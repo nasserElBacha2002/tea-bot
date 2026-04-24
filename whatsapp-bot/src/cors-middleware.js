@@ -22,6 +22,7 @@ export function createCorsMiddleware() {
         if (allowed.includes(origin)) return cb(null, true);
         return cb(null, false);
       },
+      credentials: true,
     });
   }
 
@@ -35,5 +36,6 @@ export function createCorsMiddleware() {
       if (LOCALHOST_ORIGIN_RE.test(origin)) return cb(null, true);
       return cb(null, false);
     },
+    credentials: true,
   });
 }

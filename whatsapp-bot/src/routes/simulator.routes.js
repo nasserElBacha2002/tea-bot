@@ -1,4 +1,5 @@
 import express from 'express';
+import { requireAuth } from '../middleware/require-auth.middleware.js';
 import {
   startSimulation,
   sendMessage,
@@ -6,6 +7,8 @@ import {
 } from '../controllers/simulator.controller.js';
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 /**
  * Rutas de simulación para el frontend.

@@ -1,4 +1,5 @@
 import express from 'express';
+import { requireAuth } from '../middleware/require-auth.middleware.js';
 import {
   listDrafts,
   getDraft,
@@ -16,6 +17,8 @@ import {
 } from '../controllers/flow-versions.controller.js';
 
 const router = express.Router();
+
+router.use(requireAuth);
 
 router.post('/validate', validateFlow);
 

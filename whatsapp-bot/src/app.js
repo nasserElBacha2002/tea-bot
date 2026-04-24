@@ -3,6 +3,7 @@ import { config, validateConfig, hasMetaCritical } from './config.js';
 import { createCorsMiddleware } from './cors-middleware.js';
 import webhookRouter from './routes/webhook.routes.js';
 import twilioWebhookRouter from './routes/twilio-webhook.routes.js';
+import authRouter from './routes/auth.routes.js';
 import flowAdminRouter from './routes/flow-admin.routes.js';
 import simulatorRouter from './routes/simulator.routes.js';
 import flowLoader from './utils/flow-loader.js';
@@ -43,6 +44,7 @@ validateConfig();
 // Rutas de la API
 app.use('/webhook', webhookRouter);
 app.use('/webhooks/twilio', twilioWebhookRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/flows', flowAdminRouter);
 app.use('/api/simulator', simulatorRouter);
 

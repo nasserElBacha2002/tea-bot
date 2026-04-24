@@ -19,6 +19,9 @@ export const config = {
   appBaseUrl: process.env.APP_BASE_URL || `http://localhost:${PORT}`,
   /** Lista CSV de orígenes permitidos (CORS). Vacío en dev → solo localhost. */
   corsOrigin: process.env.CORS_ORIGIN || '',
+  adminUsername: (process.env.ADMIN_USERNAME || '').trim(),
+  adminPasswordHash: (process.env.ADMIN_PASSWORD_HASH || '').trim().toLowerCase(),
+  sessionSecret: process.env.SESSION_SECRET || '',
 };
 
 function hasMetaCritical() {
@@ -30,6 +33,21 @@ function hasMetaCritical() {
 }
 
 export const validateConfig = () => {
+  const adminKeys = ['ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH', 'SESSION_SECRET'];
+  const missingAdmin = adminKeys.filter((key) => !process.env[key] || !String(process.env[key]).trim());
+  if (missingAdmin.length > 0) {
+    console.error('❌ Faltan variables de administración obligatorias:', missingAdmin.join(', '));
+    process.exit(1);
+  }
+  if (!/^[a-f0-9]{64}$/.test(config.adminPasswordHash)) {
+    console.error('❌ ADMIN_PASSWORD_HASH debe ser SHA-256 en hexadecimal (64 caracteres).');
+    process.exit(1);
+  }
+  if (String(config.sessionSecret).length < 32) {
+    console.error('❌ SESSION_SECRET debe tener al menos 32 caracteres.');
+    process.exit(1);
+  }
+
   const metaKeys = ['META_VERIFY_TOKEN', 'META_ACCESS_TOKEN', 'META_PHONE_NUMBER_ID'];
   const missingMeta = metaKeys.filter((key) => !process.env[key]);
 

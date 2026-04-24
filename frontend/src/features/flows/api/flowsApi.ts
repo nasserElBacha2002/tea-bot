@@ -13,6 +13,7 @@ const API_BASE = `${API_ORIGIN}/api/flows`;
 
 const client = axios.create({
   baseURL: API_BASE,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },

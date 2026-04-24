@@ -78,6 +78,58 @@ cp .env.example .env
 
 En V1 Twilio se responde por TwiML sincrono en el webhook, por eso `TWILIO_*` quedan documentadas para futuro outbound async por SDK/API.
 
+### Admin (panel y API de flujos)
+
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD_HASH` (hex SHA-256 de la contraseña; no texto plano)
+- `SESSION_SECRET` (≥ 32 caracteres; firma la cookie de sesión)
+
+Generar hash:
+
+```bash
+node -e "console.log(require('crypto').createHash('sha256').update('Tea2026').digest('hex'))"
+```
+
+Endpoints auth (sin `requireAuth`):
+
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/logout`
+
+Protegidos con cookie HTTP-only firmada: `/api/flows/*`, `/api/simulator/*`. No se loguean contraseña ni hash.
+
+Pruebas manuales (ajustá usuario/contraseña según tu `.env`):
+
+Login correcto:
+
+```bash
+curl -i -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"tea-bot","password":"Tea2026"}'
+```
+
+Login incorrecto:
+
+```bash
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"tea-bot","password":"mal"}'
+```
+
+Listar drafts sin cookie (401):
+
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/flows/
+```
+
+Twilio sin auth (debe seguir respondiendo):
+
+```bash
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=hola&MessageSid=SM123"
+```
+
 ## Levantar backend
 
 ```bash
@@ -234,5 +286,6 @@ Enviar un texto que no matchee transiciones del nodo actual para validar fallbac
 - `GET /healthz`
 - `GET|POST /webhook` (Meta legacy)
 - `POST /webhooks/twilio/:flowId`
-- `GET/POST/PUT/... /api/flows/*`
-- `POST /api/simulator/*`
+- `POST /api/auth/login`, `GET /api/auth/me`, `POST /api/auth/logout`
+- `GET/POST/PUT/... /api/flows/*` (requiere sesión)
+- `POST /api/simulator/*` (requiere sesión)

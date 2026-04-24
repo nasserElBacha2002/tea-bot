@@ -20,6 +20,22 @@ Monorepo con backend de flujos (`whatsapp-bot`), editor (`frontend`) y prototipo
 
 `VITE_API_BASE_URL` debe ser la URL pública con la que el navegador puede llamar al API (esquema + host + puerto si aplica), **no** un hostname solo interno de Docker.
 
+## Autenticación del panel
+
+El backend exige `ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH` (SHA-256 en hex de la contraseña) y `SESSION_SECRET` (≥ 32 caracteres). Ver `whatsapp-bot/.env.example`.
+
+- Login: `POST /api/auth/login` (JSON). Sesión: **cookie HTTP-only** `tea_session`, firmada con HMAC-SHA256 usando `SESSION_SECRET` (payload JSON con usuario y expiración). Se eligió cookie en lugar de JWT en header porque encaja bien con axios `withCredentials` y evita exponer el token en `localStorage`; en `localhost` el navegador envía la cookie al API en otro puerto cuando CORS permite credenciales y el origen del front está permitido.
+- Rutas públicas: webhooks, `GET /health`, `GET /healthz`, `GET /`.
+- Rutas protegidas: `/api/flows/*`, `/api/simulator/*`.
+
+Generar hash de contraseña:
+
+```bash
+node -e "console.log(require('crypto').createHash('sha256').update('Tea2026').digest('hex'))"
+```
+
+En `whatsapp-bot/.env`, incluí en `CORS_ORIGIN` el origen exacto del frontend (ej. `http://localhost:5173` y/o `http://localhost:8080` con Docker).
+
 ## Levantar en local (sin Docker)
 
 ### Backend

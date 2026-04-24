@@ -8,6 +8,7 @@ const API_BASE = `${API_ORIGIN}/api/simulator`;
 
 const client = axios.create({
   baseURL: API_BASE,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
