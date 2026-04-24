@@ -1,0 +1,318 @@
+{
+  "id": "main-menu",
+  "name": "Menú Principal — Tea y Deportea",
+  "version": "1.0.0",
+  "entryNode": "welcome",
+  "fallbackNode": "fallback_global",
+  "nodes": [
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "Bienvenido/a a Tea y Deportea. Soy XXXX, tu asistente virtual.\n\n¿Sos estudiante y/o egresado/a de la escuela?\n\nRespondé:\n• SI (o 1)\n• NO (o 2)",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar", "hola", "buenas"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "alumni_yes" },
+        { "type": "match", "value": "2", "nextNode": "no_branch_menu" },
+        { "type": "matchAny", "value": ["si", "sí", "yes", "ok"], "nextNode": "alumni_yes" },
+        { "type": "matchIncludes", "value": "estudiante", "nextNode": "alumni_yes" },
+        { "type": "matchIncludes", "value": "egresad", "nextNode": "alumni_yes" },
+        { "type": "matchAny", "value": ["no"], "nextNode": "no_branch_menu" },
+        { "type": "default", "nextNode": "welcome" }
+      ],
+      "ui": { "position": { "x": 80, "y": 120 } }
+    },
+    {
+      "id": "alumni_yes",
+      "type": "end",
+      "message": "Perfecto. En breve te compartimos la información para estudiantes y/o egresados/as.\n\nCuando quieras volver a empezar, escribí MENÚ o INICIO.",
+      "ui": { "position": { "x": 480, "y": 40 } }
+    },
+    {
+      "id": "no_branch_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Carreras presenciales\n2. Carreras a distancia\n3. Cursos",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar", "hola"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "presencial_menu" },
+        { "type": "match", "value": "2", "nextNode": "distancia_menu" },
+        { "type": "match", "value": "3", "nextNode": "cursos_menu" },
+        {
+          "type": "matchAny",
+          "value": ["carreras presenciales", "presencial", "presenciales"],
+          "nextNode": "presencial_menu"
+        },
+        {
+          "type": "matchAny",
+          "value": ["carreras a distancia", "a distancia", "distancia"],
+          "nextNode": "distancia_menu"
+        },
+        { "type": "matchIncludes", "value": "curso", "nextNode": "cursos_menu" },
+        { "type": "matchAny", "value": ["cursos"], "nextNode": "cursos_menu" },
+        { "type": "default", "nextNode": "no_branch_menu" }
+      ],
+      "ui": { "position": { "x": 480, "y": 280 } }
+    },
+    {
+      "id": "presencial_menu",
+      "type": "message",
+      "message": "Carreras presenciales — elegí:\n\n1. Periodismo General\n2. Periodismo Deportivo",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "presencial_general_menu" },
+        { "type": "match", "value": "2", "nextNode": "presencial_deportivo_menu" },
+        {
+          "type": "matchAny",
+          "value": ["periodismo general", "general"],
+          "nextNode": "presencial_general_menu"
+        },
+        {
+          "type": "matchAny",
+          "value": ["periodismo deportivo", "deportivo"],
+          "nextNode": "presencial_deportivo_menu"
+        },
+        { "type": "matchIncludes", "value": "periodismo general", "nextNode": "presencial_general_menu" },
+        { "type": "matchIncludes", "value": "periodismo deportivo", "nextNode": "presencial_deportivo_menu" },
+        { "type": "default", "nextNode": "presencial_menu" }
+      ],
+      "ui": { "position": { "x": 880, "y": 80 } }
+    },
+    {
+      "id": "presencial_general_menu",
+      "type": "message",
+      "message": "Periodismo General — elegí:\n\n1. Charla informativa\n2. Informes",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "presencial_general_charla" },
+        { "type": "match", "value": "2", "nextNode": "presencial_general_informes" },
+        {
+          "type": "matchAny",
+          "value": ["charla informativa", "charla"],
+          "nextNode": "presencial_general_charla"
+        },
+        { "type": "matchAny", "value": ["informes", "informe"], "nextNode": "presencial_general_informes" },
+        { "type": "matchIncludes", "value": "charla", "nextNode": "presencial_general_charla" },
+        { "type": "matchIncludes", "value": "informe", "nextNode": "presencial_general_informes" },
+        { "type": "default", "nextNode": "presencial_general_menu" }
+      ],
+      "ui": { "position": { "x": 1280, "y": 0 } }
+    },
+    {
+      "id": "presencial_general_charla",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre la charla informativa de Periodismo General.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1680, "y": -40 } }
+    },
+    {
+      "id": "presencial_general_informes",
+      "type": "end",
+      "message": "Perfecto. Te compartimos los informes de Periodismo General.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1680, "y": 80 } }
+    },
+    {
+      "id": "presencial_deportivo_menu",
+      "type": "message",
+      "message": "Periodismo Deportivo — elegí:\n\n1. Charla informativa\n2. Informes",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "presencial_deportivo_charla" },
+        { "type": "match", "value": "2", "nextNode": "presencial_deportivo_informes" },
+        {
+          "type": "matchAny",
+          "value": ["charla informativa", "charla"],
+          "nextNode": "presencial_deportivo_charla"
+        },
+        {
+          "type": "matchAny",
+          "value": ["informes", "informe"],
+          "nextNode": "presencial_deportivo_informes"
+        },
+        { "type": "matchIncludes", "value": "charla", "nextNode": "presencial_deportivo_charla" },
+        { "type": "matchIncludes", "value": "informe", "nextNode": "presencial_deportivo_informes" },
+        { "type": "default", "nextNode": "presencial_deportivo_menu" }
+      ],
+      "ui": { "position": { "x": 1280, "y": 200 } }
+    },
+    {
+      "id": "presencial_deportivo_charla",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre la charla informativa de Periodismo Deportivo.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1680, "y": 160 } }
+    },
+    {
+      "id": "presencial_deportivo_informes",
+      "type": "end",
+      "message": "Perfecto. Te compartimos los informes de Periodismo Deportivo.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1680, "y": 280 } }
+    },
+    {
+      "id": "distancia_menu",
+      "type": "message",
+      "message": "Carreras a distancia — elegí:\n\n1. Charla informativa\n2. Informes",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "distancia_charla" },
+        { "type": "match", "value": "2", "nextNode": "distancia_informes" },
+        {
+          "type": "matchAny",
+          "value": ["charla informativa", "charla"],
+          "nextNode": "distancia_charla"
+        },
+        { "type": "matchAny", "value": ["informes", "informe"], "nextNode": "distancia_informes" },
+        { "type": "matchIncludes", "value": "charla", "nextNode": "distancia_charla" },
+        { "type": "matchIncludes", "value": "informe", "nextNode": "distancia_informes" },
+        { "type": "default", "nextNode": "distancia_menu" }
+      ],
+      "ui": { "position": { "x": 880, "y": 400 } }
+    },
+    {
+      "id": "distancia_charla",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre la charla informativa de Carreras a Distancia.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 360 } }
+    },
+    {
+      "id": "distancia_informes",
+      "type": "end",
+      "message": "Perfecto. Te compartimos los informes de Carreras a Distancia.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 480 } }
+    },
+    {
+      "id": "cursos_menu",
+      "type": "message",
+      "message": "Cursos — elegí una opción:\n\n1. Relato y Comentario Presencial\n2. Relato y Comentario a Distancia\n3. Oratoria\n4. Literatura Policial\n5. Literatura y Deporte\n6. Streaming\n7. Campamento de Verano",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar"],
+          "nextNode": "welcome"
+        },
+        { "type": "match", "value": "1", "nextNode": "curso_relato_presencial" },
+        { "type": "match", "value": "2", "nextNode": "curso_relato_distancia" },
+        { "type": "match", "value": "3", "nextNode": "curso_oratoria" },
+        { "type": "match", "value": "4", "nextNode": "curso_literatura_policial" },
+        { "type": "match", "value": "5", "nextNode": "curso_literatura_deporte" },
+        { "type": "match", "value": "6", "nextNode": "curso_streaming" },
+        { "type": "match", "value": "7", "nextNode": "curso_campamento_verano" },
+        {
+          "type": "matchAny",
+          "value": [
+            "relato y comentario presencial",
+            "relato presencial",
+            "comentario presencial"
+          ],
+          "nextNode": "curso_relato_presencial"
+        },
+        {
+          "type": "matchAny",
+          "value": [
+            "relato y comentario a distancia",
+            "relato a distancia",
+            "comentario a distancia"
+          ],
+          "nextNode": "curso_relato_distancia"
+        },
+        { "type": "matchAny", "value": ["oratoria"], "nextNode": "curso_oratoria" },
+        {
+          "type": "matchAny",
+          "value": ["literatura policial", "policial"],
+          "nextNode": "curso_literatura_policial"
+        },
+        {
+          "type": "matchAny",
+          "value": ["literatura y deporte", "literatura deporte"],
+          "nextNode": "curso_literatura_deporte"
+        },
+        { "type": "matchAny", "value": ["streaming"], "nextNode": "curso_streaming" },
+        {
+          "type": "matchAny",
+          "value": ["campamento", "campamento de verano", "verano"],
+          "nextNode": "curso_campamento_verano"
+        },
+        { "type": "default", "nextNode": "cursos_menu" }
+      ],
+      "ui": { "position": { "x": 880, "y": 640 } }
+    },
+    {
+      "id": "curso_relato_presencial",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Relato y Comentario Presencial.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 560 } }
+    },
+    {
+      "id": "curso_relato_distancia",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Relato y Comentario a Distancia.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 640 } }
+    },
+    {
+      "id": "curso_oratoria",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Oratoria.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 720 } }
+    },
+    {
+      "id": "curso_literatura_policial",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Literatura Policial.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 800 } }
+    },
+    {
+      "id": "curso_literatura_deporte",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Literatura y Deporte.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 880 } }
+    },
+    {
+      "id": "curso_streaming",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Streaming.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 960 } }
+    },
+    {
+      "id": "curso_campamento_verano",
+      "type": "end",
+      "message": "Perfecto. Te compartimos la información sobre Campamento de Verano.\n\nEscribí MENÚ o INICIO para reiniciar.",
+      "ui": { "position": { "x": 1280, "y": 1040 } }
+    },
+    {
+      "id": "fallback_global",
+      "type": "message",
+      "message": "No te entendí.\n\nEscribí MENÚ o INICIO para volver al comienzo, o repetí la última opción que te mostramos.",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": ["menu", "menú", "inicio", "volver", "empezar", "hola", "buenas"],
+          "nextNode": "welcome"
+        },
+        { "type": "default", "nextNode": "fallback_global" }
+      ],
+      "ui": { "position": { "x": 80, "y": 520 } }
+    }
+  ],
+  "status": "draft",
+  "updatedAt": "2026-04-02T20:00:00.000Z"
+}

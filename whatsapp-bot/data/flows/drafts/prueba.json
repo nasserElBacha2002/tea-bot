@@ -1,0 +1,81 @@
+{
+  "id": "prueba",
+  "name": "prueba",
+  "version": "draft",
+  "status": "draft",
+  "entryNode": "welcome",
+  "fallbackNode": "not-understood",
+  "nodes": [
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "¡Hola! ¿En qué puedo ayudarte?",
+      "ui": {
+        "position": {
+          "x": 80,
+          "y": 80
+        }
+      },
+      "transitions": [
+        {
+          "type": "match",
+          "value": "Comer",
+          "nextNode": "step-mnrngox99fuq7n"
+        },
+        {
+          "type": "default",
+          "nextNode": "not-understood"
+        }
+      ]
+    },
+    {
+      "id": "not-understood",
+      "type": "message",
+      "message": "No entendí. Intenta de nuevo, por favor.",
+      "ui": {
+        "position": {
+          "x": 440,
+          "y": 80
+        }
+      },
+      "transitions": [
+        {
+          "type": "default",
+          "nextNode": "welcome"
+        }
+      ]
+    },
+    {
+      "id": "step-mnrngox99fuq7n",
+      "type": "message",
+      "message": "Que queres comer",
+      "ui": {
+        "position": {
+          "x": 640,
+          "y": 80
+        }
+      },
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": [
+            "arroz"
+          ],
+          "nextNode": "step-mnrnhs17zeysu1"
+        }
+      ]
+    },
+    {
+      "id": "step-mnrnhs17zeysu1",
+      "type": "message",
+      "message": "tengo arroz con lentejas",
+      "ui": {
+        "position": {
+          "x": 80,
+          "y": 260
+        }
+      }
+    }
+  ],
+  "updatedAt": "2026-04-09T15:47:40.961Z"
+}

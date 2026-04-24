@@ -1,0 +1,109 @@
+{
+  "id": "main-menu",
+  "name": "Menú Principal",
+  "version": "v1",
+  "entryNode": "init",
+  "fallbackNode": "not-understood",
+  "nodes": [
+    {
+      "id": "init",
+      "type": "message",
+      "message": "Hola, soy el asistente automático.\n\nElegí una opción:\n1. Cursos\n2. Horarios\n3. Precios\n4. Hablar con una persona",
+      "transitions": [
+        {
+          "type": "matchAny",
+          "value": [
+            "hola",
+            "buenas",
+            "inicio",
+            "menú",
+            "menu",
+            "empezar"
+          ],
+          "nextNode": "init"
+        },
+        {
+          "type": "match",
+          "value": "1",
+          "nextNode": "cursos"
+        },
+        {
+          "type": "matchIncludes",
+          "value": "curso",
+          "nextNode": "cursos"
+        },
+        {
+          "type": "match",
+          "value": "2",
+          "nextNode": "horarios"
+        },
+        {
+          "type": "matchIncludes",
+          "value": "horario",
+          "nextNode": "horarios"
+        },
+        {
+          "type": "match",
+          "value": "3",
+          "nextNode": "precios"
+        },
+        {
+          "type": "matchIncludes",
+          "value": "precio",
+          "nextNode": "precios"
+        },
+        {
+          "type": "match",
+          "value": "4",
+          "nextNode": "humano"
+        },
+        {
+          "type": "matchAny",
+          "value": [
+            "humano",
+            "persona",
+            "asesor"
+          ],
+          "nextNode": "humano"
+        },
+        {
+          "type": "default",
+          "nextNode": "not-understood"
+        }
+      ]
+    },
+    {
+      "id": "cursos",
+      "type": "message",
+      "message": "Actualmente contamos con cursos de programación. Si querés, respondeme con tu consulta puntual y te guiamos.",
+      "nextNode": "init"
+    },
+    {
+      "id": "horarios",
+      "type": "message",
+      "message": "Tenemos distintas franjas horarias según el curso. Si querés, indicame qué curso te interesa y te paso los horarios.",
+      "nextNode": "init"
+    },
+    {
+      "id": "precios",
+      "type": "message",
+      "message": "Los precios pueden variar según el curso y la modalidad. Escribime qué curso te interesa y te paso la información.",
+      "nextNode": "init"
+    },
+    {
+      "id": "humano",
+      "type": "message",
+      "message": "Perfecto. Te derivamos con una persona del equipo a la brevedad.",
+      "nextNode": "init"
+    },
+    {
+      "id": "not-understood",
+      "type": "message",
+      "message": "No entendí tu mensaje.\n\nRespondé con una opción:\n1. Cursos\n2. Horarios\n3. Precios\n4. Hablar con una persona",
+      "nextNode": "init"
+    }
+  ],
+  "status": "published",
+  "updatedAt": "2026-04-02T18:15:47.250Z",
+  "publishedAt": "2026-04-02T18:15:47.251Z"
+}

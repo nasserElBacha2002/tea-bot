@@ -1,0 +1,9 @@
+{
+  "defaultFlow": "main-menu",
+  "flows": [
+    {
+      "id": "main-menu",
+      "file": "./main-menu.json"
+    }
+  ]
+}

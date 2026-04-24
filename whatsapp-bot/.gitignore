@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment (secrets)
+.env
+.env.*
+!.env.example
+
+# Logs and temp
+logs/
+*.log
+tmp/
+temp/
+*.tmp
+.DS_Store
+
+# Runtime / PII
+data/sessions.json
+data/webhook-processed-ids.json

@@ -1,0 +1,69 @@
+{
+  "id": "prueba-male",
+  "name": "prueba-male",
+  "version": "draft",
+  "status": "draft",
+  "entryNode": "welcome",
+  "fallbackNode": "not-understood",
+  "nodes": [
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "¡Hola! ¿En qué puedo ayudarte?",
+      "ui": {
+        "position": {
+          "x": 80,
+          "y": 80
+        }
+      },
+      "transitions": [
+        {
+          "type": "match",
+          "value": "hola",
+          "nextNode": "step-mo0bpa1qyu5zd6"
+        },
+        {
+          "type": "default",
+          "nextNode": "not-understood"
+        }
+      ]
+    },
+    {
+      "id": "not-understood",
+      "type": "message",
+      "message": "No entendí. Intenta de nuevo, por favor.",
+      "ui": {
+        "position": {
+          "x": 440,
+          "y": 80
+        }
+      },
+      "transitions": [
+        {
+          "type": "default",
+          "nextNode": "welcome"
+        }
+      ]
+    },
+    {
+      "id": "step-mo0bpa1qyu5zd6",
+      "type": "message",
+      "message": "Esto es un paso de prubea",
+      "ui": {
+        "position": {
+          "x": 640,
+          "y": 80
+        },
+        "stepTitle": "Prueba primer paso"
+      },
+      "transitions": [
+        {
+          "type": "match",
+          "value": "si",
+          "nextNode": "welcome"
+        }
+      ]
+    }
+  ],
+  "updatedAt": "2026-04-15T17:28:26.724Z"
+}

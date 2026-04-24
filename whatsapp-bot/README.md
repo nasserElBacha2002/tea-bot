@@ -1,0 +1,238 @@
+# WhatsApp Bot Runtime (FlowEngine propio + canales Meta/Twilio)
+
+Sistema para crear, publicar y ejecutar flujos conversacionales JSON con motor propio. El runtime soporta canales de entrada/salida por adapters, sin depender de Twilio Studio Flows.
+
+## Arquitectura (V1)
+
+```text
+Inbound channel webhook (Meta o Twilio)
+  -> Inbound Adapter (normaliza payload al contrato canonico)
+  -> FlowEngine (motor propio)
+  -> Outbound Adapter (Meta API o TwiML)
+```
+
+- Editor/admin/publicacion: `/api/flows/*`
+- Simulador: `/api/simulator/*`
+- Meta legacy: `GET|POST /webhook`
+- Twilio V1: `POST /webhooks/twilio/:flowId`
+
+## Prototipo `tea-twilio` (obsoleto)
+
+La carpeta `tea-twilio/` era solo una prueba con Express + TwiML y un `flow.json` suelto. **El canal Twilio oficial vive en este proyecto (`whatsapp-bot`)**: `POST /webhooks/twilio/:flowId` usa el flujo **publicado activo** del repositorio (`data/flows/published/`), el `FlowEngine` y el mismo modelo JSON que el editor. Ver `tea-twilio/README.md` antes de borrar esa carpeta.
+
+## Contrato canonico inbound
+
+Todos los canales deben normalizar a:
+
+```js
+{
+  provider: 'twilio' | 'meta',
+  flowId: 'main-menu',
+  userId: 'twilio:whatsapp:+5491111111111',
+  text: 'hola',
+  messageId: 'SMxxxxxxxx',
+  rawPayload: { ... }
+}
+```
+
+## Modelo JSON de flujo (publicado)
+
+Contrato minimo de ejecucion:
+
+- `id` (string)
+- `schemaVersion` (int, opcional; si falta se asume `1`)
+- `entryNode` (string, debe existir en nodes)
+- `fallbackNode` (string opcional, si existe debe apuntar a nodo existente)
+- `nodes` (array no vacio)
+  - cada nodo requiere `id`, `type`, `message`
+  - `transitions` si existe debe ser array
+  - cada `transition.nextNode` debe existir
+  - `nextNode` directo, si existe, debe existir
+
+## Variables de entorno
+
+Copiar base:
+
+```bash
+cp .env.example .env
+```
+
+### Runtime general
+
+- `PORT`
+- `NODE_ENV`
+- `APP_BASE_URL`
+- `CORS_ORIGIN`
+
+### Meta (legacy / paralelo)
+
+- `META_VERIFY_TOKEN`
+- `META_ACCESS_TOKEN`
+- `META_PHONE_NUMBER_ID`
+
+### Twilio (V1)
+
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN`
+- `TWILIO_WHATSAPP_FROM`
+
+En V1 Twilio se responde por TwiML sincrono en el webhook, por eso `TWILIO_*` quedan documentadas para futuro outbound async por SDK/API.
+
+## Levantar backend
+
+```bash
+npm install
+npm run dev
+# o npm start
+```
+
+Salud:
+
+- `GET /` — respuesta mínima
+- `GET /health` — ok, `service`, `timestamp`, `environment` (sin secretos; pensado para Docker/load balancer)
+- `GET /healthz` — señales extra (config Meta como booleanos, flujo publicado activo)
+
+## Docker (backend + frontend)
+
+Instrucciones de `docker compose`, puertos y `VITE_API_BASE_URL`: ver el `README.md` en la **raíz del monorepo**.
+
+## Publicacion y resolucion de flowId
+
+1. Editar draft en editor/API.
+2. Publicar (`POST /api/flows/:flowId/publish`).
+3. Runtime usa `activeVersion` publicado para ese `flowId`.
+
+Twilio usa explicitamente el flow en URL:
+
+- `POST /webhooks/twilio/main-menu` -> ejecuta published activo de `main-menu`.
+
+Si no existe version publicada activa para ese flow, se loguea error controlado y se devuelve respuesta segura sin crashear.
+
+## Webhook Meta (legacy)
+
+- `GET /webhook` verificacion Meta (`hub.*`).
+- `POST /webhook` mensajes Meta.
+
+Se mantiene por compatibilidad.
+
+## Webhook Twilio (V1)
+
+Endpoint:
+
+- `POST /webhooks/twilio/:flowId`
+- `Content-Type: application/x-www-form-urlencoded`
+
+Campos usados de Twilio:
+
+- `From`
+- `Body`
+- `MessageSid`
+- `WaId` (opcional)
+
+Respuesta:
+
+```xml
+<Response>
+  <Message>respuesta del flujo</Message>
+</Response>
+```
+
+## Idempotencia
+
+Deduplicacion persistida en:
+
+- `data/webhook-processed-ids.json`
+
+Clave dedupe:
+
+- `provider:messageId`
+- Ejemplo Twilio: `twilio:SM123...`
+- Ejemplo Meta: `meta:wamid....`
+
+Si llega duplicado:
+
+- no se vuelve a ejecutar el FlowEngine
+- se responde 200
+- Twilio devuelve TwiML vacio (`<Response></Response>`)
+- log: `duplicate=true action=ignored`
+
+## Sesiones por proveedor
+
+Clave de sesion por usuario con prefijo de proveedor:
+
+- Twilio: `twilio:whatsapp:+549...`
+- Meta: `meta:549...`
+
+Esto evita colisiones de estado entre canales.
+
+## Ejemplos curl (Twilio)
+
+### 1) Mensaje inicial
+
+```bash
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=hola&MessageSid=SM123"
+```
+
+### 2) Respuesta SI / NO
+
+```bash
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=si&MessageSid=SM124"
+
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=no&MessageSid=SM125"
+```
+
+### 3) Duplicado (mismo MessageSid)
+
+```bash
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=hola&MessageSid=SM-DUP-1"
+
+curl -X POST http://localhost:3000/webhooks/twilio/main-menu \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=hola&MessageSid=SM-DUP-1"
+```
+
+### 4) flowId inexistente
+
+```bash
+curl -X POST http://localhost:3000/webhooks/twilio/flow-inexistente \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "From=whatsapp:+5491111111111&Body=hola&MessageSid=SM404"
+```
+
+### 5) Fallback
+
+Enviar un texto que no matchee transiciones del nodo actual para validar fallback del flujo publicado.
+
+## Checklist Twilio Sandbox
+
+1. En Twilio Console -> WhatsApp Sandbox.
+2. En **When a message comes in** configurar:
+   - Metodo: `POST`
+   - URL: `https://tu-dominio/webhooks/twilio/main-menu`
+3. Guardar configuracion.
+4. Desde WhatsApp enviar mensaje al numero sandbox (tras `join` al sandbox).
+5. Verificar logs del backend para `provider=twilio` y `duplicate=false`.
+
+## Logs esperados (sin secretos)
+
+- `provider`, `flowId`, `userId`, `messageId`, `duplicate`.
+- Si aplica, `node` resultante.
+- Nunca se imprimen tokens/secrets.
+
+## Endpoints principales
+
+- `GET /`
+- `GET /health`
+- `GET /healthz`
+- `GET|POST /webhook` (Meta legacy)
+- `POST /webhooks/twilio/:flowId`
+- `GET/POST/PUT/... /api/flows/*`
+- `POST /api/simulator/*`
