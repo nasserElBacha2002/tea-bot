@@ -1,6 +1,6 @@
 {
   "flowId": "main-menu",
-  "activeVersion": "v4",
+  "activeVersion": "v5",
   "versions": [
     {
       "version": "v1",
@@ -28,8 +28,15 @@
       "file": "v4.json",
       "publishedAt": "2026-04-24T14:29:44.368Z",
       "sourceDraftUpdatedAt": "2026-04-02T20:00:00.000Z"
+    },
+    {
+      "version": "v5",
+      "versionLabel": "v5",
+      "file": "v5.json",
+      "publishedAt": "2026-04-24T14:33:26.502Z",
+      "sourceDraftUpdatedAt": "2026-04-02T20:00:00.000Z"
     }
   ],
-  "lastPublishedAt": "2026-04-24T14:29:44.368Z",
-  "updatedAt": "2026-04-24T14:29:44.370Z"
+  "lastPublishedAt": "2026-04-24T14:33:26.502Z",
+  "updatedAt": "2026-04-24T14:33:26.502Z"
 }
