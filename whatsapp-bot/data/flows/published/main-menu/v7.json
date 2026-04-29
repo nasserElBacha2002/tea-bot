@@ -1,0 +1,257 @@
+{
+  "id": "main-menu",
+  "name": "Menú Principal — Tea y Deportea",
+  "version": "v7",
+  "entryNode": "welcome",
+  "fallbackNode": "fallback",
+  "nodes": [
+
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "Bienvenido/a a Tea y Deportea. Soy XXXXX, tu asistente virtual.\n\n¿Sos estudiante y/o egresado/a de la escuela?\n\n1. SI\n2. NO",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "si_menu" },
+        { "type": "match", "value": "2", "nextNode": "no_menu" },
+        { "type": "matchAny", "value": ["si", "sí"], "nextNode": "si_menu" },
+        { "type": "matchAny", "value": ["no"], "nextNode": "no_menu" },
+        { "type": "default", "nextNode": "fallback" }
+      ]
+    },
+
+    {
+      "id": "si_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Carreras presenciales\n2. Carrera a distancia\n3. Cursos\n4. Archivo\n5. Estudio de streaming\n6. Solicitud de cámaras y micrófonos para TV",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "presencial_tipo" },
+        { "type": "match", "value": "2", "nextNode": "distancia_menu" },
+        { "type": "match", "value": "3", "nextNode": "cursos_si" },
+        { "type": "match", "value": "4", "nextNode": "archivo" },
+        { "type": "match", "value": "5", "nextNode": "streaming" },
+        { "type": "match", "value": "6", "nextNode": "camaras" },
+        { "type": "default", "nextNode": "si_menu" }
+      ]
+    },
+
+    {
+      "id": "presencial_tipo",
+      "type": "message",
+      "message": "Elegí una carrera:\n\n1. Periodismo Deportivo\n2. Periodismo General",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "menu_principal_alumno" },
+        { "type": "match", "value": "2", "nextNode": "menu_principal_alumno" },
+        { "type": "default", "nextNode": "presencial_tipo" }
+      ]
+    },
+
+    {
+      "id": "menu_principal_alumno",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Secretaría\n2. Administración\n3. Dirección de estudios\n4. Blanqueo de clave Quinttos\n5. Blanqueo de mail institucional\n6. Licenciatura\n7. Cambios de turno\n8. Cursos\n9. Mail de profesores/as",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "secretaria" },
+        { "type": "match", "value": "2", "nextNode": "administracion" },
+        { "type": "match", "value": "3", "nextNode": "direccion" },
+        { "type": "match", "value": "4", "nextNode": "clave" },
+        { "type": "match", "value": "5", "nextNode": "mail_inst" },
+        { "type": "match", "value": "6", "nextNode": "licenciatura_menu" },
+        { "type": "match", "value": "7", "nextNode": "turno" },
+        { "type": "match", "value": "8", "nextNode": "cursos_si" },
+        { "type": "match", "value": "9", "nextNode": "profesores" },
+        { "type": "default", "nextNode": "menu_principal_alumno" }
+      ]
+    },
+
+    {
+      "id": "secretaria",
+      "type": "message",
+      "message": "Secretaría:\n\nA. Constancia alumno regular\nB. Constancia título en trámite\nC. Programas\nD. Analíticos\nE. Inasistencias\nF. Acreditaciones\nG. Constancia examen",
+      "transitions": [
+        { "type": "match", "value": "a", "nextNode": "sec_a" },
+        { "type": "match", "value": "b", "nextNode": "sec_b" },
+        { "type": "match", "value": "c", "nextNode": "sec_c" },
+        { "type": "match", "value": "d", "nextNode": "sec_d" },
+        { "type": "match", "value": "e", "nextNode": "sec_e" },
+        { "type": "match", "value": "f", "nextNode": "sec_f" },
+        { "type": "match", "value": "g", "nextNode": "sec_g" },
+        { "type": "default", "nextNode": "secretaria" }
+      ]
+    },
+
+    {
+      "id": "sec_a",
+      "type": "end",
+      "message": "Podes descargarla desde tu perfil de quinttos y acercarte a sellarla y firmarla en secretaria de lunes a viernes (días hábiles) de 9 a 21 hs."
+    },
+    {
+      "id": "sec_b",
+      "type": "end",
+      "message": "Podes solicitarla en persona en la escuela o por mail."
+    },
+    {
+      "id": "sec_c",
+      "type": "end",
+      "message": "Podes solicitarlos por mail."
+    },
+    {
+      "id": "sec_d",
+      "type": "end",
+      "message": "Para consultar cuando estará listo tu analítico o si lo extraviaste debes enviar mail."
+    },
+    {
+      "id": "sec_e",
+      "type": "end",
+      "message": "Para justificar tu inasistencia debes enviar foto del certificado médico."
+    },
+    {
+      "id": "sec_f",
+      "type": "end",
+      "message": "Para solicitarlas debes enviar mail."
+    },
+    {
+      "id": "sec_g",
+      "type": "end",
+      "message": "Debes solicitarla en persona en secretaria después de rendir el examen."
+    },
+
+    {
+      "id": "archivo",
+      "type": "end",
+      "message": "Debes contactarte por mail a archivo@teaydeportea.edu.ar o acercarte presencialmente."
+    },
+    {
+      "id": "streaming",
+      "type": "end",
+      "message": "Reservas y consultas generales escribir a streamroom@teaydeportea.edu.ar"
+    },
+    {
+      "id": "camaras",
+      "type": "end",
+      "message": "Deben escribir a pedidostallertv@teaydeportea.edu.ar"
+    },
+
+    {
+      "id": "administracion",
+      "type": "end",
+      "message": "Te comunicamos con Administración.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "direccion",
+      "type": "end",
+      "message": "Te comunicamos con Dirección de estudios.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "clave",
+      "type": "end",
+      "message": "Te ayudamos con el blanqueo de clave Quinttos.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "mail_inst",
+      "type": "end",
+      "message": "Te ayudamos con el blanqueo de mail institucional.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "licenciatura_menu",
+      "type": "end",
+      "message": "Te pasamos información sobre la Licenciatura.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "turno",
+      "type": "end",
+      "message": "Te ayudamos con cambios de turno.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "cursos_si",
+      "type": "end",
+      "message": "Te pasamos información de cursos.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "profesores",
+      "type": "end",
+      "message": "Te compartimos el mail de profesores/as.\n\nEscribí MENÚ para volver."
+    },
+
+    {
+      "id": "no_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Carreras presenciales\n2. Carreras a distancia\n3. Cursos\n4. Licenciatura\n5. Otros contactos\n6. Charlas informativas\n7. Informes",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "presencial" },
+        { "type": "match", "value": "2", "nextNode": "distancia" },
+        { "type": "match", "value": "3", "nextNode": "cursos" },
+        { "type": "match", "value": "4", "nextNode": "licenciatura_no" },
+        { "type": "match", "value": "5", "nextNode": "contactos" },
+        { "type": "match", "value": "6", "nextNode": "charlas" },
+        { "type": "match", "value": "7", "nextNode": "informes" },
+        { "type": "default", "nextNode": "no_menu" }
+      ]
+    },
+    {
+      "id": "presencial",
+      "type": "message",
+      "message": "Carreras presenciales:\n\n1. Periodismo General\n2. Periodismo Deportivo",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "pg" },
+        { "type": "match", "value": "2", "nextNode": "pd" },
+        { "type": "default", "nextNode": "presencial" }
+      ]
+    },
+    {
+      "id": "pg",
+      "type": "end",
+      "message": "Te compartimos información de Periodismo General.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "pd",
+      "type": "end",
+      "message": "Te compartimos información de Periodismo Deportivo.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "distancia",
+      "type": "end",
+      "message": "Te compartimos información de carreras a distancia.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "cursos",
+      "type": "end",
+      "message": "Te compartimos información de cursos.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "licenciatura_no",
+      "type": "end",
+      "message": "Te compartimos información de la Licenciatura.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "contactos",
+      "type": "end",
+      "message": "Te compartimos otros contactos.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "charlas",
+      "type": "end",
+      "message": "Te compartimos información sobre charlas informativas.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "informes",
+      "type": "end",
+      "message": "Te compartimos los informes en PDF.\n\nEscribí MENÚ para volver."
+    },
+    {
+      "id": "distancia_menu",
+      "type": "end",
+      "message": "Te compartimos información de carreras a distancia.\n\nEscribí MENÚ para volver."
+    },
+
+    {
+      "id": "fallback",
+      "type": "message",
+      "message": "No te entendí.\n\nEscribí MENÚ para volver.",
+      "transitions": [
+        { "type": "matchAny", "value": ["menu", "menú"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "fallback" }
+      ]
+    }
+
+  ]
+}

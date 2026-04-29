@@ -1,0 +1,96 @@
+{
+  "id": "main-menu",
+  "name": "Menú Principal — Tea y Deportea",
+  "version": "v6",
+  "entryNode": "welcome",
+  "fallbackNode": "fallback_global",
+  "nodes": [
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "Bienvenido/a a Tea y Deportea. Soy XXXX, tu asistente virtual.\n\n¿Sos estudiante y/o egresado/a de la escuela?\n\nRespondé:\n• SI (o 1)\n• NO (o 2)",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "alumni_menu" },
+        { "type": "match", "value": "2", "nextNode": "no_menu" },
+        { "type": "matchAny", "value": ["si", "sí"], "nextNode": "alumni_menu" },
+        { "type": "matchAny", "value": ["no"], "nextNode": "no_menu" },
+        { "type": "default", "nextNode": "fallback_global" }
+      ]
+    },
+
+    {
+      "id": "alumni_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Secretaría\n2. Administración\n3. Dirección de estudios\n4. Blanqueo de clave Quinttos\n5. Blanqueo de mail institucional\n6. Licenciatura\n7. Cambios de turno\n8. Cursos\n9. Mail de profesores/as",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "sec" },
+        { "type": "match", "value": "2", "nextNode": "admin" },
+        { "type": "match", "value": "3", "nextNode": "direccion" },
+        { "type": "match", "value": "4", "nextNode": "clave" },
+        { "type": "match", "value": "5", "nextNode": "mail" },
+        { "type": "match", "value": "6", "nextNode": "licenciatura" },
+        { "type": "match", "value": "7", "nextNode": "turno" },
+        { "type": "match", "value": "8", "nextNode": "alumni_cursos" },
+        { "type": "match", "value": "9", "nextNode": "profesores" },
+        { "type": "default", "nextNode": "alumni_menu" }
+      ]
+    },
+
+    { "id": "sec", "type": "end", "message": "Te comunicamos con Secretaría.\n\nEscribí MENÚ para volver." },
+    { "id": "admin", "type": "end", "message": "Te comunicamos con Administración.\n\nEscribí MENÚ para volver." },
+    { "id": "direccion", "type": "end", "message": "Te comunicamos con Dirección de estudios.\n\nEscribí MENÚ para volver." },
+    { "id": "clave", "type": "end", "message": "Te ayudamos con el blanqueo de clave Quinttos.\n\nEscribí MENÚ para volver." },
+    { "id": "mail", "type": "end", "message": "Te ayudamos con el blanqueo de mail institucional.\n\nEscribí MENÚ para volver." },
+    { "id": "licenciatura", "type": "end", "message": "Te pasamos información sobre la Licenciatura.\n\nEscribí MENÚ para volver." },
+    { "id": "turno", "type": "end", "message": "Te ayudamos con cambios de turno.\n\nEscribí MENÚ para volver." },
+    { "id": "alumni_cursos", "type": "end", "message": "Te pasamos información de cursos.\n\nEscribí MENÚ para volver." },
+    { "id": "profesores", "type": "end", "message": "Te compartimos el mail de profesores/as.\n\nEscribí MENÚ para volver." },
+
+    {
+      "id": "no_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Carreras presenciales\n2. Carreras a distancia\n3. Cursos\n4. Licenciatura\n5. Otros contactos\n6. Charlas informativas\n7. Informes",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "presencial" },
+        { "type": "match", "value": "2", "nextNode": "distancia" },
+        { "type": "match", "value": "3", "nextNode": "cursos" },
+        { "type": "match", "value": "4", "nextNode": "licenciatura_no" },
+        { "type": "match", "value": "5", "nextNode": "contactos" },
+        { "type": "match", "value": "6", "nextNode": "charlas" },
+        { "type": "match", "value": "7", "nextNode": "informes" },
+        { "type": "default", "nextNode": "no_menu" }
+      ]
+    },
+
+    {
+      "id": "presencial",
+      "type": "message",
+      "message": "Carreras presenciales:\n\n1. Periodismo General\n2. Periodismo Deportivo",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "pg" },
+        { "type": "match", "value": "2", "nextNode": "pd" },
+        { "type": "default", "nextNode": "presencial" }
+      ]
+    },
+
+    { "id": "pg", "type": "end", "message": "Te compartimos información de Periodismo General.\n\nEscribí MENÚ para volver." },
+    { "id": "pd", "type": "end", "message": "Te compartimos información de Periodismo Deportivo.\n\nEscribí MENÚ para volver." },
+
+    { "id": "distancia", "type": "end", "message": "Te compartimos información de carreras a distancia.\n\nEscribí MENÚ para volver." },
+    { "id": "cursos", "type": "end", "message": "Te compartimos información de cursos.\n\nEscribí MENÚ para volver." },
+    { "id": "licenciatura_no", "type": "end", "message": "Te compartimos información de la Licenciatura.\n\nEscribí MENÚ para volver." },
+    { "id": "contactos", "type": "end", "message": "Te compartimos otros contactos.\n\nEscribí MENÚ para volver." },
+    { "id": "charlas", "type": "end", "message": "Te compartimos información sobre charlas informativas.\n\nEscribí MENÚ para volver." },
+    { "id": "informes", "type": "end", "message": "Te compartimos los informes en PDF.\n\nEscribí MENÚ para volver." },
+
+    {
+      "id": "fallback_global",
+      "type": "message",
+      "message": "No te entendí.\n\nEscribí MENÚ para volver al inicio.",
+      "transitions": [
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "fallback_global" }
+      ]
+    }
+  ]
+}

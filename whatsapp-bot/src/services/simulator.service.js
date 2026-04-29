@@ -12,19 +12,21 @@ class SimulatorService {
   /**
    * Inicia una simulación y devuelve el mensaje de bienvenida.
    */
-  async startSimulation({ sessionId, flowId, flowSnapshot }) {
+  async startSimulation({ sessionId, flowId, flowSnapshot, useDraftSnapshot = false }) {
     const userId = this.getSimulationId(sessionId);
     
     // Limpiamos sesión previa si existiera
     await sessionService.resetSession(userId);
 
-    // Llamamos al motor en modo DRAFT (flowSnapshot = borrador actual del editor, opcional)
+    // Por defecto simulamos published activo.
+    // Solo usamos snapshot draft cuando useDraftSnapshot=true.
+    const useSnapshot = Boolean(useDraftSnapshot && flowSnapshot);
     const result = await flowEngine.resolveIncomingMessage({
       userId,
       text: '', // Mensaje vacío para disparar el entryNode
-      flowMode: 'draft',
+      flowMode: useSnapshot ? 'draft' : 'published',
       flowId,
-      flowSnapshot: flowSnapshot || undefined,
+      flowSnapshot: useSnapshot ? flowSnapshot : undefined,
     });
 
     return {
@@ -41,8 +43,7 @@ class SimulatorService {
     
     const result = await flowEngine.resolveIncomingMessage({
       userId,
-      text,
-      flowMode: 'draft'
+      text
     });
 
     return {

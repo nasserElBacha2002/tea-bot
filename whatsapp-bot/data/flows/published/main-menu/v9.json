@@ -1,0 +1,323 @@
+{
+  "id": "main-menu",
+  "name": "Menú Principal — Tea y Deportea",
+  "version": "v9",
+  "entryNode": "welcome",
+  "fallbackNode": "fallback_global",
+  "nodes": [
+
+    {
+      "id": "welcome",
+      "type": "message",
+      "message": "Bienvenido/a a Tea y Deportea. Soy XXXXX, tu asistente virtual.\n\n¿Sos estudiante y/o egresado/a de la escuela?\n\n1. SI\n2. NO",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "si_menu" },
+        { "type": "match", "value": "2", "nextNode": "no_menu" },
+        { "type": "matchAny", "value": ["si", "sí"], "nextNode": "si_menu" },
+        { "type": "matchAny", "value": ["no"], "nextNode": "no_menu" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "fallback_global" }
+      ],
+      "ui": { "position": { "x": 80, "y": 120 } }
+    },
+
+    {
+      "id": "si_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Carreras presenciales\n2. Carrera a distancia\n3. Cursos\n4. Archivo\n5. Estudio de streaming\n6. Solicitud de cámaras y micrófonos para TV",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "presencial_tipo" },
+        { "type": "match", "value": "2", "nextNode": "distancia_menu" },
+        { "type": "match", "value": "3", "nextNode": "cursos_si" },
+        { "type": "match", "value": "4", "nextNode": "archivo" },
+        { "type": "match", "value": "5", "nextNode": "streaming" },
+        { "type": "match", "value": "6", "nextNode": "camaras" },
+        { "type": "matchIncludes", "value": "presencial", "nextNode": "presencial_tipo" },
+        { "type": "matchIncludes", "value": "distancia", "nextNode": "distancia_menu" },
+        { "type": "matchIncludes", "value": "curso", "nextNode": "cursos_si" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "si_menu" }
+      ],
+      "ui": { "position": { "x": 480, "y": 120 } }
+    },
+
+    {
+      "id": "presencial_tipo",
+      "type": "message",
+      "message": "Elegí una carrera:\n\n1. Periodismo Deportivo\n2. Periodismo General",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "alumno_menu" },
+        { "type": "match", "value": "2", "nextNode": "alumno_menu" },
+        { "type": "matchIncludes", "value": "deportivo", "nextNode": "alumno_menu" },
+        { "type": "matchIncludes", "value": "general", "nextNode": "alumno_menu" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "presencial_tipo" }
+      ],
+      "ui": { "position": { "x": 880, "y": 40 } }
+    },
+
+    {
+      "id": "alumno_menu",
+      "type": "message",
+      "message": "Elegí una opción:\n\n1. Secretaría\n2. Administración\n3. Dirección de estudios\n4. Blanqueo de clave Quinttos\n5. Blanqueo de mail institucional\n6. Licenciatura\n7. Cambios de turno\n8. Cursos\n9. Mail de profesores/as",
+      "transitions": [
+        { "type": "match", "value": "1", "nextNode": "sec_menu" },
+        { "type": "match", "value": "2", "nextNode": "admin_menu" },
+        { "type": "match", "value": "3", "nextNode": "direccion" },
+        { "type": "match", "value": "4", "nextNode": "clave" },
+        { "type": "match", "value": "5", "nextNode": "mail_inst" },
+        { "type": "match", "value": "6", "nextNode": "lic_menu" },
+        { "type": "match", "value": "7", "nextNode": "turno" },
+        { "type": "match", "value": "8", "nextNode": "cursos_si" },
+        { "type": "match", "value": "9", "nextNode": "profesores" },
+        { "type": "matchIncludes", "value": "secret", "nextNode": "sec_menu" },
+        { "type": "matchIncludes", "value": "admin", "nextNode": "admin_menu" },
+        { "type": "matchIncludes", "value": "direccion", "nextNode": "direccion" },
+        { "type": "matchIncludes", "value": "clave", "nextNode": "clave" },
+        { "type": "matchIncludes", "value": "mail", "nextNode": "mail_inst" },
+        { "type": "matchIncludes", "value": "lic", "nextNode": "lic_menu" },
+        { "type": "matchIncludes", "value": "turno", "nextNode": "turno" },
+        { "type": "matchIncludes", "value": "curso", "nextNode": "cursos_si" },
+        { "type": "matchIncludes", "value": "profesor", "nextNode": "profesores" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "alumno_menu" }
+      ],
+      "ui": { "position": { "x": 1280, "y": 40 } }
+    },
+
+    {
+      "id": "sec_menu",
+      "type": "message",
+      "message": "Secretaría:\n\nA. Constancia de alumno regular\nB. Constancia de título en trámite\nC. Programas\nD. Analíticos\nE. Inasistencias\nF. Solicitud de acreditaciones\nG. Constancia de examen",
+      "transitions": [
+        { "type": "match", "value": "a", "nextNode": "sec_a" },
+        { "type": "match", "value": "b", "nextNode": "sec_b" },
+        { "type": "match", "value": "c", "nextNode": "sec_c" },
+        { "type": "match", "value": "d", "nextNode": "sec_d" },
+        { "type": "match", "value": "e", "nextNode": "sec_e" },
+        { "type": "match", "value": "f", "nextNode": "sec_f" },
+        { "type": "match", "value": "g", "nextNode": "sec_g" },
+        { "type": "matchIncludes", "value": "constancia", "nextNode": "sec_a" },
+        { "type": "matchIncludes", "value": "anal", "nextNode": "sec_d" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "sec_menu" }
+      ],
+      "ui": { "position": { "x": 1680, "y": 0 } }
+    },
+
+    {
+      "id": "sec_a",
+      "type": "end",
+      "message": "Podes descargarla desde tu perfil de quinttos y acercarte a sellarla y firmarla en secretaria de lunes a viernes (días hábiles) de 9 a 21 hs.",
+      "ui": { "position": { "x": 2080, "y": -160 } }
+    },
+    {
+      "id": "sec_b",
+      "type": "end",
+      "message": "Podes solicitarla en persona en la escuela o por mail a deportea@teaydeportea.edu.ar o tea@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": -80 } }
+    },
+    {
+      "id": "sec_c",
+      "type": "end",
+      "message": "Podes solicitarlos a deportea@teaydeportea.edu.ar o tea@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 0 } }
+    },
+    {
+      "id": "sec_d",
+      "type": "end",
+      "message": "Para consultar cuando estará listo tu analítico o si lo extraviaste debes enviar mail a secretaria@teaydeportea.edu.ar o tea@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 80 } }
+    },
+    {
+      "id": "sec_e",
+      "type": "end",
+      "message": "Para justificar tu inasistencia debes enviar foto del certificado médico",
+      "ui": { "position": { "x": 2080, "y": 160 } }
+    },
+    {
+      "id": "sec_f",
+      "type": "end",
+      "message": "Para solicitarlas debes enviar mail",
+      "ui": { "position": { "x": 2080, "y": 240 } }
+    },
+    {
+      "id": "sec_g",
+      "type": "end",
+      "message": "Debes solicitarla en persona en secretaria después de rendir el examen",
+      "ui": { "position": { "x": 2080, "y": 320 } }
+    },
+
+    {
+      "id": "admin_menu",
+      "type": "message",
+      "message": "Administración:\n\nA. Problemas con pagos\nB. Medios de pago\nC. Solicitud de baja\nD. Adhesión a débito automático en cuenta bancaria\nE. Adhesión a débito automático con tarjeta de crédito\nF. Solicitud de baja a débito automático",
+      "transitions": [
+        { "type": "match", "value": "a", "nextNode": "admin_a" },
+        { "type": "match", "value": "b", "nextNode": "admin_b" },
+        { "type": "match", "value": "c", "nextNode": "admin_c" },
+        { "type": "match", "value": "d", "nextNode": "admin_d" },
+        { "type": "match", "value": "e", "nextNode": "admin_e" },
+        { "type": "match", "value": "f", "nextNode": "admin_f" },
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "admin_menu" }
+      ],
+      "ui": { "position": { "x": 1680, "y": 400 } }
+    },
+
+    {
+      "id": "admin_a",
+      "type": "end",
+      "message": "Debes escribir a administracion@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 400 } }
+    },
+    {
+      "id": "admin_b",
+      "type": "end",
+      "message": "Pago online en quinttos con tarjeta de crédito o débito VISA o MASTER o mercado pago",
+      "ui": { "position": { "x": 2080, "y": 480 } }
+    },
+    {
+      "id": "admin_c",
+      "type": "end",
+      "message": "Debes enviar mail a administracion@teaydeportea.edu.ar indicando tu nombre, apellido y DNI",
+      "ui": { "position": { "x": 2080, "y": 560 } }
+    },
+    {
+      "id": "admin_d",
+      "type": "end",
+      "message": "Podes adherirte desde tu perfil de quinttos completando datos bancarios",
+      "ui": { "position": { "x": 2080, "y": 640 } }
+    },
+    {
+      "id": "admin_e",
+      "type": "end",
+      "message": "Debes acercarte a administración o completar formulario desde quinttos",
+      "ui": { "position": { "x": 2080, "y": 720 } }
+    },
+    {
+      "id": "admin_f",
+      "type": "end",
+      "message": "Debes escribir a administracion@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 800 } }
+    },
+
+    {
+      "id": "direccion",
+      "type": "end",
+      "message": "Por temas académicos escribir a direcciondeportea@teaydeportea.edu.ar o llamar al 4370 6464 int 134",
+      "ui": { "position": { "x": 1680, "y": 880 } }
+    },
+
+    {
+      "id": "clave",
+      "type": "end",
+      "message": "Indicanos tu DNI sin puntos y un representante se comunicará con vos",
+      "ui": { "position": { "x": 1680, "y": 960 } }
+    },
+
+    {
+      "id": "mail_inst",
+      "type": "end",
+      "message": "Debes enviar mail a kgomez@teaydeportea.edu.ar desde un mail personal",
+      "ui": { "position": { "x": 1680, "y": 1040 } }
+    },
+
+    {
+      "id": "lic_menu",
+      "type": "message",
+      "message": "Licenciatura:\n\nA. UCU - USBA\nB. Convenio con universidades",
+      "transitions": [
+        { "type": "match", "value": "a", "nextNode": "lic_a" },
+        { "type": "match", "value": "b", "nextNode": "lic_b" },
+        { "type": "default", "nextNode": "lic_menu" }
+      ],
+      "ui": { "position": { "x": 1680, "y": 1120 } }
+    },
+
+    {
+      "id": "lic_a",
+      "type": "end",
+      "message": "Para informes debes enviar mail a licenciatura@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 1120 } }
+    },
+    {
+      "id": "lic_b",
+      "type": "end",
+      "message": "Debes escribir a deportea@teaydeportea.edu.ar o tea@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 2080, "y": 1200 } }
+    },
+
+    {
+      "id": "turno",
+      "type": "end",
+      "message": "Debes enviar mail indicando tus datos personales y motivo del cambio",
+      "ui": { "position": { "x": 1680, "y": 1280 } }
+    },
+
+    {
+      "id": "profesores",
+      "type": "end",
+      "message": "Debes escribir a direcciondeportea@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 1680, "y": 1360 } }
+    },
+
+    {
+      "id": "distancia_menu",
+      "type": "end",
+      "message": "Para carrera a distancia escribir a secretariatydonline@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 880, "y": 280 } }
+    },
+
+    {
+      "id": "cursos_si",
+      "type": "end",
+      "message": "Podes ver nuestra oferta en www.teaydeportea.edu.ar/cursos o escribir a cursos@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 880, "y": 360 } }
+    },
+
+    {
+      "id": "archivo",
+      "type": "end",
+      "message": "archivo@teaydeportea.edu.ar o presencial de lunes a viernes de 10 a 20hs",
+      "ui": { "position": { "x": 880, "y": 440 } }
+    },
+
+    {
+      "id": "streaming",
+      "type": "end",
+      "message": "streamroom@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 880, "y": 520 } }
+    },
+
+    {
+      "id": "camaras",
+      "type": "end",
+      "message": "pedidostallertv@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 880, "y": 600 } }
+    },
+
+    {
+      "id": "no_menu",
+      "type": "end",
+      "message": "Carreras presenciales, a distancia, cursos o escribir a institucional@teaydeportea.edu.ar",
+      "ui": { "position": { "x": 480, "y": 280 } }
+    },
+
+    {
+      "id": "fallback_global",
+      "type": "message",
+      "message": "No te entendí. Escribí MENÚ para volver al inicio.",
+      "transitions": [
+        { "type": "matchAny", "value": ["menu", "menú", "inicio"], "nextNode": "welcome" },
+        { "type": "default", "nextNode": "fallback_global" }
+      ],
+      "ui": { "position": { "x": 80, "y": 520 } }
+    }
+
+  ],
+  "status": "published",
+  "updatedAt": "2026-04-29T12:38:00.000Z",
+  "schemaVersion": 1,
+  "publishedAt": "2026-04-29T12:38:00.000Z"
+}
