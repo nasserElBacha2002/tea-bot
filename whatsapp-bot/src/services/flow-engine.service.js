@@ -3,6 +3,7 @@ import flowLoader from '../utils/flow-loader.js';
 import sessionService from './session.service.js';
 import conversationTracker from './conversationTracker.service.js';
 import conversationExportService from './conversationExport.service.js';
+import { config } from '../config.js';
 import { detectGlobalCommand } from '../utils/global-commands.js';
 import { compileFlow } from '../utils/compile-flow.js';
 import { logPerf, nowMs, roundMs } from '../utils/perf-timer.js';
@@ -419,7 +420,7 @@ export class FlowEngine {
         perfContext
       );
     }
-    if (this._isInformationalResolutionNode(node) && !terminalReason) {
+    if (config.exportInfoProvidedEvents && this._isInformationalResolutionNode(node) && !terminalReason) {
       await conversationExportService.exportFinalizedConversation(
         userId,
         'info_provided',

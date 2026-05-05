@@ -35,6 +35,12 @@ export const config = {
   ),
   abandonTimeoutMinutes: Number(process.env.ABANDON_TIMEOUT_MINUTES || 30),
   abandonSweepIntervalSeconds: Number(process.env.ABANDON_SWEEP_INTERVAL_SECONDS || 300),
+  abandonIncludeSimulator: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.ABANDON_INCLUDE_SIMULATOR || '').trim().toLowerCase()
+  ),
+  exportInfoProvidedEvents: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_EXPORT_INFO_PROVIDED_EVENTS || '').trim().toLowerCase()
+  ),
 };
 
 function hasMetaCritical() {

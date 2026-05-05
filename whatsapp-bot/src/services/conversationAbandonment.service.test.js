@@ -9,10 +9,12 @@ test('runSweep exporta y resetea sesiones abandonadas', async () => {
   const originalConfig = {
     enabled: config.abandonTrackingEnabled,
     timeout: config.abandonTimeoutMinutes,
+    includeSimulator: config.abandonIncludeSimulator,
   };
 
   config.abandonTrackingEnabled = true;
   config.abandonTimeoutMinutes = 1;
+  config.abandonIncludeSimulator = true;
 
   const now = new Date();
   const staleIso = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
@@ -55,4 +57,5 @@ test('runSweep exporta y resetea sesiones abandonadas', async () => {
 
   config.abandonTrackingEnabled = originalConfig.enabled;
   config.abandonTimeoutMinutes = originalConfig.timeout;
+  config.abandonIncludeSimulator = originalConfig.includeSimulator;
 });

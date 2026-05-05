@@ -32,6 +32,9 @@ class ConversationAbandonmentService {
 
   _isAbandonedSession(session, nowMs) {
     if (!session) return false;
+    if (!config.abandonIncludeSimulator && String(session.provider || '').toLowerCase() === 'simulator') {
+      return false;
+    }
     if (session.exportedAt) return false;
     const last = Date.parse(session.lastMessageAt || session.updatedAt || '');
     if (!Number.isFinite(last)) return false;
