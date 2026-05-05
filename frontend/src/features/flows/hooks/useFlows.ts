@@ -83,11 +83,13 @@ export const useArchiveFlow = () => {
   });
 };
 
-export const usePublishedVersions = (flowId: string) =>
+export const usePublishedVersions = (flowId: string, options?: { enabled?: boolean }) =>
   useQuery({
     queryKey: flowVersionKeys.list(flowId),
     queryFn: () => flowsApi.listVersions(flowId),
-    enabled: !!flowId,
+    enabled: !!flowId && (options?.enabled ?? true),
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
   });
 
 export const usePublishedVersionDetail = (
@@ -116,6 +118,26 @@ export const useDuplicatePublishedToDraft = () => {
     onSuccess: (_d, { flowId }) => {
       qc.invalidateQueries({ queryKey: flowKeys.detail(flowId) });
       qc.invalidateQueries({ queryKey: flowVersionKeys.list(flowId) });
+      qc.invalidateQueries({ queryKey: flowKeys.lists() });
+    },
+  });
+};
+
+export const useImportJsonAsNewVersion = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      flowId,
+      flow,
+      publish,
+    }: {
+      flowId: string;
+      flow: Partial<Flow>;
+      publish?: boolean;
+    }) => flowsApi.importJsonAsNewVersion(flowId, flow, publish),
+    onSuccess: (_d, { flowId }) => {
+      qc.invalidateQueries({ queryKey: flowVersionKeys.list(flowId) });
+      qc.invalidateQueries({ queryKey: flowKeys.detail(flowId) });
       qc.invalidateQueries({ queryKey: flowKeys.lists() });
     },
   });

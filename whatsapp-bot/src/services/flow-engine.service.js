@@ -1,10 +1,15 @@
 import flowRepository from '../repositories/flow.repository.js';
 import flowLoader from '../utils/flow-loader.js';
 import sessionService from './session.service.js';
+import { detectGlobalCommand } from '../utils/global-commands.js';
+import { compileFlow } from '../utils/compile-flow.js';
+import { logPerf, nowMs, roundMs } from '../utils/perf-timer.js';
 
 function normalizeMessage(text) {
   return (text || '').trim().toLowerCase();
 }
+
+const HISTORY_LIMIT = 20;
 
 export class FlowEngine {
   /**
@@ -16,9 +21,17 @@ export class FlowEngine {
    * @param {string} [params.flowId] - Forzar un flowId específico (útil para iniciar simulaciones).
    * @returns {Object} - Respuesta estructurada { reply, flowId, currentNodeId, variables }.
    */
-  async resolveIncomingMessage({ userId, text, flowMode = 'published', flowId: explicitFlowId, flowSnapshot }) {
+  async resolveIncomingMessage({
+    userId,
+    text,
+    flowMode = 'published',
+    flowId: explicitFlowId,
+    flowSnapshot,
+    perfContext = null,
+  }) {
+    const resolveStart = nowMs();
     const input = normalizeMessage(text);
-    let session = sessionService.getSession(userId);
+    let session = sessionService.getSession(userId, perfContext);
 
     // 1. Manejo de Inicio Automático (Si no hay sesión)
     if (!session) {
@@ -28,14 +41,31 @@ export class FlowEngine {
         && typeof flowSnapshot === 'object'
         && flowSnapshot.id === targetFlowId
         && Array.isArray(flowSnapshot.nodes);
-      const flow = useSnapshot ? flowSnapshot : await this.getFlow(targetFlowId, flowMode);
+      const flowBundle = useSnapshot
+        ? {
+          flow: flowSnapshot,
+          compiled: compileFlow(flowSnapshot),
+          flowSource: 'snapshot',
+          flowCacheHit: true,
+        }
+        : await this.getFlow(targetFlowId, flowMode, null, perfContext);
+      const flow = flowBundle.flow;
+      const compiled = flowBundle.compiled;
 
       // Creamos la sesión en el nodo inicial (opcional: borrador en memoria para simulador del editor)
-      session = await sessionService.createSession(userId, targetFlowId, flow.entryNode, {
-        ...(useSnapshot ? { simulatorFlowOverride: flowSnapshot } : {}),
-      });
+      session = await sessionService.createSession(
+        userId,
+        targetFlowId,
+        flow.entryNode,
+        {
+          ...(useSnapshot ? { simulatorFlowOverride: flowSnapshot } : {}),
+        },
+        perfContext
+      );
 
-      const entryNode = flow.nodes.find((n) => n.id === flow.entryNode);
+      const entryLookupStart = nowMs();
+      const entryNode = this._getNode(compiled, flow, flow.entryNode);
+      perfContext?.add?.('entryNodeLookupMs', roundMs(nowMs() - entryLookupStart));
       if (!entryNode) {
         console.warn(
           `[FlowEngine] entryNode "${flow.entryNode}" no existe en flujo "${targetFlowId}".`,
@@ -47,74 +77,202 @@ export class FlowEngine {
 
       // Si el entryNode es un redirect, lo procesamos recursivamente
       if (entryNode.type === 'redirect') {
-        return this.processNode(userId, entryNode, flow, {}, '', flowMode);
+        perfContext?.add?.('wasRedirect', true);
+        const result = await this.processNode(
+          userId,
+          entryNode,
+          compiled,
+          flow,
+          {},
+          session,
+          '',
+          flowMode,
+          perfContext
+        );
+        perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+        return result;
       }
 
-      return {
+      const result = {
         reply: entryNode.message,
         flowId: session.flowId,
         currentNodeId: session.currentNode,
         variables: session.variables,
       };
+      perfContext?.add?.('currentNodeId', session.currentNode);
+      perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+      logPerf('flow_resolve', {
+        flowId: flow.id,
+        version: flow.version,
+        nodeId: session.currentNode,
+        resolveMs: perfContext?.toJSON?.().resolveIncomingMessageMs,
+        globalCommand: null,
+        matched: 'entry',
+      });
+      return result;
     }
 
     // 2. Cargar flujo y nodo actual de la sesión existente
-    const flow = await this.getFlow(session.flowId, flowMode, session);
-    let currentNode = flow.nodes.find((n) => n.id === session.currentNode || n.id === session.nodeId);
+    const flowBundle = await this.getFlow(session.flowId, flowMode, session, perfContext);
+    const flow = flowBundle.flow;
+    const compiled = flowBundle.compiled;
+    const nodeLookupStart = nowMs();
+    const currentNodeId = session.currentNode || session.nodeId;
+    let currentNode = this._getNode(compiled, flow, currentNodeId);
+    perfContext?.add?.('currentNodeLookupMs', roundMs(nowMs() - nodeLookupStart));
 
     if (!currentNode) {
       console.warn(
         `[FlowEngine] Sesión corrupta: nodo "${session.currentNode}" inexistente en "${session.flowId}". Reiniciando conversación.`,
       );
-      await sessionService.resetSession(userId);
+      await sessionService.resetSession(userId, perfContext);
       return this.resolveIncomingMessage({
         userId,
         text,
         flowMode,
         flowId: explicitFlowId,
         flowSnapshot,
+        perfContext,
       });
     }
 
+    const globalCommand = detectGlobalCommand(input);
+    if (globalCommand.type) {
+      const globalResult = await this._resolveGlobalCommand({
+        globalCommand: globalCommand.type,
+        userId,
+        flow,
+        compiled,
+        session,
+        flowMode,
+        perfContext,
+      });
+      if (globalResult) {
+        perfContext?.add?.('globalCommand', globalCommand.type);
+        perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+        logPerf('flow_resolve', {
+          flowId: flow.id,
+          version: flow.version,
+          nodeId: globalResult.currentNodeId,
+          resolveMs: perfContext?.toJSON?.().resolveIncomingMessageMs,
+          globalCommand: globalCommand.type,
+          matched: 'global',
+        });
+        return globalResult;
+      }
+    }
+
     // 3. Evaluar transiciones según el input del usuario
-    const nextNodeId = this.evaluateTransitions(currentNode, input, flow.fallbackNode);
-    const nextNode = flow.nodes.find((n) => n.id === nextNodeId);
+    const transitionStart = nowMs();
+    const transitionStats = this._transitionStats(currentNode);
+    const transitionEval = compiled
+      ? this.evaluateCompiledTransitionsDetailed(compiled, currentNode.id, input, flow.fallbackNode)
+      : this.evaluateTransitionsDetailed(currentNode, input, flow.fallbackNode);
+    const nextNodeId = transitionEval.nextNodeId;
+    perfContext?.add?.('transitionEvalMs', roundMs(nowMs() - transitionStart));
+    perfContext?.add?.('currentNodeId', currentNode.id);
+    perfContext?.add?.('nextNodeId', nextNodeId);
+    perfContext?.add?.('transitionType', transitionEval.reason);
+    perfContext?.add?.('transitionCount', transitionStats.transitionCount);
+    perfContext?.add?.('transitionValuesCount', transitionStats.valueCount);
+    perfContext?.add?.('fellBack', transitionEval.usedFallback);
+    const nextLookupStart = nowMs();
+    const nextNode = this._getNode(compiled, flow, nextNodeId);
+    perfContext?.add?.('nextNodeLookupMs', roundMs(nowMs() - nextLookupStart));
 
     // 4. Procesar el siguiente nodo (lógica de tipo de nodo)
-    return this.processNode(userId, nextNode, flow, session.variables, input, flowMode);
+    const result = await this.processNode(
+      userId,
+      nextNode,
+      compiled,
+      flow,
+      session.variables,
+      session,
+      input,
+      flowMode,
+      perfContext
+    );
+    perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+    logPerf('flow_resolve', {
+      flowId: flow.id,
+      version: flow.version,
+      nodeId: result.currentNodeId,
+      resolveMs: perfContext?.toJSON?.().resolveIncomingMessageMs,
+      globalCommand: perfContext?.toJSON?.().globalCommand || null,
+      matched: transitionEval.reason,
+    });
+    return result;
   }
 
   /**
    * Resuelve un flujo según el modo solicitado.
    */
-  async getFlow(flowId, flowMode, session = null) {
+  async getFlow(flowId, flowMode, session = null, perfContext = null) {
+    const start = nowMs();
     if (session?.simulatorFlowOverride) {
-      return session.simulatorFlowOverride;
+      perfContext?.add?.('flowSource', 'session_override');
+      perfContext?.add?.('flowCacheHit', true);
+      perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
+      const override = session.simulatorFlowOverride;
+      return {
+        flow: override,
+        compiled: compileFlow(override),
+      };
     }
     if (flowMode === 'draft') {
       const draft = await flowRepository.getDraft(flowId);
       if (!draft) throw new Error(`[FlowEngine] Draft "${flowId}" no encontrado.`);
-      return draft;
+      perfContext?.add?.('flowSource', 'draft_repo');
+      perfContext?.add?.('flowCacheHit', false);
+      perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
+      return {
+        flow: draft,
+        compiled: compileFlow(draft),
+      };
     }
 
     // Por defecto usamos el Loader (que cachea los published)
-    const published = flowLoader.getFlow(flowId);
+    const hasCache = flowLoader.hasFlow(flowId);
+    const published = await flowLoader.getFlow(flowId);
     if (!published) {
       // Intento final desde repo por si el loader no refrescó
       const repoPublished = await flowRepository.getLatestPublished(flowId);
       if (!repoPublished) throw new Error(`[FlowEngine] Published "${flowId}" no encontrado.`);
-      return repoPublished;
+      perfContext?.add?.('flowSource', 'published_repo_fallback');
+      perfContext?.add?.('flowCacheHit', false);
+      perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
+      return {
+        flow: repoPublished,
+        compiled: compileFlow(repoPublished),
+      };
     }
-    return published;
+    perfContext?.add?.('flowSource', 'published_loader_cache');
+    perfContext?.add?.('flowCacheHit', hasCache);
+    perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
+    return {
+      flow: published,
+      compiled: flowLoader.getCompiledFlow(flowId) || compileFlow(published),
+    };
   }
 
   /**
    * Procesa la lógica específica de cada tipo de nodo y actualiza la sesión.
    */
-  async processNode(userId, node, flow, variables = {}, lastInput = '', flowMode = 'published') {
+  async processNode(
+    userId,
+    node,
+    compiled,
+    flow,
+    variables = {},
+    session = null,
+    lastInput = '',
+    flowMode = 'published',
+    perfContext = null,
+    options = {}
+  ) {
     if (!node) {
       console.warn(`[FlowEngine] processNode: siguiente nodo ausente (userId=${userId}).`);
-      await sessionService.resetSession(userId);
+      await sessionService.resetSession(userId, perfContext);
       return {
         reply:
           'Tuvimos un problema al continuar la conversación. Enviá cualquier mensaje para empezar de nuevo.',
@@ -135,16 +293,19 @@ export class FlowEngine {
     await sessionService.updateSession(userId, {
       currentNode: node.id,
       variables: currentVariables,
-    });
+      __skipHistoryPush: Boolean(options.skipHistoryPush),
+      __resetHistory: Boolean(options.resetHistory),
+      __historyOverride: Array.isArray(options.historyOverride) ? options.historyOverride : undefined,
+    }, perfContext);
 
     // Si es un nodo de tipo 'redirect', saltamos automáticamente al siguiente sin esperar input
     if (node.type === 'redirect' && node.nextNode) {
-      const targetNode = flow.nodes.find((n) => n.id === node.nextNode);
+      const targetNode = this._getNode(compiled, flow, node.nextNode);
       if (!targetNode) {
         console.warn(
           `[FlowEngine] redirect desde "${node.id}" apunta a nodo inexistente "${node.nextNode}".`,
         );
-        await sessionService.resetSession(userId);
+        await sessionService.resetSession(userId, perfContext);
         return {
           reply:
             'Tuvimos un problema al continuar la conversación. Enviá cualquier mensaje para empezar de nuevo.',
@@ -153,17 +314,29 @@ export class FlowEngine {
           variables: {},
         };
       }
-      return this.processNode(userId, targetNode, flow, currentVariables, '', flowMode);
+      const refreshedSession = sessionService.getSession(userId, perfContext);
+      return this.processNode(
+        userId,
+        targetNode,
+        compiled,
+        flow,
+        currentVariables,
+        refreshedSession,
+        '',
+        flowMode,
+        perfContext,
+        options
+      );
     }
 
     // Si es un mensaje informativo que redirige después de mostrarse (en la PRÓXIMA interacción)
     if (node.type === 'message' && node.nextNode) {
-      await sessionService.updateSession(userId, { currentNode: node.nextNode });
+      await sessionService.updateSession(userId, { currentNode: node.nextNode }, perfContext);
     }
 
     // Si es 'end', finalizamos la lógica (en esta fase reseteamos la sesión)
     if (node.type === 'end') {
-      await sessionService.resetSession(userId);
+      await sessionService.resetSession(userId, perfContext);
     }
 
     return {
@@ -182,16 +355,30 @@ export class FlowEngine {
    * 4. default
    */
   evaluateTransitions(node, input, fallbackNodeId) {
+    return this.evaluateTransitionsDetailed(node, input, fallbackNodeId).nextNodeId;
+  }
+
+  evaluateTransitionsDetailed(node, input, fallbackNodeId) {
     if (!node) {
-      return fallbackNodeId;
+      return {
+        nextNodeId: fallbackNodeId,
+        reason: 'node_missing',
+        usedFallback: true,
+      };
     }
     if (!node.transitions || node.transitions.length === 0) {
-      return node.nextNode || fallbackNodeId;
+      return {
+        nextNodeId: node.nextNode || fallbackNodeId,
+        reason: node.nextNode ? 'node_next' : 'fallback',
+        usedFallback: !node.nextNode,
+      };
     }
 
     // 1. match (Coincidencia exacta)
     const matchTrans = node.transitions.find((t) => t.type === 'match' && input === normalizeMessage(t.value));
-    if (matchTrans) return matchTrans.nextNode;
+    if (matchTrans) {
+      return { nextNodeId: matchTrans.nextNode, reason: 'match', usedFallback: false };
+    }
 
     // 2. matchAny (Cualquiera de la lista)
     const matchAnyTrans = node.transitions.find(
@@ -199,19 +386,172 @@ export class FlowEngine {
         && Array.isArray(t.value)
         && t.value.some((v) => input === normalizeMessage(v)),
     );
-    if (matchAnyTrans) return matchAnyTrans.nextNode;
+    if (matchAnyTrans) {
+      return { nextNodeId: matchAnyTrans.nextNode, reason: 'matchAny', usedFallback: false };
+    }
 
     // 3. matchIncludes (Contiene la palabra)
     const matchIncTrans = node.transitions.find(
       (t) => t.type === 'matchIncludes' && input.includes(normalizeMessage(t.value)),
     );
-    if (matchIncTrans) return matchIncTrans.nextNode;
+    if (matchIncTrans) {
+      return { nextNodeId: matchIncTrans.nextNode, reason: 'matchIncludes', usedFallback: false };
+    }
 
     // 4. default
     const defTrans = node.transitions.find((t) => t.type === 'default' || t.default === true);
-    if (defTrans) return defTrans.nextNode;
+    if (defTrans) {
+      return { nextNodeId: defTrans.nextNode, reason: 'default', usedFallback: false };
+    }
 
-    return fallbackNodeId || node.id;
+    return {
+      nextNodeId: fallbackNodeId || node.id,
+      reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
+      usedFallback: Boolean(fallbackNodeId),
+    };
+  }
+
+  evaluateCompiledTransitionsDetailed(compiled, nodeId, input, fallbackNodeId) {
+    const node = compiled.nodesById.get(nodeId);
+    if (!node) {
+      return { nextNodeId: fallbackNodeId, reason: 'node_missing', usedFallback: true };
+    }
+    const transitions = compiled.transitionsByNodeId.get(nodeId) || [];
+    if (transitions.length === 0) {
+      return {
+        nextNodeId: node.nextNode || fallbackNodeId,
+        reason: node.nextNode ? 'node_next' : 'fallback',
+        usedFallback: !node.nextNode,
+      };
+    }
+
+    const exact = compiled.exactMatchByNodeId.get(nodeId);
+    const match = exact?.get(input);
+    if (match) return { nextNodeId: match.nextNode, reason: 'exact', usedFallback: false };
+
+    const includes = compiled.includesRulesByNodeId.get(nodeId) || [];
+    const includeMatch = includes.find((rule) => input.includes(rule.needle));
+    if (includeMatch) {
+      return { nextNodeId: includeMatch.transition.nextNode, reason: 'matchIncludes', usedFallback: false };
+    }
+
+    const defaultTransition = compiled.defaultTransitionByNodeId.get(nodeId);
+    if (defaultTransition) {
+      return { nextNodeId: defaultTransition.nextNode, reason: 'default', usedFallback: false };
+    }
+
+    return {
+      nextNodeId: fallbackNodeId || node.id,
+      reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
+      usedFallback: Boolean(fallbackNodeId),
+    };
+  }
+
+  async _resolveGlobalCommand({
+    globalCommand,
+    userId,
+    flow,
+    compiled,
+    session,
+    flowMode,
+    perfContext,
+  }) {
+    if (globalCommand === 'menu') {
+      const menuNode = this._getNode(compiled, flow, flow.entryNode);
+      if (!menuNode) return null;
+      const baseVariables = session?.variables || {};
+      return this.processNode(
+        userId,
+        menuNode,
+        compiled,
+        flow,
+        baseVariables,
+        session,
+        '',
+        flowMode,
+        perfContext,
+        { resetHistory: true, skipHistoryPush: true, historyOverride: [] }
+      );
+    }
+
+    if (globalCommand === 'back') {
+      const history = Array.isArray(session?.history) ? [...session.history] : [];
+      const previousNodeId = history.pop();
+      const targetNodeId = previousNodeId || flow.entryNode;
+      const backNode = this._getNode(compiled, flow, targetNodeId);
+      if (!backNode) return null;
+      return this.processNode(
+        userId,
+        backNode,
+        compiled,
+        flow,
+        session?.variables || {},
+        session,
+        '',
+        flowMode,
+        perfContext,
+        { skipHistoryPush: true, historyOverride: history }
+      );
+    }
+
+    if (globalCommand === 'human') {
+      const humanNodeId = this._resolveHumanNodeId(compiled, flow);
+      if (humanNodeId) {
+        const node = this._getNode(compiled, flow, humanNodeId);
+        if (node) {
+          return this.processNode(
+            userId,
+            node,
+            compiled,
+            flow,
+            session?.variables || {},
+            session,
+            '',
+            flowMode,
+            perfContext,
+            { skipHistoryPush: true }
+          );
+        }
+      }
+      return {
+        reply: '🙌 Te vamos a derivar con una persona del equipo para que pueda ayudarte mejor.',
+        flowId: flow.id,
+        currentNodeId: session?.currentNode || null,
+        variables: session?.variables || {},
+      };
+    }
+    return null;
+  }
+
+  _resolveHumanNodeId(compiled, flow) {
+    if (compiled?.globalCommandEntryByType?.get('human')) {
+      return compiled.globalCommandEntryByType.get('human');
+    }
+    const candidates = ['human_handoff', 'humano', 'asesor', 'representante'];
+    for (const candidate of candidates) {
+      if (this._getNode(compiled, flow, candidate)) return candidate;
+    }
+    return null;
+  }
+
+  _getNode(compiled, flow, nodeId) {
+    if (!nodeId) return null;
+    if (compiled?.nodesById?.has(nodeId)) return compiled.nodesById.get(nodeId);
+    return flow.nodes.find((n) => n.id === nodeId) || null;
+  }
+
+  _transitionStats(node) {
+    const transitions = Array.isArray(node?.transitions) ? node.transitions : [];
+    let valueCount = 0;
+    for (const trans of transitions) {
+      const value = trans?.value;
+      if (Array.isArray(value)) valueCount += value.length;
+      else if (typeof value === 'string') valueCount += 1;
+    }
+    return {
+      transitionCount: transitions.length,
+      valueCount,
+    };
   }
 }
 

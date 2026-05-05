@@ -72,6 +72,10 @@ vi.mock('../hooks/useFlows', () => ({
     mutateAsync: vi.fn().mockResolvedValue({ valid: true }),
     isPending: false,
   }),
+  useImportJsonAsNewVersion: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ version: 'v2', activated: false }),
+    isPending: false,
+  }),
   usePublishFlow: () => ({
     mutateAsync: vi.fn().mockResolvedValue({ flowId: 'f1', version: 'v1', publishedAt: '2024-01-01' }),
     isPending: false,
@@ -177,10 +181,13 @@ describe('ConversationEditorPage', () => {
     await screen.findByText('Guardando cambios…');
   });
 
-  it('renders simulator panel with chat on desktop', async () => {
+  it('initially keeps desktop simulator paused until user activates it', async () => {
+    const user = userEvent.setup();
     renderPage();
     await screen.findByText('Mi flujo');
-    expect(await screen.findByText('Probar conversación')).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /probar conversación/i })).toBeTruthy();
+    expect(screen.queryByText('Hola desde simulador')).toBeNull();
+    await user.click(screen.getByRole('button', { name: /probar conversación/i }));
     expect(await screen.findByText('Hola desde simulador')).toBeTruthy();
     expect(simulatorMocks.start).toHaveBeenCalled();
   });

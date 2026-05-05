@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Box,
+  Button,
   List,
   ListItemButton,
   ListItemText,
@@ -24,6 +25,8 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
   onStepSelect,
 }) => {
   const [query, setQuery] = useState('');
+  const [visibleCount, setVisibleCount] = useState(60);
+  const isFiltering = query.trim().length > 0;
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return steps.map((s, i) => ({ s, i }));
@@ -31,6 +34,10 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
       .map((s, i) => ({ s, i }))
       .filter(({ s }) => s.title.toLowerCase().includes(q) || s.internalId.toLowerCase().includes(q));
   }, [query, steps]);
+  const visibleRows = useMemo(
+    () => (isFiltering ? filtered : filtered.slice(0, visibleCount)),
+    [filtered, isFiltering, visibleCount]
+  );
 
   return (
     <Box
@@ -62,7 +69,7 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
         </Box>
       )}
       <List dense disablePadding sx={{ px: 0.5, pb: 1 }}>
-        {filtered.map(({ s, i }) => (
+        {visibleRows.map(({ s, i }) => (
           <ListItemButton
             key={s.internalId}
             selected={activeStepId === s.internalId}
@@ -77,6 +84,18 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
           </ListItemButton>
         ))}
       </List>
+      {!isFiltering && visibleCount < filtered.length && (
+        <Box sx={{ px: 1, pb: 1 }}>
+          <Button
+            fullWidth
+            size="small"
+            variant="outlined"
+            onClick={() => setVisibleCount(v => Math.min(v + 60, filtered.length))}
+          >
+            Mostrar más
+          </Button>
+        </Box>
+      )}
     </Box>
   );
 };

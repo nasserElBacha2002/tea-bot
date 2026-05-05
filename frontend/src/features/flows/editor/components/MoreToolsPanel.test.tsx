@@ -29,6 +29,14 @@ vi.mock('../../hooks/useFlows', () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
   }),
+  useValidateFlow: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ valid: true }),
+    isPending: false,
+  }),
+  useImportJsonAsNewVersion: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ version: 'v2' }),
+    isPending: false,
+  }),
 }));
 
 vi.mock('../../components/FlowGraphCanvas', () => ({

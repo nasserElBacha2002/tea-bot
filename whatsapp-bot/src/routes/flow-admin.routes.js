@@ -13,7 +13,8 @@ import {
 import {
   listPublishedVersions,
   getPublishedVersionDetail,
-  duplicatePublishedVersionToDraft
+  duplicatePublishedVersionToDraft,
+  importJsonAsNewVersion
 } from '../controllers/flow-versions.controller.js';
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.post('/validate', validateFlow);
 router.get('/:flowId/versions/:version', getPublishedVersionDetail);
 router.get('/:flowId/versions', listPublishedVersions);
 router.post('/:flowId/versions/:version/duplicate-to-draft', duplicatePublishedVersionToDraft);
+router.post('/:flowId/versions/import-json', importJsonAsNewVersion);
 
 // CRUD drafts
 router.get('/', listDrafts);

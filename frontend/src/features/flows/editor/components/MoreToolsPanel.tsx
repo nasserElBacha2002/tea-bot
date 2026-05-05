@@ -30,6 +30,11 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
   const [tab, setTab] = useState<MoreToolsTabValue>('connections');
   const [introOpen, setIntroOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [loadedTabs, setLoadedTabs] = useState<Record<MoreToolsTabValue, boolean>>({
+    connections: true,
+    history: false,
+    map: false,
+  });
 
   const openMapFlow = () => {
     try {
@@ -57,7 +62,10 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <Tabs
         value={tab}
-        onChange={(_, v) => setTab(v)}
+        onChange={(_, v: MoreToolsTabValue) => {
+          setTab(v);
+          setLoadedTabs(prev => ({ ...prev, [v]: true }));
+        }}
         variant="scrollable"
         scrollButtons="auto"
         sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 1 }}
@@ -68,7 +76,7 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
       </Tabs>
 
       <Box sx={{ flex: 1, overflow: 'auto', p: 2 }}>
-        {tab === 'connections' && (
+        {tab === 'connections' && loadedTabs.connections && (
           <ConnectionsTable viewModel={viewModel} onRowActivate={onConnectionRowActivate} />
         )}
         {tab === 'history' && (
@@ -76,6 +84,7 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
             flowId={flowId}
             editorDirty={editorDirty}
             onRestoreSuccess={onRestoreSuccess}
+            enabled={loadedTabs.history}
           />
         )}
         {tab === 'map' && (

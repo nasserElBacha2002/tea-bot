@@ -8,6 +8,10 @@ class FlowValidator {
     this.supportedTransitions = ['match', 'matchAny', 'matchIncludes', 'default'];
   }
 
+  _isFallbackRequired(flow) {
+    return flow?.requireFallback === true;
+  }
+
   /**
    * Valida un objeto de flujo completo.
    * @param {Object} flow - El flujo cargado desde JSON.
@@ -19,6 +23,9 @@ class FlowValidator {
     // 1. Campos base
     if (!id) throw new Error('El flujo debe tener un "id" único.');
     if (!entryNode) throw new Error(`El flujo "${id}" debe tener un "entryNode" definido.`);
+    if (this._isFallbackRequired(flow) && !fallbackNode) {
+      throw new Error(`El flujo "${id}" requiere un "fallbackNode" definido por su esquema.`);
+    }
     if (!Array.isArray(nodes)) {
       throw new Error(`El flujo "${id}" debe tener "nodes" como array.`);
     }
@@ -31,6 +38,14 @@ class FlowValidator {
 
     // 2. Verificar existencia de nodos de entrada y fallback
     const nodeIds = nodes.map((n) => n.id);
+    const seenNodeIds = new Set();
+    for (const nodeId of nodeIds) {
+      if (!nodeId) continue;
+      if (seenNodeIds.has(nodeId)) {
+        throw new Error(`El flow "${id}" contiene IDs de nodo duplicados: "${nodeId}".`);
+      }
+      seenNodeIds.add(nodeId);
+    }
     if (!nodeIds.includes(entryNode)) {
       throw new Error(`El flow "${id}" define un entryNode "${entryNode}" que no existe en la lista de nodos.`);
     }

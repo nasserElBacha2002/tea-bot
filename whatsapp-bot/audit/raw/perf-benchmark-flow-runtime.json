@@ -1,0 +1,55 @@
+{
+  "generatedAt": "2026-05-05T14:27:41.023Z",
+  "flowId": "main-menu",
+  "messages": 500,
+  "rows": [
+    {
+      "version": "v10",
+      "filePath": "/Users/nasserelbacha/Documents/Tea-bot/whatsapp-bot/data/flows/published/main-menu/v10.json",
+      "sizeKB": 31.1,
+      "nodes": 85,
+      "transitions": 155,
+      "values": 184,
+      "globalCommandsDuplicated": 22,
+      "compileMs": 0.4058,
+      "parseAvgMs": 0.1414,
+      "engineResolveAvgMs": 0.2803,
+      "p50": 0.246,
+      "p95": 0.595,
+      "p99": 0.939,
+      "msgPerSec": 3565.17
+    },
+    {
+      "version": "v11",
+      "filePath": "/Users/nasserelbacha/Documents/Tea-bot/whatsapp-bot/data/flows/published/main-menu/v11.json",
+      "sizeKB": 110.4,
+      "nodes": 86,
+      "transitions": 391,
+      "values": 801,
+      "globalCommandsDuplicated": 257,
+      "compileMs": 0.277,
+      "parseAvgMs": 0.1536,
+      "engineResolveAvgMs": 0.6648,
+      "p50": 0.596,
+      "p95": 1.066,
+      "p99": 1.587,
+      "msgPerSec": 1504.07
+    },
+    {
+      "version": "v12",
+      "filePath": "/Users/nasserelbacha/Documents/Tea-bot/whatsapp-bot/data/flows/published/main-menu/v12.json",
+      "sizeKB": 150.2,
+      "nodes": 86,
+      "transitions": 454,
+      "values": 2081,
+      "globalCommandsDuplicated": 257,
+      "compileMs": 0.4347,
+      "parseAvgMs": 0.1978,
+      "engineResolveAvgMs": 1.0609,
+      "p50": 0.982,
+      "p95": 1.473,
+      "p99": 2.191,
+      "msgPerSec": 942.46
+    }
+  ]
+}

@@ -19,6 +19,10 @@ export interface ConnectionsTableProps {
 
 export const ConnectionsTable: React.FC<ConnectionsTableProps> = ({ viewModel, onRowActivate }) => {
   const rows = React.useMemo(() => buildConnectionRows(viewModel), [viewModel]);
+  const [visibleCount, setVisibleCount] = React.useState(50);
+  React.useEffect(() => {
+    setVisibleCount(50);
+  }, [viewModel.flowId]);
 
   if (rows.length === 0) {
     return (
@@ -32,6 +36,11 @@ export const ConnectionsTable: React.FC<ConnectionsTableProps> = ({ viewModel, o
 
   return (
     <Paper variant="outlined" sx={{ overflow: 'auto' }}>
+      <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="caption" color="text.secondary">
+          Mostrando {Math.min(visibleCount, rows.length)} de {rows.length} conexiones
+        </Typography>
+      </Box>
       <Table size="small" stickyHeader>
         <TableHead>
           <TableRow>
@@ -41,7 +50,7 @@ export const ConnectionsTable: React.FC<ConnectionsTableProps> = ({ viewModel, o
           </TableRow>
         </TableHead>
         <TableBody>
-          {rows.map(row => (
+          {rows.slice(0, visibleCount).map(row => (
             <TableRow
               key={row.id}
               hover
@@ -55,6 +64,17 @@ export const ConnectionsTable: React.FC<ConnectionsTableProps> = ({ viewModel, o
           ))}
         </TableBody>
       </Table>
+      {visibleCount < rows.length && (
+        <Box sx={{ p: 1, display: 'flex', justifyContent: 'center' }}>
+          <Typography
+            component="button"
+            onClick={() => setVisibleCount(v => Math.min(v + 50, rows.length))}
+            style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#1976d2' }}
+          >
+            Mostrar más
+          </Typography>
+        </Box>
+      )}
     </Paper>
   );
 };

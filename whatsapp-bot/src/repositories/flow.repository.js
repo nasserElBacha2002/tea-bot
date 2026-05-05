@@ -386,6 +386,68 @@ class FlowRepository {
     return publishedFlow;
   }
 
+  async importPublishedVersionFromJson(flowId, flow, { publish = false } = {}) {
+    const normalizedFlow = this._withDefaultSchemaVersion({
+      ...flow,
+      id: flowId,
+    });
+    flowValidator.validate(normalizedFlow);
+
+    const dir = this._flowPublishedDir(flowId);
+    await fs.mkdir(dir, { recursive: true });
+
+    let meta = await this.getPublishedMetadata(flowId);
+    if (!meta) {
+      meta = {
+        flowId,
+        activeVersion: null,
+        versions: [],
+        lastPublishedAt: null,
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    const nextNum = this._nextVersionNum(meta);
+    const versionLabel = `v${nextNum}`;
+    const fileName = `${versionLabel}.json`;
+    const publishedAt = new Date().toISOString();
+
+    const publishedFlow = {
+      ...normalizedFlow,
+      id: flowId,
+      version: versionLabel,
+      status: 'published',
+      publishedAt
+    };
+
+    const versionEntry = {
+      version: versionLabel,
+      versionLabel,
+      file: fileName,
+      publishedAt,
+      sourceDraftUpdatedAt: null
+    };
+
+    await fs.writeFile(path.join(dir, fileName), JSON.stringify(publishedFlow, null, 2), 'utf-8');
+
+    const shouldPromoteAsActive = Boolean(publish) || !meta.activeVersion;
+    const newMeta = {
+      flowId,
+      activeVersion: shouldPromoteAsActive ? versionLabel : meta.activeVersion,
+      versions: [...(meta.versions || []), versionEntry],
+      lastPublishedAt: shouldPromoteAsActive ? publishedAt : meta.lastPublishedAt,
+      updatedAt: new Date().toISOString()
+    };
+    await this._writeMetadata(flowId, newMeta);
+
+    return {
+      flow: publishedFlow,
+      activeVersion: newMeta.activeVersion,
+      createdVersion: versionLabel,
+      wasActivated: shouldPromoteAsActive
+    };
+  }
+
   /**
    * Copia una versión publicada al draft del mismo flowId.
    */

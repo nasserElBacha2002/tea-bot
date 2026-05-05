@@ -12,10 +12,17 @@ export interface SimulatorPanelProps {
   flowId: string;
   draftFlow: Flow;
   viewModel: ConversationViewModel;
+  enabled?: boolean;
 }
 
-export const SimulatorPanel: React.FC<SimulatorPanelProps> = ({ variant, flowId, draftFlow, viewModel }) => {
-  const sim = useConversationSimulator({ flowId, draftFlow, viewModel });
+export const SimulatorPanel: React.FC<SimulatorPanelProps> = ({
+  variant,
+  flowId,
+  draftFlow,
+  viewModel,
+  enabled = true,
+}) => {
+  const sim = useConversationSimulator({ flowId, draftFlow, viewModel, enabled });
 
   return (
     <Box
@@ -63,13 +70,21 @@ export const SimulatorPanel: React.FC<SimulatorPanelProps> = ({ variant, flowId,
         </Alert>
       )}
 
-      {sim.loading && (
+      {!enabled && (
+        <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
+          <Typography variant="body2" color="text.secondary" textAlign="center">
+            Activá la prueba para iniciar el simulador.
+          </Typography>
+        </Box>
+      )}
+
+      {enabled && sim.loading && (
         <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={32} />
         </Box>
       )}
 
-      {!sim.loading && sim.error && (
+      {enabled && !sim.loading && sim.error && (
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, py: 2 }}>
           <Typography variant="body2" color="text.secondary" textAlign="center">
             {sim.error}
@@ -80,7 +95,7 @@ export const SimulatorPanel: React.FC<SimulatorPanelProps> = ({ variant, flowId,
         </Box>
       )}
 
-      {!sim.loading && !sim.error && (
+      {enabled && !sim.loading && !sim.error && (
         <>
           <SimulatorChat
             messages={sim.messages}

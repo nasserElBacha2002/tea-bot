@@ -93,3 +93,12 @@ export interface PublishedVersionDetailResponse {
   activeVersion: string | null;
   flow: Flow;
 }
+
+export interface ImportJsonVersionResponse {
+  flowId: string;
+  version: string;
+  activeVersion: string | null;
+  activated: boolean;
+  publishedAt: string;
+  flow: Flow;
+}

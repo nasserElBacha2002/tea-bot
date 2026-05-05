@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import flowEngine from '../services/flow-engine.service.js';
 import webhookDedupe from '../services/webhook-dedupe.service.js';
 import { sendTextMessage } from '../services/whatsapp.service.js';
+import { createPerfContext, logPerf, maskId, nowMs, roundMs } from '../utils/perf-timer.js';
 
 /**
  * Verifica el token del webhook enviado por Meta.
@@ -24,6 +25,7 @@ export const verifyWebhook = (req, res) => {
  * Recibe y procesa los eventos entrantes de WhatsApp.
  */
 export const receiveMessage = async (req, res) => {
+  const requestStart = nowMs();
   try {
     const { body } = req;
 
@@ -45,6 +47,7 @@ export const receiveMessage = async (req, res) => {
         const messages = value?.messages || [];
 
         for (const message of messages) {
+          const messageStart = nowMs();
           const from = message?.from;
           const userId = from ? `meta:${from}` : 'meta:unknown';
           const type = message?.type;
@@ -68,32 +71,59 @@ export const receiveMessage = async (req, res) => {
 
           // Si logramos obtener texto, procesamos la respuesta con el MOTOR DE FLUJOS
           if (text) {
-            if (dedupeKey && (await webhookDedupe.isDuplicate(dedupeKey))) {
+            const perfContext = createPerfContext({
+              channel: 'meta',
+              flowId: 'default',
+              userIdMasked: maskId(userId),
+              messageIdMasked: maskId(messageId),
+              inboundLength: text.length,
+            });
+            if (dedupeKey && (await webhookDedupe.isDuplicate(dedupeKey, perfContext))) {
               console.log(
                 `[WebhookInbound] provider=meta flowId=default userId=${userId} messageId=${messageId} duplicate=true action=ignored`,
               );
+              perfContext.add('duplicate', true);
+              perfContext.add('totalMs', roundMs(nowMs() - messageStart));
+              logPerf('meta_webhook_message', perfContext.toJSON());
               continue;
             }
 
             if (dedupeKey) {
-              await webhookDedupe.markProcessed(dedupeKey);
+              await webhookDedupe.markProcessed(dedupeKey, perfContext);
             }
 
             console.log(
               `[WebhookInbound] provider=meta flowId=default userId=${userId} messageId=${messageId} duplicate=false type=${type}`,
             );
 
-            const result = await flowEngine.resolveIncomingMessage({ userId, text });
+            const engineStart = nowMs();
+            const result = await flowEngine.resolveIncomingMessage({ userId, text, perfContext });
+            perfContext.add('engineMs', roundMs(nowMs() - engineStart));
 
+            const outboundStart = nowMs();
             await sendTextMessage({ to: from, message: result.reply });
+            perfContext.add('outboundSendMs', roundMs(nowMs() - outboundStart));
+            perfContext.add('replyLength', result.reply?.length || 0);
+            perfContext.add('nodeId', result.currentNodeId || null);
+            perfContext.add('duplicate', false);
+            perfContext.add('totalMs', roundMs(nowMs() - messageStart));
+            logPerf('meta_webhook_message', perfContext.toJSON());
           }
         }
       }
     }
 
+    logPerf('meta_webhook_request', {
+      totalMs: roundMs(nowMs() - requestStart),
+      entryCount: entries.length,
+    });
     return res.status(200).send('EVENT_RECEIVED');
   } catch (error) {
     console.error('❌ Error crítico en el controlador del webhook:', error.message);
+    logPerf('meta_webhook_error', {
+      totalMs: roundMs(nowMs() - requestStart),
+      error: error.message,
+    }, { force: true });
     return res.status(200).send('EVENT_RECEIVED');
   }
 };

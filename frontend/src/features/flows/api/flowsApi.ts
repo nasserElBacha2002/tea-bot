@@ -4,6 +4,7 @@ import type {
   FlowSummary,
   PublishedVersionsSummary,
   PublishedVersionDetailResponse,
+  ImportJsonVersionResponse,
 } from '../types/flow.types';
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
@@ -82,6 +83,18 @@ export const flowsApi = {
     const { data } = await client.post(
       `/${encodeURIComponent(flowId)}/versions/${encodeURIComponent(version)}/duplicate-to-draft`,
       { overwriteDraft }
+    );
+    return data.data;
+  },
+
+  importJsonAsNewVersion: async (
+    flowId: string,
+    flow: Partial<Flow>,
+    publish = false
+  ): Promise<ImportJsonVersionResponse> => {
+    const { data } = await client.post(
+      `/${encodeURIComponent(flowId)}/versions/import-json`,
+      { flow, publish }
     );
     return data.data;
   },

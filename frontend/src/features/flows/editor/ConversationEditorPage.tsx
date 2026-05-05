@@ -32,7 +32,13 @@ import {
   EditNote,
 } from '@mui/icons-material';
 import { flowsApi } from '../api/flowsApi';
-import { flowKeys, useFlow, useUpdateFlow, useValidateFlow } from '../hooks/useFlows';
+import {
+  flowKeys,
+  useFlow,
+  useImportJsonAsNewVersion,
+  useUpdateFlow,
+  useValidateFlow,
+} from '../hooks/useFlows';
 import { EMPTY_PUBLISH_FLOW, EMPTY_PUBLISH_VM } from './state/publishFallbackModels';
 import { useConversationPublish } from './state/useConversationPublish';
 import { PublishReviewDialog } from './components/PublishReviewDialog';
@@ -45,6 +51,7 @@ import { SimulatorPanel } from './components/SimulatorPanel';
 import { StepCard } from './components/StepCard';
 import { MoreToolsPanel } from './components/MoreToolsPanel';
 import { FlowMetadataDialog } from './components/FlowMetadataDialog';
+import { ImportJsonVersionDialog } from './components/ImportJsonVersionDialog';
 
 function statusLabel(status: string, version: string): { main: string; sub?: string } {
   if (status === 'published') return { main: 'En vivo', sub: version !== 'draft' ? version : undefined };
@@ -62,6 +69,8 @@ export const ConversationEditorPage: React.FC = () => {
   const { data: remoteFlow, isLoading, isError } = useFlow(flowId!);
   const updateFlow = useUpdateFlow(flowId!);
   const validateFlow = useValidateFlow();
+  const validateImportFlow = useValidateFlow();
+  const importJsonMutation = useImportJsonAsNewVersion();
 
   const serverViewModel = useMemo(
     () => (remoteFlow ? flowToConversationViewModel(remoteFlow) : null),
@@ -80,6 +89,8 @@ export const ConversationEditorPage: React.FC = () => {
     severity: 'success' | 'error';
   }>({ open: false, message: '', severity: 'success' });
   const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
+  const [importJsonOpen, setImportJsonOpen] = useState(false);
+  const [simulatorEnabled, setSimulatorEnabled] = useState(false);
 
   const scrollToStep = useCallback((internalId: string) => {
     setActiveStepId(internalId);
@@ -211,6 +222,13 @@ export const ConversationEditorPage: React.FC = () => {
     );
   }
 
+  const selectedStepId = activeStepId ?? vm.steps[0]?.internalId ?? null;
+  const selectedStepIndex = selectedStepId
+    ? vm.steps.findIndex(step => step.internalId === selectedStepId)
+    : -1;
+  const selectedStep =
+    selectedStepIndex >= 0 ? vm.steps[selectedStepIndex] : vm.steps[0] ?? null;
+
   const st = statusLabel(vm.status, vm.version);
 
   return (
@@ -276,6 +294,13 @@ export const ConversationEditorPage: React.FC = () => {
           </Button>
           <Button
             size="small"
+            variant="outlined"
+            onClick={() => setImportJsonOpen(true)}
+          >
+            Importar JSON
+          </Button>
+          <Button
+            size="small"
             variant={moreToolsOpen ? 'contained' : 'outlined'}
             color="secondary"
             startIcon={<Build />}
@@ -287,11 +312,21 @@ export const ConversationEditorPage: React.FC = () => {
             size="small"
             variant="outlined"
             startIcon={<PlayArrow />}
-            onClick={() => setSimulatorOpen(true)}
+            onClick={() => (isMdUp ? setSimulatorEnabled(v => !v) : setSimulatorOpen(true))}
             sx={{ display: { xs: 'inline-flex', md: 'none' } }}
           >
             Probar
           </Button>
+          {isMdUp && (
+            <Button
+              size="small"
+              variant={simulatorEnabled ? 'contained' : 'outlined'}
+              startIcon={<PlayArrow />}
+              onClick={() => setSimulatorEnabled(v => !v)}
+            >
+              {simulatorEnabled ? 'Pausa prueba' : 'Probar conversación'}
+            </Button>
+          )}
           <Button
             size="small"
             variant="contained"
@@ -329,7 +364,7 @@ export const ConversationEditorPage: React.FC = () => {
             Cerrar
           </Button>
         </Box>
-        {draftFlowForSimulator && (
+        {draftFlowForSimulator && moreToolsOpen && (
           <MoreToolsPanel
             flowId={flowId!}
             viewModel={vm}
@@ -382,35 +417,43 @@ export const ConversationEditorPage: React.FC = () => {
             </Alert>
           )}
 
-          {vm.steps.map((step, stepIndex) => (
+          {selectedStep && (
             <StepCard
-              key={step.internalId}
-              step={step}
-              stepIndex={stepIndex}
+              key={selectedStep.internalId}
+              step={selectedStep}
+              stepIndex={Math.max(selectedStepIndex, 0)}
               totalSteps={vm.steps.length}
               allSteps={vm.steps}
               validationIssues={editor.validationIssues}
-              active={activeStepId === step.internalId}
-              cardRef={el => registerStepRef(step.internalId, el)}
-              onTitleChange={title => editor.updateStepTitle(step.internalId, title)}
-              onMessageChange={message => editor.updateStepMessage(step.internalId, message)}
-              onDuplicate={() => editor.duplicateStep(step.internalId)}
-              onDelete={() => editor.deleteStep(step.internalId)}
-              onMoveUp={() => editor.reorderSteps(stepIndex, stepIndex - 1)}
-              onMoveDown={() => editor.reorderSteps(stepIndex, stepIndex + 1)}
-              onAddResponse={kind => editor.addResponse(step.internalId, kind)}
-              onUpdateResponseValues={(responseUiId, values) =>
-                editor.updateResponse(step.internalId, responseUiId, { values })
+              active={activeStepId === selectedStep.internalId}
+              cardRef={el => registerStepRef(selectedStep.internalId, el)}
+              onTitleChange={title => editor.updateStepTitle(selectedStep.internalId, title)}
+              onMessageChange={message => editor.updateStepMessage(selectedStep.internalId, message)}
+              onDuplicate={() => editor.duplicateStep(selectedStep.internalId)}
+              onDelete={() => editor.deleteStep(selectedStep.internalId)}
+              onMoveUp={() =>
+                selectedStepIndex > 0 && editor.reorderSteps(selectedStepIndex, selectedStepIndex - 1)
               }
-              onDeleteResponse={responseUiId => editor.deleteResponse(step.internalId, responseUiId)}
+              onMoveDown={() =>
+                selectedStepIndex >= 0 &&
+                selectedStepIndex < vm.steps.length - 1 &&
+                editor.reorderSteps(selectedStepIndex, selectedStepIndex + 1)
+              }
+              onAddResponse={kind => editor.addResponse(selectedStep.internalId, kind)}
+              onUpdateResponseValues={(responseUiId, values) =>
+                editor.updateResponse(selectedStep.internalId, responseUiId, { values })
+              }
+              onDeleteResponse={responseUiId =>
+                editor.deleteResponse(selectedStep.internalId, responseUiId)
+              }
               onSetResponseDestination={(responseUiId, targetId) =>
-                editor.setResponseDestination(step.internalId, responseUiId, targetId)
+                editor.setResponseDestination(selectedStep.internalId, responseUiId, targetId)
               }
               onCreateStepForResponse={responseUiId =>
-                editor.createStepAndAssignDestination(step.internalId, responseUiId)
+                editor.createStepAndAssignDestination(selectedStep.internalId, responseUiId)
               }
             />
-          ))}
+          )}
         </Box>
 
         {isMdUp && draftFlowForSimulator && (
@@ -434,6 +477,7 @@ export const ConversationEditorPage: React.FC = () => {
               flowId={flowId!}
               draftFlow={draftFlowForSimulator}
               viewModel={vm}
+              enabled={simulatorEnabled}
             />
           </Box>
         )}
@@ -470,6 +514,18 @@ export const ConversationEditorPage: React.FC = () => {
                 </ListItemButton>
               ))}
           </List>
+          {!isMdUp && (
+            <Box sx={{ px: 2, pb: 2 }}>
+              <Button
+                size="small"
+                fullWidth
+                variant="outlined"
+                onClick={() => setSimulatorEnabled(v => !v)}
+              >
+                {simulatorEnabled ? 'Pausar simulador' : 'Activar simulador'}
+              </Button>
+            </Box>
+          )}
         </Box>
       </Drawer>
 
@@ -479,6 +535,25 @@ export const ConversationEditorPage: React.FC = () => {
         initialDescription={vm.description ?? ''}
         onClose={() => setMetadataDialogOpen(false)}
         onSave={(flowName, description) => editor.updateFlowInfo(flowName, description)}
+      />
+      <ImportJsonVersionDialog
+        open={importJsonOpen}
+        loadingValidate={validateImportFlow.isPending}
+        loadingCreate={importJsonMutation.isPending}
+        onClose={() => setImportJsonOpen(false)}
+        onValidate={flow => validateImportFlow.mutateAsync(flow)}
+        onCreate={async (flow, publish) => {
+          const created = await importJsonMutation.mutateAsync({ flowId: flowId!, flow, publish });
+          setImportJsonOpen(false);
+          setSnackbar({
+            open: true,
+            message: `Nueva versión creada: ${created.version}.`,
+            severity: 'success',
+          });
+          if (created.activated) {
+            await queryClient.invalidateQueries({ queryKey: flowKeys.detail(flowId!) });
+          }
+        }}
       />
 
       <Snackbar

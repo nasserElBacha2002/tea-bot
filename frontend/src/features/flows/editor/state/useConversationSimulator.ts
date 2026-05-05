@@ -24,9 +24,15 @@ export interface UseConversationSimulatorParams {
   flowId: string;
   draftFlow: Flow;
   viewModel: ConversationViewModel;
+  enabled?: boolean;
 }
 
-export function useConversationSimulator({ flowId, draftFlow, viewModel }: UseConversationSimulatorParams) {
+export function useConversationSimulator({
+  flowId,
+  draftFlow,
+  viewModel,
+  enabled = true,
+}: UseConversationSimulatorParams) {
   const sessionIdRef = useRef(`sim-${flowId}-${Date.now()}`);
   const draftFlowRef = useRef(draftFlow);
   draftFlowRef.current = draftFlow;
@@ -90,12 +96,16 @@ export function useConversationSimulator({ flowId, draftFlow, viewModel }: UseCo
   );
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     const signal = { cancelled: false };
     void bootstrap({ signal });
     return () => {
       signal.cancelled = true;
     };
-  }, [flowId, bootstrap]);
+  }, [flowId, bootstrap, enabled]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -140,8 +150,9 @@ export function useConversationSimulator({ flowId, draftFlow, viewModel }: UseCo
   }, [flowId, applyStartResponse]);
 
   const retry = useCallback(() => {
+    if (!enabled) return;
     void bootstrap();
-  }, [bootstrap]);
+  }, [bootstrap, enabled]);
 
   return {
     messages,

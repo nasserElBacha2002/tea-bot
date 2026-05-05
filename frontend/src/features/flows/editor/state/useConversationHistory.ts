@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
+import type { Flow } from '../../types/flow.types';
 import {
   useDuplicatePublishedToDraft,
+  useImportJsonAsNewVersion,
   usePublishedVersions,
+  useValidateFlow,
 } from '../../hooks/useFlows';
 
 export interface RestoreTarget {
@@ -11,9 +14,11 @@ export interface RestoreTarget {
   publishedAt: string;
 }
 
-export function useConversationHistory(flowId: string) {
-  const versionsQuery = usePublishedVersions(flowId);
+export function useConversationHistory(flowId: string, options?: { enabled?: boolean }) {
+  const versionsQuery = usePublishedVersions(flowId, { enabled: options?.enabled ?? true });
   const duplicateMutation = useDuplicatePublishedToDraft();
+  const validateMutation = useValidateFlow();
+  const importMutation = useImportJsonAsNewVersion();
   const [lastError, setLastError] = useState<string | null>(null);
 
   const restoreVersionToDraft = useCallback(
@@ -43,6 +48,11 @@ export function useConversationHistory(flowId: string) {
     versionsQuery,
     restoreVersionToDraft,
     isRestoring: duplicateMutation.isPending,
+    validateImportedFlow: (flow: Partial<Flow>) => validateMutation.mutateAsync(flow),
+    importJsonAsNewVersion: (flow: Partial<Flow>, publish = false) =>
+      importMutation.mutateAsync({ flowId, flow, publish }),
+    isValidatingImport: validateMutation.isPending,
+    isImporting: importMutation.isPending,
     lastError,
     clearError: () => setLastError(null),
   };
