@@ -22,6 +22,19 @@ export const config = {
   adminUsername: (process.env.ADMIN_USERNAME || '').trim(),
   adminPasswordHash: (process.env.ADMIN_PASSWORD_HASH || '').trim().toLowerCase(),
   sessionSecret: process.env.SESSION_SECRET || '',
+  googleSheetsEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.GOOGLE_SHEETS_ENABLED || '').trim().toLowerCase()
+  ),
+  googleSheetsSpreadsheetId: (process.env.GOOGLE_SHEETS_SPREADSHEET_ID || '').trim(),
+  googleSheetsTabName: (process.env.GOOGLE_SHEETS_TAB_NAME || 'Conversaciones').trim(),
+  googleSheetsRawTabName: (process.env.GOOGLE_SHEETS_RAW_TAB_NAME || '').trim(),
+  googleServiceAccountEmail: (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '').trim(),
+  googlePrivateKey: process.env.GOOGLE_PRIVATE_KEY || '',
+  abandonTrackingEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.ABANDON_TRACKING_ENABLED || '').trim().toLowerCase()
+  ),
+  abandonTimeoutMinutes: Number(process.env.ABANDON_TIMEOUT_MINUTES || 30),
+  abandonSweepIntervalSeconds: Number(process.env.ABANDON_SWEEP_INTERVAL_SECONDS || 300),
 };
 
 function hasMetaCritical() {
@@ -60,6 +73,21 @@ export const validateConfig = () => {
       console.error('❌ Producción: CORS_ORIGIN es obligatorio (origen del editor o frontend, CSV).');
       process.exit(1);
     }
+    if (config.googleSheetsEnabled) {
+      const requiredSheets = [
+        ['GOOGLE_SHEETS_SPREADSHEET_ID', config.googleSheetsSpreadsheetId],
+        ['GOOGLE_SHEETS_TAB_NAME', config.googleSheetsTabName],
+        ['GOOGLE_SERVICE_ACCOUNT_EMAIL', config.googleServiceAccountEmail],
+        ['GOOGLE_PRIVATE_KEY', config.googlePrivateKey],
+      ].filter(([, value]) => !value);
+      if (requiredSheets.length > 0) {
+        console.warn(
+          `⚠️ Google Sheets habilitado pero faltan variables: ${requiredSheets
+            .map(([key]) => key)
+            .join(', ')}`
+        );
+      }
+    }
     return;
   }
 
@@ -80,6 +108,22 @@ export const validateConfig = () => {
         ', ',
       )}). Son opcionales en V1 TwiML y requeridas para envío async futuro.`,
     );
+  }
+
+  if (config.googleSheetsEnabled) {
+    const requiredSheets = [
+      ['GOOGLE_SHEETS_SPREADSHEET_ID', config.googleSheetsSpreadsheetId],
+      ['GOOGLE_SHEETS_TAB_NAME', config.googleSheetsTabName],
+      ['GOOGLE_SERVICE_ACCOUNT_EMAIL', config.googleServiceAccountEmail],
+      ['GOOGLE_PRIVATE_KEY', config.googlePrivateKey],
+    ].filter(([, value]) => !value);
+    if (requiredSheets.length > 0) {
+      console.warn(
+        `⚠️ Google Sheets habilitado pero faltan variables: ${requiredSheets
+          .map(([key]) => key)
+          .join(', ')}`
+      );
+    }
   }
 };
 

@@ -1,6 +1,8 @@
 import flowRepository from '../repositories/flow.repository.js';
 import flowLoader from '../utils/flow-loader.js';
 import sessionService from './session.service.js';
+import conversationTracker from './conversationTracker.service.js';
+import conversationExportService from './conversationExport.service.js';
 import { detectGlobalCommand } from '../utils/global-commands.js';
 import { compileFlow } from '../utils/compile-flow.js';
 import { logPerf, nowMs, roundMs } from '../utils/perf-timer.js';
@@ -10,6 +12,7 @@ function normalizeMessage(text) {
 }
 
 const HISTORY_LIMIT = 20;
+const CANCEL_INPUTS = new Set(['salir', 'cancelar', 'terminar']);
 
 export class FlowEngine {
   /**
@@ -60,6 +63,12 @@ export class FlowEngine {
         {
           ...(useSnapshot ? { simulatorFlowOverride: flowSnapshot } : {}),
         },
+        perfContext
+      );
+      session = await conversationTracker.ensureSessionContext(userId, flow, session, perfContext);
+      await sessionService.updateSession(
+        userId,
+        conversationTracker.buildMessagePatch(text),
         perfContext
       );
 
@@ -116,6 +125,13 @@ export class FlowEngine {
     const flowBundle = await this.getFlow(session.flowId, flowMode, session, perfContext);
     const flow = flowBundle.flow;
     const compiled = flowBundle.compiled;
+    session = await conversationTracker.ensureSessionContext(userId, flow, session, perfContext);
+    await sessionService.updateSession(
+      userId,
+      conversationTracker.buildMessagePatch(text),
+      perfContext
+    );
+    session = sessionService.getSession(userId, perfContext) || session;
     const nodeLookupStart = nowMs();
     const currentNodeId = session.currentNode || session.nodeId;
     let currentNode = this._getNode(compiled, flow, currentNodeId);
@@ -134,6 +150,27 @@ export class FlowEngine {
         flowSnapshot,
         perfContext,
       });
+    }
+
+    if (CANCEL_INPUTS.has(input)) {
+      await conversationExportService.exportFinalizedConversation(
+        userId,
+        'cancelled_by_user',
+        {
+          flowId: flow.id,
+          flowVersion: flow.version,
+          reason: 'cancelled_by_user',
+          lastNodeId: currentNode.id,
+        },
+        perfContext
+      );
+      await sessionService.resetSession(userId, perfContext);
+      return {
+        reply: 'Perfecto, cerramos la conversación por ahora. Si querés volver, escribinos cuando quieras.',
+        flowId: flow.id,
+        currentNodeId: null,
+        variables: {},
+      };
     }
 
     const globalCommand = detectGlobalCommand(input);
@@ -176,9 +213,36 @@ export class FlowEngine {
     perfContext?.add?.('transitionCount', transitionStats.transitionCount);
     perfContext?.add?.('transitionValuesCount', transitionStats.valueCount);
     perfContext?.add?.('fellBack', transitionEval.usedFallback);
+    if (transitionEval.matchedTransition?.track) {
+      const trackedPatch = conversationTracker.buildTrackingPatch(session, transitionEval.matchedTransition);
+      if (Object.keys(trackedPatch).length > 0) {
+        await sessionService.updateSession(userId, trackedPatch, perfContext);
+        session = sessionService.getSession(userId, perfContext) || session;
+      }
+    }
+    if (transitionEval.usedFallback) {
+      await sessionService.updateSession(userId, conversationTracker.buildFallbackPatch(session), perfContext);
+      session = sessionService.getSession(userId, perfContext) || session;
+    }
     const nextLookupStart = nowMs();
     const nextNode = this._getNode(compiled, flow, nextNodeId);
     perfContext?.add?.('nextNodeLookupMs', roundMs(nowMs() - nextLookupStart));
+    if (transitionEval.matchedTransition && nextNodeId) {
+      const nextNodeLabel = nextNode
+        ? (nextNode.label || nextNode.trackingLabel || nextNode.title || nextNode.name || '')
+        : '';
+      const transitionTrailPatch = conversationTracker.buildTransitionTrailPatch(
+        session,
+        currentNode.id,
+        nextNodeId,
+        transitionEval.matchedTransition,
+        nextNodeLabel
+      );
+      if (Object.keys(transitionTrailPatch).length > 0) {
+        await sessionService.updateSession(userId, transitionTrailPatch, perfContext);
+        session = sessionService.getSession(userId, perfContext) || session;
+      }
+    }
 
     // 4. Procesar el siguiente nodo (lógica de tipo de nodo)
     const result = await this.processNode(
@@ -293,6 +357,7 @@ export class FlowEngine {
     await sessionService.updateSession(userId, {
       currentNode: node.id,
       variables: currentVariables,
+      ...conversationTracker.buildNodeVisitPatch(session, node.id),
       __skipHistoryPush: Boolean(options.skipHistoryPush),
       __resetHistory: Boolean(options.resetHistory),
       __historyOverride: Array.isArray(options.historyOverride) ? options.historyOverride : undefined,
@@ -334,8 +399,43 @@ export class FlowEngine {
       await sessionService.updateSession(userId, { currentNode: node.nextNode }, perfContext);
     }
 
-    // Si es 'end', finalizamos la lógica (en esta fase reseteamos la sesión)
-    if (node.type === 'end') {
+    const terminalReason =
+      node.isTerminal === true
+        ? String(node.terminalReason || 'completed')
+        : node.type === 'end'
+          ? 'completed'
+          : null;
+    if (terminalReason) {
+      await conversationExportService.exportFinalizedConversation(
+        userId,
+        terminalReason,
+        {
+          flowId: flow.id,
+          flowVersion: flow.version,
+          reason: terminalReason,
+          lastNodeId: node.id,
+          requiresHuman: terminalReason === 'human_handoff' || terminalReason === 'fallback_handoff',
+        },
+        perfContext
+      );
+    }
+    if (this._isInformationalResolutionNode(node) && !terminalReason) {
+      await conversationExportService.exportFinalizedConversation(
+        userId,
+        'info_provided',
+        {
+          flowId: flow.id,
+          flowVersion: flow.version,
+          reason: 'info_provided',
+          lastNodeId: node.id,
+          requiresHuman: false,
+        },
+        perfContext
+      );
+    }
+
+    // Si es 'end' o terminal, finalizamos la sesión
+    if (node.type === 'end' || node.isTerminal === true) {
       await sessionService.resetSession(userId, perfContext);
     }
 
@@ -364,6 +464,7 @@ export class FlowEngine {
         nextNodeId: fallbackNodeId,
         reason: 'node_missing',
         usedFallback: true,
+        matchedTransition: null,
       };
     }
     if (!node.transitions || node.transitions.length === 0) {
@@ -371,13 +472,14 @@ export class FlowEngine {
         nextNodeId: node.nextNode || fallbackNodeId,
         reason: node.nextNode ? 'node_next' : 'fallback',
         usedFallback: !node.nextNode,
+        matchedTransition: null,
       };
     }
 
     // 1. match (Coincidencia exacta)
     const matchTrans = node.transitions.find((t) => t.type === 'match' && input === normalizeMessage(t.value));
     if (matchTrans) {
-      return { nextNodeId: matchTrans.nextNode, reason: 'match', usedFallback: false };
+      return { nextNodeId: matchTrans.nextNode, reason: 'match', usedFallback: false, matchedTransition: matchTrans };
     }
 
     // 2. matchAny (Cualquiera de la lista)
@@ -387,7 +489,12 @@ export class FlowEngine {
         && t.value.some((v) => input === normalizeMessage(v)),
     );
     if (matchAnyTrans) {
-      return { nextNodeId: matchAnyTrans.nextNode, reason: 'matchAny', usedFallback: false };
+      return {
+        nextNodeId: matchAnyTrans.nextNode,
+        reason: 'matchAny',
+        usedFallback: false,
+        matchedTransition: matchAnyTrans,
+      };
     }
 
     // 3. matchIncludes (Contiene la palabra)
@@ -395,26 +502,37 @@ export class FlowEngine {
       (t) => t.type === 'matchIncludes' && input.includes(normalizeMessage(t.value)),
     );
     if (matchIncTrans) {
-      return { nextNodeId: matchIncTrans.nextNode, reason: 'matchIncludes', usedFallback: false };
+      return {
+        nextNodeId: matchIncTrans.nextNode,
+        reason: 'matchIncludes',
+        usedFallback: false,
+        matchedTransition: matchIncTrans,
+      };
     }
 
     // 4. default
     const defTrans = node.transitions.find((t) => t.type === 'default' || t.default === true);
     if (defTrans) {
-      return { nextNodeId: defTrans.nextNode, reason: 'default', usedFallback: false };
+      return { nextNodeId: defTrans.nextNode, reason: 'default', usedFallback: false, matchedTransition: defTrans };
     }
 
     return {
       nextNodeId: fallbackNodeId || node.id,
       reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
       usedFallback: Boolean(fallbackNodeId),
+      matchedTransition: null,
     };
   }
 
   evaluateCompiledTransitionsDetailed(compiled, nodeId, input, fallbackNodeId) {
     const node = compiled.nodesById.get(nodeId);
     if (!node) {
-      return { nextNodeId: fallbackNodeId, reason: 'node_missing', usedFallback: true };
+      return {
+        nextNodeId: fallbackNodeId,
+        reason: 'node_missing',
+        usedFallback: true,
+        matchedTransition: null,
+      };
     }
     const transitions = compiled.transitionsByNodeId.get(nodeId) || [];
     if (transitions.length === 0) {
@@ -422,28 +540,40 @@ export class FlowEngine {
         nextNodeId: node.nextNode || fallbackNodeId,
         reason: node.nextNode ? 'node_next' : 'fallback',
         usedFallback: !node.nextNode,
+        matchedTransition: null,
       };
     }
 
     const exact = compiled.exactMatchByNodeId.get(nodeId);
     const match = exact?.get(input);
-    if (match) return { nextNodeId: match.nextNode, reason: 'exact', usedFallback: false };
+    if (match) return { nextNodeId: match.nextNode, reason: 'exact', usedFallback: false, matchedTransition: match };
 
     const includes = compiled.includesRulesByNodeId.get(nodeId) || [];
     const includeMatch = includes.find((rule) => input.includes(rule.needle));
     if (includeMatch) {
-      return { nextNodeId: includeMatch.transition.nextNode, reason: 'matchIncludes', usedFallback: false };
+      return {
+        nextNodeId: includeMatch.transition.nextNode,
+        reason: 'matchIncludes',
+        usedFallback: false,
+        matchedTransition: includeMatch.transition,
+      };
     }
 
     const defaultTransition = compiled.defaultTransitionByNodeId.get(nodeId);
     if (defaultTransition) {
-      return { nextNodeId: defaultTransition.nextNode, reason: 'default', usedFallback: false };
+      return {
+        nextNodeId: defaultTransition.nextNode,
+        reason: 'default',
+        usedFallback: false,
+        matchedTransition: defaultTransition,
+      };
     }
 
     return {
       nextNodeId: fallbackNodeId || node.id,
       reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
       usedFallback: Boolean(fallbackNodeId),
+      matchedTransition: null,
     };
   }
 
@@ -513,11 +643,24 @@ export class FlowEngine {
           );
         }
       }
+      await conversationExportService.exportFinalizedConversation(
+        userId,
+        'human_handoff',
+        {
+          flowId: flow.id,
+          flowVersion: flow.version,
+          reason: 'human_handoff',
+          lastNodeId: session?.currentNode || null,
+          requiresHuman: true,
+        },
+        perfContext
+      );
+      await sessionService.resetSession(userId, perfContext);
       return {
         reply: '🙌 Te vamos a derivar con una persona del equipo para que pueda ayudarte mejor.',
         flowId: flow.id,
-        currentNodeId: session?.currentNode || null,
-        variables: session?.variables || {},
+        currentNodeId: null,
+        variables: {},
       };
     }
     return null;
@@ -552,6 +695,15 @@ export class FlowEngine {
       transitionCount: transitions.length,
       valueCount,
     };
+  }
+
+  _isInformationalResolutionNode(node) {
+    if (!node || node.type !== 'message') return false;
+    if (node.isInformational === true) return true;
+    if (String(node.exportStatus || '').trim().toLowerCase() === 'info_provided') return true;
+    if (String(node.track?.exportStatus || '').trim().toLowerCase() === 'info_provided') return true;
+    const message = String(node.message || '');
+    return message.includes('✅ *Información solicitada*');
   }
 }
 

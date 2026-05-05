@@ -84,6 +84,92 @@ En V1 Twilio se responde por TwiML sincrono en el webhook, por eso `TWILIO_*` qu
 - `ADMIN_PASSWORD_HASH` (hex SHA-256 de la contraseña; no texto plano)
 - `SESSION_SECRET` (≥ 32 caracteres; firma la cookie de sesión)
 
+### Google Sheets (export de conversaciones finalizadas)
+
+- `GOOGLE_SHEETS_ENABLED` (`true|false`)
+- `GOOGLE_SHEETS_SPREADSHEET_ID`
+- `GOOGLE_SHEETS_TAB_NAME`
+- `GOOGLE_SHEETS_RAW_TAB_NAME` (opcional)
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_PRIVATE_KEY`
+
+Configuración recomendada:
+
+1. Habilitar Google Sheets API en Google Cloud.
+2. Crear una Service Account.
+3. Crear y descargar la clave JSON de esa Service Account.
+4. Copiar `client_email` en `GOOGLE_SERVICE_ACCOUNT_EMAIL`.
+5. Copiar `private_key` en `GOOGLE_PRIVATE_KEY` (respetando `\n`).
+6. Compartir el Google Sheet con ese email como **Editor**.
+7. Copiar el ID del Sheet en `GOOGLE_SHEETS_SPREADSHEET_ID`.
+
+Notas:
+
+- No subir nunca el JSON real ni la private key al repositorio.
+- Con `GOOGLE_SHEETS_ENABLED=false`, la integración queda desactivada.
+- Si `GOOGLE_SHEETS_ENABLED=true`, se requieren todas las variables listadas arriba.
+- `GOOGLE_SHEETS_RAW_TAB_NAME` permite exportar una copia técnica adicional (opcional).
+
+### Formato de hoja administrativa (principal)
+
+La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta columnas legibles para uso administrativo:
+
+- Fecha de inicio
+- Fecha de cierre
+- Duracion
+- Telefono
+- Canal
+- Nombre
+- Tipo de usuario
+- Consulta principal
+- Detalle de consulta
+- Estado de la conversacion
+- Requiere atencion humana
+- Motivo de cierre
+- Accion sugerida
+- Recorrido resumido
+- Ultimo mensaje del usuario
+- Observaciones
+- Datos tecnicos
+
+Notas:
+
+- El sistema intenta asegurar encabezados solo si la hoja está vacía (no duplica en cada registro).
+- La ultima columna (`Datos tecnicos`) mantiene el JSON técnico completo para auditoría.
+
+### Labels humanos en el JSON de flujo (opcional)
+
+Se pueden agregar campos opcionales para mejorar el recorrido resumido exportado:
+
+- Nodo: `label`, `trackingLabel`, `title` o `name`.
+- Transición: `track.label`.
+
+Ejemplo nodo:
+
+```json
+{
+  "id": "si_pg_direccion",
+  "type": "message",
+  "label": "Direccion de Posgrado",
+  "message": "..."
+}
+```
+
+Ejemplo transición:
+
+```json
+{
+  "type": "match",
+  "value": "1",
+  "nextNode": "si_presenciales_tipo",
+  "track": {
+    "key": "modalidad_consulta",
+    "value": "Presencial",
+    "label": "Eligio cursos presenciales"
+  }
+}
+```
+
 Generar hash:
 
 ```bash

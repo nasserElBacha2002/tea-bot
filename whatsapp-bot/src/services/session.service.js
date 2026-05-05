@@ -77,6 +77,10 @@ class SessionService {
     });
   }
 
+  listSessions() {
+    return Object.entries(this.sessions).map(([userId, session]) => ({ userId, session }));
+  }
+
   /**
    * Crear nueva sesión.
    */

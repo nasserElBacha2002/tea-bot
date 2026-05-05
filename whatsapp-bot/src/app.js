@@ -8,6 +8,7 @@ import flowAdminRouter from './routes/flow-admin.routes.js';
 import simulatorRouter from './routes/simulator.routes.js';
 import flowLoader from './utils/flow-loader.js';
 import sessionService from './services/session.service.js';
+import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import { bootstrapFlows } from './utils/bootstrap-flows.js';
 import flowRepository from './repositories/flow.repository.js';
 
@@ -33,6 +34,7 @@ validateConfig();
 
     // 3. Cargar sesiones
     await sessionService.loadSessions();
+    conversationAbandonmentService.start();
 
     console.log('🚀 Sistema de flujos (Fase 3) y sesiones inicializado.');
   } catch (err) {
