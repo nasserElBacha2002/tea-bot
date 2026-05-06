@@ -19,6 +19,8 @@ export const receiveTwilioMessage = async (req, res) => {
   try {
     const adapterStart = nowMs();
     const event = toCanonicalTwilioInboundEvent({ body: req.body, flowId });
+    console.log('Twilio From:', req.body?.From);
+    console.log('Normalized phone:', event.phone);
     const perfContext = createPerfContext({
       channel: 'twilio',
       flowId: event.flowId,

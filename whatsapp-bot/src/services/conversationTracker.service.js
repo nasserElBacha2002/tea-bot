@@ -5,8 +5,13 @@ const MAX_TRANSITION_TRAIL = 200;
 
 function deriveProviderAndPhone(userId) {
   const raw = String(userId || '');
-  const [provider = 'unknown', rest = ''] = raw.split(':');
-  const normalizedPhone = rest.replace(/^whatsapp:/i, '').replace(/^meta:/i, '');
+  const separatorIndex = raw.indexOf(':');
+  const provider = separatorIndex >= 0 ? raw.slice(0, separatorIndex) : 'unknown';
+  const rest = separatorIndex >= 0 ? raw.slice(separatorIndex + 1) : raw;
+  const normalizedPhone = rest
+    .replace(/^whatsapp:/i, '')
+    .replace(/^meta:/i, '')
+    .trim();
   return {
     provider,
     phone: normalizedPhone || rest || raw,
