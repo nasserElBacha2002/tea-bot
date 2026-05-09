@@ -1,7 +1,7 @@
 {
   "id": "main-menu",
   "name": "Menú Principal — Tea y Deportea",
-  "version": "v11",
+  "version": "v17",
   "status": "draft",
   "entryNode": "welcome",
   "fallbackNode": "fallback_global",
@@ -9,7 +9,7 @@
     {
       "id": "welcome",
       "type": "message",
-      "message": "👋 *Bienvenido/a a Tea y Deportea*\n\nSoy *XXXXX*, tu asistente virtual 🤖\n\nPara orientarte mejor, primero necesito saber:\n\n*¿Sos estudiante y/o egresado/a de la escuela?*\n\n👉 Elegí una opción:\n\n1️⃣ *Sí*\n2️⃣ *No*\n\n↩️ Escribí *atrás* para volver al paso anterior.\n🏠 Escribí *menú* para volver al inicio.\n👤 Escribí *humano* para pedir ayuda de una persona.",
+      "message": "👋 *Bienvenido/a a Tea y Deportea*\n\nSoy *TyD*, tu asistente virtual 🤖\n\n\nPara orientarte mejor, primero necesito saber:\n\n*¿Sos estudiante o egresado/a de la escuela?*\n\n👉 Elegí una opción:\n\n1️⃣ *Sí*\n2️⃣ *No*\n",
       "ui": {
         "position": {
           "x": 80,
@@ -5538,20 +5538,8 @@
           "nextNode": "human_handoff"
         }
       ]
-    },
-    {
-      "id": "step-moyagvhf0o5osx",
-      "type": "message",
-      "message": "test",
-      "ui": {
-        "position": {
-          "x": 640,
-          "y": 5120
-        },
-        "stepTitle": "Nuevo paso"
-      }
     }
   ],
-  "updatedAt": "2026-05-09T11:57:24.406Z",
+  "updatedAt": "2026-05-09T12:19:12.599Z",
   "schemaVersion": 1
 }
