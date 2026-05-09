@@ -54,7 +54,19 @@ const draftVm: ConversationViewModel = {
       internalId: 'a',
       title: 'A',
       message: 'm',
-      responses: [],
+      responses: [
+        { uiId: 'r1', kind: 'fallback', values: [], destinationStepId: 'b', displayOrder: 0 },
+      ],
+      metadata: { nodeType: 'message', position: { x: 0, y: 0 } },
+    },
+    {
+      uiId: 'b',
+      internalId: 'b',
+      title: 'B',
+      message: 'Respaldo',
+      responses: [
+        { uiId: 'r2', kind: 'fallback', values: [], destinationStepId: 'a', displayOrder: 0 },
+      ],
       metadata: { nodeType: 'message', position: { x: 0, y: 0 } },
     },
   ],

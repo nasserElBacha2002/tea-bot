@@ -112,30 +112,26 @@ Notas:
 
 ### Formato de hoja administrativa (principal)
 
-La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta columnas legibles para uso administrativo:
+La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta **exactamente 13 columnas** por fila, en este orden:
 
-- Fecha de inicio
-- Fecha de cierre
-- Duracion
-- Telefono
-- Canal
-- Nombre
-- Tipo de usuario
-- Consulta principal
-- Detalle de consulta
-- Estado de la conversacion
-- Requiere atencion humana
-- Motivo de cierre
-- Accion sugerida
-- Recorrido resumido
-- Ultimo mensaje del usuario
-- Observaciones
-- Datos tecnicos
+1. Fecha de inicio  
+2. Fecha de cierre  
+3. Teléfono  
+4. Tipo de usuario  
+5. Consulta principal  
+6. Detalle de consulta  
+7. Estado de la conversación  
+8. Requiere atención humana  
+9. Motivo de cierre  
+10. Acción sugerida  
+11. Recorrido resumido  
+12. Último mensaje del usuario  
+13. Observaciones  
 
 Notas:
 
-- El sistema intenta asegurar encabezados solo si la hoja está vacía (no duplica en cada registro).
-- La ultima columna (`Datos tecnicos`) mantiene el JSON técnico completo para auditoría.
+- El sistema intenta escribir la fila de encabezados solo si la pestaña está vacía (no duplica en cada registro).
+- Los datos técnicos completos **no** van en la pestaña principal. Si configurás `GOOGLE_SHEETS_RAW_TAB_NAME`, el JSON técnico puede registrarse en esa pestaña adicional.
 
 ### Labels humanos en el JSON de flujo (opcional)
 

@@ -45,6 +45,14 @@ import { PublishReviewDialog } from './components/PublishReviewDialog';
 import { PublishConfirmDialog } from './components/PublishConfirmDialog';
 import { RiskyPublishDialog } from './components/RiskyPublishDialog';
 import { conversationViewModelToFlow, flowToConversationViewModel } from './model/conversationAdapters';
+import {
+  buildConversationValidationSummary,
+  firstInvalidStepIdInDisplayOrder,
+} from './model/conversationValidation';
+import {
+  extractNodeIdFromNodoError,
+  mapBackendFlowErrorToUserMessage,
+} from './model/mapBackendFlowError';
 import { useConversationEditor } from './state/useConversationEditor';
 import { StepsIndex } from './components/StepsIndex';
 import { SimulatorPanel } from './components/SimulatorPanel';
@@ -92,23 +100,34 @@ export const ConversationEditorPage: React.FC = () => {
   const [importJsonOpen, setImportJsonOpen] = useState(false);
   const [simulatorEnabled, setSimulatorEnabled] = useState(false);
 
-  const scrollToStep = useCallback((internalId: string) => {
+  const scrollToStep = useCallback((internalId: string, opts?: { focusMessage?: boolean }) => {
     setActiveStepId(internalId);
     setIndexDrawerOpen(false);
     requestAnimationFrame(() => {
       const el = stepRefs.current[internalId];
       el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (opts?.focusMessage) {
+        requestAnimationFrame(() => {
+          document.getElementById(`step-message-input-${internalId}`)?.focus();
+        });
+      }
     });
   }, []);
 
   const editor = useConversationEditor({
     serverViewModel,
     remoteFlowId: flowId!,
-    onCreatedStep: scrollToStep,
+    baseFlow: remoteFlow,
+    onCreatedStep: id => scrollToStep(id, { focusMessage: true }),
   });
 
   const saveDraftForPublish = useCallback(async () => {
     if (!remoteFlow || !editor.viewModel || !editor.dirty) return;
+    if (editor.validationIssues.length > 0) {
+      throw new Error(
+        'El borrador tiene errores de validación. Corregilos antes de guardar o publicar.'
+      );
+    }
     const saved = await updateFlow.mutateAsync(editor.buildSavePayload(remoteFlow));
     editor.hydrateFromServer(flowToConversationViewModel(saved));
   }, [remoteFlow, editor, updateFlow]);
@@ -131,6 +150,20 @@ export const ConversationEditorPage: React.FC = () => {
   const handleSave = useCallback(async () => {
     if (!remoteFlow || !editor.viewModel || !editor.dirty) return;
     setSnackbar(s => ({ ...s, open: false }));
+
+    if (editor.validationIssues.length > 0) {
+      const vm = editor.viewModel;
+      const summary =
+        buildConversationValidationSummary(vm, editor.validationIssues) ||
+        'Revisá los avisos antes de guardar.';
+      const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
+      if (first) {
+        scrollToStep(first, { focusMessage: true });
+      }
+      setSnackbar({ open: true, message: summary, severity: 'error' });
+      return;
+    }
+
     try {
       const payload = editor.buildSavePayload(remoteFlow);
       const saved = await updateFlow.mutateAsync(payload);
@@ -140,18 +173,48 @@ export const ConversationEditorPage: React.FC = () => {
         message: 'Cambios guardados',
         severity: 'success',
       });
-    } catch {
+    } catch (e: unknown) {
+      const raw =
+        (e as { response?: { data?: { error?: string } } }).response?.data?.error ??
+        (e instanceof Error ? e.message : undefined) ??
+        'Error desconocido';
+      console.warn('[ConversationEditor] guardar borrador', raw);
+
+      const vm = editor.viewModel;
+      const stepTitles = vm.steps.map(s => ({ internalId: s.internalId, title: s.title }));
+      const userMsg = mapBackendFlowErrorToUserMessage(raw, stepTitles);
+
+      const nodeId = extractNodeIdFromNodoError(raw);
+      if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
+        scrollToStep(nodeId, { focusMessage: true });
+      } else {
+        const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
+        if (first) scrollToStep(first, { focusMessage: true });
+      }
+
       setSnackbar({
         open: true,
-        message: 'No se pudieron guardar los cambios. Intenta nuevamente.',
+        message: userMsg,
         severity: 'error',
       });
     }
-  }, [remoteFlow, editor, updateFlow]);
+  }, [remoteFlow, editor, updateFlow, scrollToStep]);
 
   const handleValidate = useCallback(async () => {
     if (!remoteFlow || !editor.viewModel) return;
     setSnackbar(s => ({ ...s, open: false }));
+
+    if (editor.validationIssues.length > 0) {
+      const vm = editor.viewModel;
+      const summary =
+        buildConversationValidationSummary(vm, editor.validationIssues) ||
+        'Revisá los avisos antes de validar el borrador.';
+      const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
+      if (first) scrollToStep(first, { focusMessage: true });
+      setSnackbar({ open: true, message: summary, severity: 'error' });
+      return;
+    }
+
     try {
       const payload = editor.buildSavePayload(remoteFlow);
       const res = await validateFlow.mutateAsync(payload);
@@ -167,7 +230,7 @@ export const ConversationEditorPage: React.FC = () => {
       const msg = ax.response?.data?.error ?? (e instanceof Error ? e.message : 'Error al validar');
       setSnackbar({ open: true, message: msg, severity: 'error' });
     }
-  }, [remoteFlow, editor, validateFlow]);
+  }, [remoteFlow, editor, validateFlow, scrollToStep]);
 
   const registerStepRef = useCallback((id: string, el: HTMLElement | null) => {
     stepRefs.current[id] = el;
@@ -413,7 +476,7 @@ export const ConversationEditorPage: React.FC = () => {
 
           {editor.validationIssues.length > 0 && (
             <Alert severity="info" sx={{ mb: 2 }}>
-              Hay {editor.validationIssues.length} aviso(s). Revisá los campos marcados en rojo.
+              {buildConversationValidationSummary(vm, editor.validationIssues)}
             </Alert>
           )}
 

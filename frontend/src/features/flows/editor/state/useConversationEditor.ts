@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 import type { Flow } from '../../types/flow.types';
+import { validateFlowPayload } from '../model/flowPayloadValidation';
+import { mergeValidationIssues } from '../model/conversationValidation';
 import type {
   ConversationResponse,
   ConversationResponseKind,
@@ -14,12 +16,15 @@ export interface UseConversationEditorOptions {
   /** View-model derivado del servidor (React Query); puede cambiar de referencia en cada refetch. */
   serverViewModel: ConversationViewModel | null;
   remoteFlowId: string;
+  /** Flujo base del servidor para validar el mismo payload que se envía en el PUT. */
+  baseFlow?: Flow | null;
   onCreatedStep?: (internalId: string) => void;
 }
 
 export function useConversationEditor({
   serverViewModel,
   remoteFlowId,
+  baseFlow,
   onCreatedStep,
 }: UseConversationEditorOptions) {
   const [state, dispatch] = useReducer(conversationEditorReducer, {
@@ -67,10 +72,14 @@ export function useConversationEditor({
   const viewModel = state.viewModel;
   const dirty = state.dirty;
 
-  const validationIssues = useMemo(
-    () => (viewModel ? validateConversationViewModel(viewModel) : []),
-    [viewModel]
-  );
+  const validationIssues = useMemo(() => {
+    if (!viewModel) return [];
+    const vmIssues = validateConversationViewModel(viewModel);
+    if (!baseFlow) return vmIssues;
+    const draft = conversationViewModelToFlow(viewModel, baseFlow);
+    const payloadIssues = validateFlowPayload(draft);
+    return mergeValidationIssues(vmIssues, payloadIssues);
+  }, [viewModel, baseFlow]);
 
   const updateFlowInfo = useCallback((flowName: string, description: string) => {
     dispatch({ type: 'UPDATE_FLOW_INFO', flowName, description });
@@ -85,8 +94,10 @@ export function useConversationEditor({
   }, []);
 
   const addStep = useCallback(() => {
-    dispatch({ type: 'ADD_STEP' });
-  }, []);
+    const id = newInternalStepId();
+    dispatch({ type: 'ADD_STEP', newStepInternalId: id });
+    onCreatedStep?.(id);
+  }, [onCreatedStep]);
 
   const deleteStep = useCallback((stepId: string) => {
     dispatch({ type: 'DELETE_STEP', stepId });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -190,6 +190,63 @@ describe('ConversationEditorPage', () => {
     await user.click(screen.getByRole('button', { name: /probar conversación/i }));
     expect(await screen.findByText('Hola desde simulador')).toBeTruthy();
     expect(simulatorMocks.start).toHaveBeenCalled();
+  });
+
+  it('after Añadir paso, the editor shows the new step and its message field', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mi flujo');
+    await user.click(screen.getByRole('button', { name: /añadir paso/i }));
+    const nameField = await screen.findByLabelText(/nombre del paso/i);
+    expect(nameField).toHaveValue('Nuevo paso sin completar');
+    const main = screen.getByRole('main');
+    const msgTa = await waitFor(() => {
+      const ta = within(main).getByPlaceholderText(/lo que leerá el cliente en este paso/i);
+      expect(ta.id.startsWith('step-message-input-')).toBe(true);
+      return ta;
+    });
+    await waitFor(() => expect(msgTa).toHaveFocus(), { timeout: 3000 });
+  });
+
+  it('shows inline validation for an empty new message step', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mi flujo');
+    await user.click(screen.getByRole('button', { name: /añadir paso/i }));
+    expect(
+      await screen.findByText(/Escribí el mensaje que verá el cliente en este paso/i)
+    ).toBeTruthy();
+  });
+
+  it('blocks Guardar without calling the API when a message step has no message', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mi flujo');
+    await user.click(screen.getByRole('button', { name: /añadir paso/i }));
+    const saveBtn = screen.getByRole('button', { name: /^guardar$/i });
+    await waitFor(() => expect(saveBtn).not.toBeDisabled());
+    await user.click(saveBtn);
+    expect(flowMocks.mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('calls the API when saving a valid dirty draft', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mi flujo');
+    const titleFields = await screen.findAllByLabelText(/nombre del paso/i);
+    const titleField = titleFields[0]!;
+    await user.clear(titleField);
+    await user.type(titleField, 'Saludo');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await waitFor(() => expect(flowMocks.mutateAsync).toHaveBeenCalled());
+  });
+
+  it('shows validation summary with the visible step name', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText('Mi flujo');
+    await user.click(screen.getByRole('button', { name: /añadir paso/i }));
+    expect(await screen.findByText(/Nuevo paso sin completar.*no tiene mensaje del bot/i)).toBeTruthy();
   });
 
   it('opens simulator modal from Probar on small screens', async () => {

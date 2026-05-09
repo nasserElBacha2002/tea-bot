@@ -7,7 +7,8 @@ import {
 } from '../../hooks/useFlows';
 import { conversationViewModelToFlow, flowToConversationViewModel } from '../model/conversationAdapters';
 import type { ConversationViewModel } from '../model/conversationViewModel';
-import { validateConversationViewModel } from '../model/conversationValidation';
+import { mergeValidationIssues, validateConversationViewModel } from '../model/conversationValidation';
+import { validateFlowPayload } from '../model/flowPayloadValidation';
 import { buildPublishChangeSummary, flowFingerprintForPublish } from '../model/publishSummary';
 import { buildPublishWarnings } from '../model/publishWarnings';
 
@@ -51,7 +52,13 @@ export function useConversationPublish({
     [draftVm, baselineVm]
   );
 
-  const validationIssues = useMemo(() => validateConversationViewModel(draftVm), [draftVm]);
+  const draftFlow = useMemo(() => conversationViewModelToFlow(draftVm, baseFlow), [draftVm, baseFlow]);
+
+  const validationIssues = useMemo(() => {
+    const vmIssues = validateConversationViewModel(draftVm);
+    const payloadIssues = validateFlowPayload(draftFlow);
+    return mergeValidationIssues(vmIssues, payloadIssues);
+  }, [draftVm, draftFlow]);
 
   const { blocking: blockingWarnings, nonBlocking: nonBlockingWarnings } = useMemo(
     () =>
@@ -61,8 +68,6 @@ export function useConversationPublish({
       }),
     [draftVm, validationIssues, editorDirty, activeVersion]
   );
-
-  const draftFlow = useMemo(() => conversationViewModelToFlow(draftVm, baseFlow), [draftVm, baseFlow]);
 
   const baselineFingerprint = useMemo(
     () => (publishedDetail?.flow ? flowFingerprintForPublish(publishedDetail.flow) : null),

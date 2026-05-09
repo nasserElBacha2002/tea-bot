@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -24,6 +24,7 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
   activeStepId,
   onStepSelect,
 }) => {
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(60);
   const isFiltering = query.trim().length > 0;
@@ -38,6 +39,14 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
     () => (isFiltering ? filtered : filtered.slice(0, visibleCount)),
     [filtered, isFiltering, visibleCount]
   );
+
+  useEffect(() => {
+    if (!activeStepId) return;
+    requestAnimationFrame(() => {
+      const el = rowRefs.current[activeStepId];
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }, [activeStepId, steps]);
 
   return (
     <Box
@@ -72,9 +81,13 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
         {visibleRows.map(({ s, i }) => (
           <ListItemButton
             key={s.internalId}
+            ref={el => {
+              rowRefs.current[s.internalId] = el;
+            }}
             selected={activeStepId === s.internalId}
             onClick={() => onStepSelect(s.internalId)}
             sx={{ borderRadius: 1, mb: 0.25 }}
+            data-step-id={s.internalId}
           >
             <ListItemText
               primaryTypographyProps={{ variant: 'body2', noWrap: true, fontWeight: 600 }}

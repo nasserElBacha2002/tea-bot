@@ -12,16 +12,9 @@ No se registra abandono por timeout en esta versión.
 
 ## Datos que se guardan
 
-Columnas principales:
+En la pestaña principal del Sheet, **una fila por conversación finalizada** con **13 columnas** fijas (orden): Fecha de inicio, Fecha de cierre, Teléfono, Tipo de usuario, Consulta principal, Detalle de consulta, Estado de la conversación, Requiere atención humana, Motivo de cierre, Acción sugerida, Recorrido resumido, Último mensaje del usuario, Observaciones.
 
-- `fecha_inicio`, `fecha_fin`
-- `telefono`, `nombre`, `provider`
-- `flow_id`, `flow_version`
-- `estado_final`, `requiere_humano`, `motivo_derivacion`
-- `es_estudiante`, `opciones_elegidas`
-- `nodos_visitados`, `ultimo_nodo`
-- `mensaje_final_usuario`
-- `raw_data` (JSON de sesión + contexto de cierre)
+Opcionalmente, si está configurada la pestaña raw (`GOOGLE_SHEETS_RAW_TAB_NAME`), allí puede guardarse un JSON con datos técnicos adicionales para auditoría.
 
 ## Tracking en el JSON del flujo
 

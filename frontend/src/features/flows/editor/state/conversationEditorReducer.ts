@@ -1,6 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
-import type { ConversationResponse, ConversationResponseKind, ConversationStep, ConversationViewModel } from '../model/conversationViewModel';
-import { humanizeNodeId } from '../model/conversationAdapters';
+import type {
+  ConversationResponse,
+  ConversationResponseKind,
+  ConversationStep,
+  ConversationViewModel,
+} from '../model/conversationViewModel';
 
 export function newInternalStepId(): string {
   return `step-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
@@ -19,11 +23,21 @@ function defaultDestinationForStep(vm: ConversationViewModel, stepInternalId: st
   return other?.internalId ?? stepInternalId;
 }
 
-function createBlankMessageStep(internalId: string, index: number): ConversationStep {
+/** Títulos por defecto distinguibles: "Nuevo paso sin completar", "Nuevo paso sin completar (2)", … */
+export function nextDefaultNewStepTitle(steps: ConversationStep[]): string {
+  const base = 'Nuevo paso sin completar';
+  const titles = new Set(steps.map(s => s.title.trim()));
+  if (!titles.has(base)) return base;
+  let n = 2;
+  while (titles.has(`${base} (${n})`)) n += 1;
+  return `${base} (${n})`;
+}
+
+function createBlankMessageStep(internalId: string, index: number, title: string): ConversationStep {
   return {
     uiId: internalId,
     internalId,
-    title: 'Nuevo paso',
+    title,
     message: '',
     responses: [],
     metadata: {
@@ -72,7 +86,7 @@ export type ConversationEditorAction =
   | { type: 'UPDATE_FLOW_INFO'; flowName: string; description: string }
   | { type: 'UPDATE_STEP_TITLE'; stepId: string; title: string }
   | { type: 'UPDATE_STEP_MESSAGE'; stepId: string; message: string }
-  | { type: 'ADD_STEP' }
+  | { type: 'ADD_STEP'; newStepInternalId: string }
   | { type: 'DELETE_STEP'; stepId: string }
   | { type: 'DUPLICATE_STEP'; stepId: string }
   | { type: 'REORDER_STEPS'; fromIndex: number; toIndex: number }
@@ -137,8 +151,8 @@ export function conversationEditorReducer(
     }
 
     case 'ADD_STEP': {
-      const id = newInternalStepId();
-      const step = createBlankMessageStep(id, vm.steps.length);
+      const title = nextDefaultNewStepTitle(vm.steps);
+      const step = createBlankMessageStep(action.newStepInternalId, vm.steps.length, title);
       return { viewModel: { ...vm, steps: [...vm.steps, step] }, dirty: true };
     }
 
@@ -254,8 +268,11 @@ export function conversationEditorReducer(
     case 'CREATE_STEP_AND_ASSIGN': {
       const { stepId, responseUiId, newStepInternalId } = action;
       const insertIndex = vm.steps.length;
-      const newStep = createBlankMessageStep(newStepInternalId, insertIndex);
-      newStep.title = humanizeNodeId(newStepInternalId);
+      const newStep = createBlankMessageStep(
+        newStepInternalId,
+        insertIndex,
+        nextDefaultNewStepTitle(vm.steps)
+      );
       const stepsWithNew = [...vm.steps, newStep];
       const steps = stepsWithNew.map(s => {
         if (s.internalId !== stepId) return s;

@@ -64,9 +64,11 @@ describe('conversationEditorReducer', () => {
 
   it('adds a step', () => {
     const s0 = { viewModel: minimalVm(), dirty: false };
-    const s1 = conversationEditorReducer(s0, { type: 'ADD_STEP' });
+    const s1 = conversationEditorReducer(s0, { type: 'ADD_STEP', newStepInternalId: 'step-new-1' });
     expect(s1.viewModel?.steps.length).toBe(2);
     expect(s1.dirty).toBe(true);
+    expect(s1.viewModel?.steps[1].internalId).toBe('step-new-1');
+    expect(s1.viewModel?.steps[1].title).toBe('Nuevo paso sin completar');
   });
 
   it('adds exact response', () => {

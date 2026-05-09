@@ -40,13 +40,11 @@ const KNOWN_NODE_LABELS = {
   fallback_global: 'No entendido',
 };
 
+/** Orden fijo de columnas en la pestaña principal de Google Sheets (13 valores por fila). */
 const HUMAN_COLUMNS = [
   'Fecha de inicio',
   'Fecha de cierre',
-  'Duración',
   'Teléfono',
-  'Canal',
-  'Nombre',
   'Tipo de usuario',
   'Consulta principal',
   'Detalle de consulta',
@@ -57,7 +55,6 @@ const HUMAN_COLUMNS = [
   'Recorrido resumido',
   'Último mensaje del usuario',
   'Observaciones',
-  'Datos técnicos',
 ];
 
 function toDate(isoLike) {
@@ -74,30 +71,8 @@ function formatDateTime(isoLike) {
   }).format(date);
 }
 
-function formatDuration(startIso, endIso) {
-  const start = toDate(startIso);
-  const end = toDate(endIso);
-  if (!start || !end) return '—';
-  const totalSeconds = Math.max(0, Math.floor((end.getTime() - start.getTime()) / 1000));
-  if (totalSeconds < 60) return `${totalSeconds} segundos`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes < 60) return seconds > 0 ? `${minutes} minutos ${seconds} segundos` : `${minutes} minutos`;
-  const hours = Math.floor(minutes / 60);
-  const remMinutes = minutes % 60;
-  return remMinutes > 0 ? `${hours} horas ${remMinutes} minutos` : `${hours} horas`;
-}
-
 function normalizeBooleanToHuman(value) {
   return value ? 'Sí' : 'No';
-}
-
-function normalizeProvider(provider) {
-  const raw = String(provider || '').trim().toLowerCase();
-  if (!raw) return 'No informado';
-  if (['twilio', 'whatsapp', 'meta'].includes(raw)) return 'WhatsApp';
-  if (raw === 'simulator') return 'Simulador';
-  return raw.charAt(0).toUpperCase() + raw.slice(1);
 }
 
 function normalizePhone(phone) {
@@ -213,12 +188,11 @@ class ConversationSheetFormatterService {
       if (!transitionTrailByTarget.has(step.to)) transitionTrailByTarget.set(step.to, step.label);
     }
 
-    const providerHuman = normalizeProvider(session?.provider);
     const requiresHuman = Boolean(
       finalStatus === 'human_handoff' || finalStatus === 'fallback_handoff' || context.requiresHuman
     );
     const startIso = session?.startedAt || session?.updatedAt || nowIso;
-    const phoneHuman = providerHuman === 'Simulador' ? 'Simulador' : normalizePhone(session?.phone);
+    const phoneHuman = normalizePhone(session?.phone);
     const routeHuman = visitedNodes
       .map((nodeId) => resolveNodeLabel(nodeId, flow, transitionTrailByTarget))
       .join(' → ') || '—';
@@ -241,10 +215,7 @@ class ConversationSheetFormatterService {
       row: [
         formatDateTime(startIso),
         formatDateTime(nowIso),
-        formatDuration(startIso, nowIso),
         phoneHuman,
-        providerHuman,
-        answers.nombre || answers.name || '—',
         isStudent(answers, visitedNodes),
         inferConsultaPrincipal(answers, visitedNodes),
         inferDetalleConsulta(answers, visitedNodes, flow, transitionTrailByTarget),
@@ -255,7 +226,6 @@ class ConversationSheetFormatterService {
         routeHuman,
         session?.lastUserMessage || '—',
         observation(finalStatus, requiresHuman),
-        JSON.stringify(technicalData),
       ],
       technicalData,
     };

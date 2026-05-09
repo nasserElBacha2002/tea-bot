@@ -15,6 +15,19 @@ function baseSession(overrides = {}) {
   };
 }
 
+test('formatHumanRecord produce exactamente 13 columnas alineadas con headers', () => {
+  const result = conversationSheetFormatterService.formatHumanRecord({
+    session: baseSession(),
+    finalStatus: 'human_handoff',
+    context: { reason: 'human_handoff', requiresHuman: true },
+    nowIso: '2026-05-05T15:00:12.000Z',
+    flow: null,
+  });
+  assert.equal(result.headers.length, 13);
+  assert.equal(result.row.length, 13);
+  assert.deepEqual(result.headers, conversationSheetFormatterService.humanHeaders());
+});
+
 test('human_handoff con provider simulator formatea campos humanos clave', () => {
   const result = conversationSheetFormatterService.formatHumanRecord({
     session: baseSession(),
@@ -23,12 +36,11 @@ test('human_handoff con provider simulator formatea campos humanos clave', () =>
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[3], 'Simulador');
-  assert.equal(result.row[4], 'Simulador');
-  assert.equal(result.row[9], 'Derivado a humano');
-  assert.equal(result.row[10], 'Sí');
-  assert.equal(result.row[11], 'El usuario pidió hablar con una persona.');
-  assert.equal(result.row[12], 'Contactar al usuario');
+  assert.equal(result.row[2], 'Simulador');
+  assert.equal(result.row[6], 'Derivado a humano');
+  assert.equal(result.row[7], 'Sí');
+  assert.equal(result.row[8], 'El usuario pidió hablar con una persona.');
+  assert.equal(result.row[9], 'Contactar al usuario');
 });
 
 test('completed devuelve estado y acción esperada', () => {
@@ -39,10 +51,10 @@ test('completed devuelve estado y acción esperada', () => {
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[9], 'Conversación finalizada');
-  assert.equal(result.row[10], 'No');
-  assert.equal(result.row[11], 'El usuario llegó al final del flujo.');
-  assert.equal(result.row[12], 'No requiere acción');
+  assert.equal(result.row[6], 'Conversación finalizada');
+  assert.equal(result.row[7], 'No');
+  assert.equal(result.row[8], 'El usuario llegó al final del flujo.');
+  assert.equal(result.row[9], 'No requiere acción');
 });
 
 test('recorrido conocido usa etiquetas humanas esperadas', () => {
@@ -53,7 +65,7 @@ test('recorrido conocido usa etiquetas humanas esperadas', () => {
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[13], 'Estudiante/egresado → Presenciales → Posgrado → Dirección → Humano');
+  assert.equal(result.row[10], 'Estudiante/egresado → Presenciales → Posgrado → Dirección → Humano');
 });
 
 test('answers.es_estudiante SI devuelve tipo estudiante/egresado', () => {
@@ -64,10 +76,10 @@ test('answers.es_estudiante SI devuelve tipo estudiante/egresado', () => {
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[6], 'Estudiante / egresado');
+  assert.equal(result.row[3], 'Estudiante / egresado');
 });
 
-test('estado desconocido devuelve estado no identificado y preserva tecnico', () => {
+test('estado desconocido devuelve estado no identificado; técnico solo en technicalData', () => {
   const result = conversationSheetFormatterService.formatHumanRecord({
     session: baseSession(),
     finalStatus: 'rare_status',
@@ -75,8 +87,8 @@ test('estado desconocido devuelve estado no identificado y preserva tecnico', ()
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[9], 'Estado no identificado');
-  assert.match(result.row[16], /"finalStatus":"rare_status"/);
+  assert.equal(result.row[6], 'Estado no identificado');
+  assert.match(JSON.stringify(result.technicalData), /"finalStatus":"rare_status"/);
 });
 
 test('si flow tiene label de nodo, se prioriza sobre fallback', () => {
@@ -93,7 +105,7 @@ test('si flow tiene label de nodo, se prioriza sobre fallback', () => {
     nowIso: '2026-05-05T15:00:12.000Z',
     flow,
   });
-  assert.equal(result.row[13], 'Menu Estudiante → Atencion Humana');
+  assert.equal(result.row[10], 'Menu Estudiante → Atencion Humana');
 });
 
 test('flujo distancia infiere consulta, detalle y recorrido humano', () => {
@@ -109,14 +121,13 @@ test('flujo distancia infiere consulta, detalle y recorrido humano', () => {
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[3], 'Simulador');
-  assert.equal(result.row[4], 'Simulador');
-  assert.equal(result.row[6], 'Estudiante / egresado');
-  assert.equal(result.row[7], 'Carreras a distancia');
-  assert.equal(result.row[8], 'Licenciatura A');
-  assert.equal(result.row[9], 'Derivado a humano');
-  assert.equal(result.row[10], 'Sí');
-  assert.equal(result.row[11], 'El usuario pidió hablar con una persona.');
-  assert.equal(result.row[12], 'Contactar al usuario');
-  assert.equal(result.row[13], 'Estudiante/egresado → A distancia → Licenciatura A → Humano');
+  assert.equal(result.row[2], 'Simulador');
+  assert.equal(result.row[3], 'Estudiante / egresado');
+  assert.equal(result.row[4], 'Carreras a distancia');
+  assert.equal(result.row[5], 'Licenciatura A');
+  assert.equal(result.row[6], 'Derivado a humano');
+  assert.equal(result.row[7], 'Sí');
+  assert.equal(result.row[8], 'El usuario pidió hablar con una persona.');
+  assert.equal(result.row[9], 'Contactar al usuario');
+  assert.equal(result.row[10], 'Estudiante/egresado → A distancia → Licenciatura A → Humano');
 });

@@ -141,6 +141,7 @@ export const StepCard: React.FC<StepCardProps> = ({
         Mensaje del bot
       </Typography>
       <TextField
+        id={`step-message-input-${step.internalId}`}
         size="small"
         fullWidth
         multiline
@@ -150,6 +151,7 @@ export const StepCard: React.FC<StepCardProps> = ({
         error={Boolean(messageIssue)}
         helperText={messageIssue?.message}
         placeholder="Lo que leerá el cliente en este paso"
+        inputProps={{ 'data-testid': `step-message-input-${step.internalId}` }}
         sx={{ mb: 2 }}
       />
 
