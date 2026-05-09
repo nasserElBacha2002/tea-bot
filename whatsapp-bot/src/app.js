@@ -14,9 +14,12 @@ import flowRepository from './repositories/flow.repository.js';
 
 const app = express();
 
-// Middleware para procesar JSON y habilitar CORS
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+// Middleware para procesar JSON y habilitar CORS.
+// Límite >100kb: flujos grandes + payload del simulador (borrador completo) superan el default de express/body-parser.
+const JSON_BODY_LIMIT = process.env.EXPRESS_JSON_LIMIT ?? '2mb';
+
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT }));
 app.use(createCorsMiddleware());
 
 // Verificación inicial de configuración
