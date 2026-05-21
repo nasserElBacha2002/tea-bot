@@ -6,6 +6,7 @@ import twilioWebhookRouter from './routes/twilio-webhook.routes.js';
 import authRouter from './routes/auth.routes.js';
 import flowAdminRouter from './routes/flow-admin.routes.js';
 import simulatorRouter from './routes/simulator.routes.js';
+import conversationsRouter from './routes/conversations.routes.js';
 import flowLoader from './utils/flow-loader.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
@@ -68,6 +69,7 @@ app.use('/webhooks/twilio', twilioWebhookRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/flows', flowAdminRouter);
 app.use('/api/simulator', simulatorRouter);
+app.use('/api/conversations', conversationsRouter);
 
 /**
  * Health check endpoint.

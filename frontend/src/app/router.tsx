@@ -6,6 +6,7 @@ import { ConversationEditorPage } from '../features/flows/editor/ConversationEdi
 import { RedirectToConversationEditor } from './RedirectToConversationEditor';
 import { RequireAuth } from '../features/auth/components/RequireAuth';
 import { LoginPage } from '../features/auth/pages/LoginPage';
+import { ConversationsPage } from '../features/conversations/pages/ConversationsPage';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -14,6 +15,7 @@ export const AppRouter: React.FC = () => {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
+            <Route path="/conversations" element={<ConversationsPage />} />
             <Route path="/flows" element={<FlowListPage />} />
             <Route path="/flows/:flowId/conversation" element={<ConversationEditorPage />} />
             <Route path="/flows/:flowId" element={<RedirectToConversationEditor />} />

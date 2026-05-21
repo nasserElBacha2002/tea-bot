@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Box, Toolbar, Typography, Button } from '@mui/material';
-import { BubbleChart } from '@mui/icons-material';
+import { BubbleChart, Forum } from '@mui/icons-material';
 import { authApi } from '../../features/auth/api/authApi';
 
 export const AppShell: React.FC = () => {
@@ -27,6 +27,14 @@ export const AppShell: React.FC = () => {
           <Typography variant="h6" fontWeight={800} sx={{ flex: 1, cursor: 'pointer' }} onClick={() => navigate('/flows')}>
             Administración Tea Bot
           </Typography>
+          <Button
+            variant={location.pathname.startsWith('/conversations') ? 'contained' : 'text'}
+            size="small"
+            startIcon={<Forum />}
+            onClick={() => navigate('/conversations')}
+          >
+            Conversaciones
+          </Button>
           <Button
             variant={location.pathname.startsWith('/flows') ? 'contained' : 'text'}
             size="small"

@@ -79,25 +79,6 @@ class ConversationService {
     return { conversation, created: false };
   }
 
-  async persistInboundMessage(conversation, event) {
-    const message = await conversationMessageRepository.createMessage({
-      conversationId: conversation.id,
-      direction: 'inbound',
-      senderType: 'user',
-      body: event.text || '',
-      provider: 'twilio',
-      providerMessageId: event.messageId || null,
-      rawPayloadJson: event.rawPayload || null,
-      metadataJson: {
-        flowId: event.flowId,
-        userId: event.userId,
-      },
-    });
-
-    await conversationRepository.touchLastMessage(conversation.id);
-    return message;
-  }
-
   async persistOutboundBotMessage(conversation, reply, context = {}) {
     const message = await conversationMessageRepository.createMessage({
       conversationId: conversation.id,
@@ -107,10 +88,13 @@ class ConversationService {
       provider: 'twilio',
       providerMessageId: context.providerMessageId || null,
       metadataJson: {
+        generatedBy: context.generatedBy || 'flow_engine',
         flowId: context.flowId || conversation.currentFlowId,
         flowVersion: context.flowVersion || conversation.currentFlowVersion,
         nodeKey: context.nodeKey || conversation.currentNodeKey,
-        generatedBy: 'flow_engine',
+        event: context.event,
+        handoffId: context.handoffId,
+        ...context.metadataExtra,
       },
     });
 
@@ -234,6 +218,64 @@ class ConversationService {
 
   async endActiveSessionsForConversation(conversationId) {
     await conversationSessionRepository.endAllActiveForConversation(conversationId);
+  }
+
+  async updateStatus(conversationId, status) {
+    return conversationRepository.updateConversation(conversationId, { status });
+  }
+
+  async markWaitingHuman(conversationId, currentNodeKey) {
+    return conversationRepository.updateConversation(conversationId, {
+      status: 'waiting_human',
+      assignedAgentId: null,
+      currentNodeKey,
+    });
+  }
+
+  async markAssigned(conversationId, agentId) {
+    return conversationRepository.updateConversation(conversationId, {
+      status: 'assigned',
+      assignedAgentId: agentId,
+    });
+  }
+
+  async markBotActive(conversationId) {
+    return conversationRepository.updateConversation(conversationId, {
+      status: 'bot',
+      assignedAgentId: null,
+    });
+  }
+
+  async closeConversation(conversationId, _reason) {
+    return conversationRepository.updateConversation(conversationId, {
+      status: 'closed',
+      closedAt: new Date(),
+    });
+  }
+
+  async reloadConversation(conversation) {
+    if (!conversation?.id) return conversation;
+    return (await conversationRepository.findById(conversation.id)) || conversation;
+  }
+
+  async persistInboundMessage(conversation, event, extraMetadata = {}) {
+    const message = await conversationMessageRepository.createMessage({
+      conversationId: conversation.id,
+      direction: 'inbound',
+      senderType: 'user',
+      body: event.text || '',
+      provider: 'twilio',
+      providerMessageId: event.messageId || null,
+      rawPayloadJson: event.rawPayload || null,
+      metadataJson: {
+        flowId: event.flowId,
+        userId: event.userId,
+        ...extraMetadata,
+      },
+    });
+
+    await conversationRepository.touchLastMessage(conversation.id);
+    return message;
   }
 }
 

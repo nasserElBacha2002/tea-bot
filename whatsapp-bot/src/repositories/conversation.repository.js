@@ -138,6 +138,95 @@ class ConversationRepository {
   async updateCurrentNode(id, currentNodeKey) {
     return this.updateConversation(id, { currentNodeKey });
   }
+
+  /**
+   * @param {object} filters
+   * @param {string} [filters.status]
+   * @param {string} [filters.channel]
+   * @param {string} [filters.provider]
+   * @param {string} [filters.search]
+   * @param {number} [filters.limit]
+   * @param {number} [filters.offset]
+   * @param {string} [filters.sort]
+   */
+  _buildListWhere(filters, values) {
+    const clauses = ['1 = 1'];
+    let i = values.length + 1;
+
+    if (filters.status) {
+      clauses.push(`c.status = $${i++}`);
+      values.push(filters.status);
+    }
+    if (filters.channel) {
+      clauses.push(`c.channel = $${i++}`);
+      values.push(filters.channel);
+    }
+    if (filters.provider) {
+      clauses.push(`c.provider = $${i++}`);
+      values.push(filters.provider);
+    }
+    if (filters.search) {
+      const pattern = `%${filters.search}%`;
+      clauses.push(`(
+        c.phone_number LIKE $${i}
+        OR c.display_name LIKE $${i}
+        OR EXISTS (
+          SELECT 1 FROM dbo.conversation_messages m
+          WHERE m.conversation_id = c.id AND m.body LIKE $${i}
+        )
+      )`);
+      values.push(pattern);
+      i += 1;
+    }
+
+    return { whereSql: clauses.join(' AND '), nextIndex: i };
+  }
+
+  _sortClause(sort) {
+    switch (sort) {
+      case 'last_message_at_asc':
+        return 'c.last_message_at ASC, c.started_at ASC';
+      case 'started_at_desc':
+        return 'c.started_at DESC';
+      default:
+        return 'c.last_message_at DESC, c.started_at DESC';
+    }
+  }
+
+  async countConversations(filters = {}) {
+    const values = [];
+    const { whereSql } = this._buildListWhere(filters, values);
+    const { rows } = await query(
+      `SELECT COUNT(*) AS total FROM dbo.conversations c WHERE ${whereSql}`,
+      values,
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  async listConversations(filters = {}) {
+    const limit = Math.min(Math.max(Number(filters.limit) || 25, 1), 100);
+    const offset = Math.max(Number(filters.offset) || 0, 0);
+    const values = [];
+    const { whereSql, nextIndex } = this._buildListWhere(filters, values);
+    const orderBy = this._sortClause(filters.sort);
+
+    values.push(limit, offset);
+    const limitParam = nextIndex;
+    const offsetParam = nextIndex + 1;
+
+    const { rows } = await query(
+      `SELECT c.* FROM dbo.conversations c
+       WHERE ${whereSql}
+       ORDER BY ${orderBy}
+       OFFSET $${offsetParam} ROWS FETCH NEXT $${limitParam} ROWS ONLY`,
+      values,
+    );
+    return rows.map(mapRow);
+  }
+
+  async getConversationById(id) {
+    return this.findById(id);
+  }
 }
 
 const conversationRepository = new ConversationRepository();

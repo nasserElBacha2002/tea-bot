@@ -435,8 +435,11 @@ export class FlowEngine {
       );
     }
 
-    // Si es 'end' o terminal, finalizamos la sesión
-    if (node.type === 'end' || node.isTerminal === true) {
+    const isHumanTerminal =
+      terminalReason === 'human_handoff' || terminalReason === 'fallback_handoff';
+
+    // Terminales de handoff humano: no resetear sesión en memoria (Fase 2 pausa en DB).
+    if (node.type === 'end' || (node.isTerminal === true && !isHumanTerminal)) {
       await sessionService.resetSession(userId, perfContext);
     }
 
@@ -445,6 +448,8 @@ export class FlowEngine {
       flowId: flow.id,
       currentNodeId: node.id,
       variables: currentVariables,
+      requiresHuman: isHumanTerminal,
+      terminalReason: terminalReason || null,
     };
   }
 
@@ -656,12 +661,13 @@ export class FlowEngine {
         },
         perfContext
       );
-      await sessionService.resetSession(userId, perfContext);
       return {
         reply: '🙌 Te vamos a derivar con una persona del equipo para que pueda ayudarte mejor.',
         flowId: flow.id,
-        currentNodeId: null,
-        variables: {},
+        currentNodeId: 'human_handoff',
+        variables: session?.variables || {},
+        requiresHuman: true,
+        terminalReason: 'human_handoff',
       };
     }
     return null;

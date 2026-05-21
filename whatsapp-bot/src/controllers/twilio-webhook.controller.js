@@ -2,6 +2,7 @@ import flowEngine from '../services/flow-engine.service.js';
 import webhookDedupe from '../services/webhook-dedupe.service.js';
 import sessionService from '../services/session.service.js';
 import messagePersistence from '../services/message-persistence.service.js';
+import humanHandoffService from '../services/human-handoff.service.js';
 import { toCanonicalTwilioInboundEvent } from '../adapters/twilio/twilio-inbound.adapter.js';
 import {
   buildEmptyTwimlResponse,
@@ -61,6 +62,17 @@ export const receiveTwilioMessage = async (req, res) => {
       messagePersistence.handleInbound(event),
     );
 
+    if (conversationContext?.skipFlowEngine) {
+      console.log(
+        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_mode_skip_engine status=${conversationContext.conversation?.status}`,
+      );
+      perfContext.add('humanModeSkip', true);
+      perfContext.add('conversationStatus', conversationContext.conversation?.status || null);
+      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+      logPerf('twilio_webhook', perfContext.toJSON());
+      return sendTwiml(res, buildEmptyTwimlResponse());
+    }
+
     const existingSession = sessionService.getSession(event.userId, perfContext);
     if (existingSession && existingSession.flowId !== event.flowId) {
       console.warn(
@@ -81,6 +93,29 @@ export const receiveTwilioMessage = async (req, res) => {
       perfContext,
     });
     perfContext.add('engineMs', roundMs(nowMs() - engineStart));
+
+    const isHandoff = humanHandoffService.isEngineHandoffResult(result);
+
+    if (isHandoff) {
+      const handoffPersist = await messagePersistence.safeRun('handleHumanHandoff', () =>
+        messagePersistence.handleHumanHandoff(conversationContext, result, event),
+      );
+
+      console.log(
+        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_handoff node=${result.currentNodeId}`,
+      );
+
+      perfContext.add('humanHandoff', true);
+      perfContext.add('nodeId', result.currentNodeId || null);
+      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+      logPerf('twilio_webhook', perfContext.toJSON());
+
+      const reply = handoffPersist?.reply || result.reply;
+      if (handoffPersist?.shouldSendTwiml === false) {
+        return sendTwiml(res, buildEmptyTwimlResponse());
+      }
+      return sendTwiml(res, buildTwimlMessage(reply));
+    }
 
     await messagePersistence.safeRun('handleOutbound', () =>
       messagePersistence.handleOutbound(conversationContext, result, event),

@@ -73,11 +73,25 @@ test('buildMssqlConfig arma opciones desde entorno', () => {
 });
 
 test('isConversationDbEnabled reconoce valores truthy', () => {
-  const prev = process.env.CONVERSATION_DB_ENABLED;
+  const prev = {
+    CONVERSATION_DB_ENABLED: process.env.CONVERSATION_DB_ENABLED,
+    DB_SERVER: process.env.DB_SERVER,
+    DB_NAME: process.env.DB_NAME,
+    DB_USER: process.env.DB_USER,
+    DB_PASSWORD: process.env.DB_PASSWORD,
+  };
   process.env.CONVERSATION_DB_ENABLED = 'yes';
   assert.equal(isConversationDbEnabled(), true);
   process.env.CONVERSATION_DB_ENABLED = '0';
   assert.equal(isConversationDbEnabled(), false);
-  if (prev === undefined) delete process.env.CONVERSATION_DB_ENABLED;
-  else process.env.CONVERSATION_DB_ENABLED = prev;
+  delete process.env.CONVERSATION_DB_ENABLED;
+  process.env.DB_SERVER = 'localhost';
+  process.env.DB_NAME = 'tea_bot';
+  process.env.DB_USER = 'sa';
+  process.env.DB_PASSWORD = 'secret';
+  assert.equal(isConversationDbEnabled(), true);
+  for (const [k, v] of Object.entries(prev)) {
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
 });

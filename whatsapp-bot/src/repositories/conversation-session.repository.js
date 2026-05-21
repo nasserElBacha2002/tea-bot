@@ -32,6 +32,17 @@ class ConversationSessionRepository {
     return mapRow(rows[0]);
   }
 
+  /** Sesión abierta más reciente (active o paused). */
+  async findLatestOpenByConversationId(conversationId) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversation_sessions
+       WHERE conversation_id = $1 AND status IN (N'active', N'paused')
+       ORDER BY started_at DESC`,
+      [conversationId],
+    );
+    return mapRow(rows[0]);
+  }
+
   async createSession(data) {
     const {
       conversationId,

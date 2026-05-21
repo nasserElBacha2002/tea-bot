@@ -2,9 +2,15 @@
  * Configuración SQL Server desde variables de entorno (sin connection string en código).
  */
 export function isConversationDbEnabled() {
-  return ['1', 'true', 'yes', 'on'].includes(
-    String(process.env.CONVERSATION_DB_ENABLED || '').trim().toLowerCase(),
-  );
+  const explicit = String(process.env.CONVERSATION_DB_ENABLED || '').trim().toLowerCase();
+  if (['0', 'false', 'no', 'off'].includes(explicit)) {
+    return false;
+  }
+  if (['1', 'true', 'yes', 'on'].includes(explicit)) {
+    return true;
+  }
+  // Auto-habilitar si las variables SQL están completas (dev local sin flag explícito).
+  return validateSqlServerEnv().ok;
 }
 
 export function getSqlServerEnv() {

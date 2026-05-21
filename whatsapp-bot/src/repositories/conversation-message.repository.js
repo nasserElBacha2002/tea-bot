@@ -69,14 +69,54 @@ class ConversationMessageRepository {
     return mapRow(rows[0]);
   }
 
-  async listByConversationId(conversationId, limit = 100) {
+  async listByConversationId(conversationId, options = {}) {
+    const limit = Math.min(Math.max(Number(options.limit) || 100, 1), 500);
+    const offset = Math.max(Number(options.offset) || 0, 0);
+    const order = String(options.order || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+
     const { rows } = await query(
-      `SELECT TOP ($2) * FROM dbo.conversation_messages
+      `SELECT * FROM dbo.conversation_messages
        WHERE conversation_id = $1
-       ORDER BY created_at ASC`,
-      [conversationId, limit],
+       ORDER BY created_at ${order}
+       OFFSET $3 ROWS FETCH NEXT $2 ROWS ONLY`,
+      [conversationId, limit, offset],
     );
     return rows.map(mapRow);
+  }
+
+  async countByConversationId(conversationId) {
+    const { rows } = await query(
+      `SELECT COUNT(*) AS total FROM dbo.conversation_messages WHERE conversation_id = $1`,
+      [conversationId],
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  /**
+   * Último mensaje por conversación (evita N+1 en listado).
+   * @param {string[]} conversationIds
+   */
+  async getLastMessageByConversationIds(conversationIds) {
+    if (!conversationIds?.length) return new Map();
+
+    const placeholders = conversationIds.map((_, idx) => `$${idx + 1}`).join(', ');
+    const { rows } = await query(
+      `WITH ranked AS (
+        SELECT m.*,
+          ROW_NUMBER() OVER (PARTITION BY m.conversation_id ORDER BY m.created_at DESC) AS rn
+        FROM dbo.conversation_messages m
+        WHERE m.conversation_id IN (${placeholders})
+      )
+      SELECT * FROM ranked WHERE rn = 1`,
+      conversationIds,
+    );
+
+    const map = new Map();
+    for (const row of rows) {
+      const mapped = mapRow(row);
+      map.set(mapped.conversationId, mapped);
+    }
+    return map;
   }
 }
 
