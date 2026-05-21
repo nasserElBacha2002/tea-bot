@@ -1,6 +1,7 @@
 import flowEngine from '../services/flow-engine.service.js';
 import webhookDedupe from '../services/webhook-dedupe.service.js';
 import sessionService from '../services/session.service.js';
+import messagePersistence from '../services/message-persistence.service.js';
 import { toCanonicalTwilioInboundEvent } from '../adapters/twilio/twilio-inbound.adapter.js';
 import {
   buildEmptyTwimlResponse,
@@ -55,10 +56,18 @@ export const receiveTwilioMessage = async (req, res) => {
       return sendTwiml(res, buildEmptyTwimlResponse());
     }
 
+    let conversationContext = null;
+    conversationContext = await messagePersistence.safeRun('handleInbound', () =>
+      messagePersistence.handleInbound(event),
+    );
+
     const existingSession = sessionService.getSession(event.userId, perfContext);
     if (existingSession && existingSession.flowId !== event.flowId) {
       console.warn(
         `[TwilioWebhook] provider=${event.provider} userId=${event.userId} sessionFlow=${existingSession.flowId} requestedFlow=${event.flowId} action=reset_session`,
+      );
+      await messagePersistence.safeRun('handleRuntimeSessionReset', () =>
+        messagePersistence.handleRuntimeSessionReset(event, conversationContext),
       );
       await sessionService.resetSession(event.userId, perfContext);
     }
@@ -72,6 +81,10 @@ export const receiveTwilioMessage = async (req, res) => {
       perfContext,
     });
     perfContext.add('engineMs', roundMs(nowMs() - engineStart));
+
+    await messagePersistence.safeRun('handleOutbound', () =>
+      messagePersistence.handleOutbound(conversationContext, result, event),
+    );
 
     console.log(
       `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false node=${result.currentNodeId}`,

@@ -41,6 +41,13 @@ export const config = {
   exportInfoProvidedEvents: ['1', 'true', 'yes', 'on'].includes(
     String(process.env.CONVERSATION_EXPORT_INFO_PROVIDED_EVENTS || '').trim().toLowerCase()
   ),
+  conversationDbEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_DB_ENABLED || '').trim().toLowerCase(),
+  ),
+  dbServer: (process.env.DB_SERVER || '').trim(),
+  dbPort: Number(process.env.DB_PORT || 1433),
+  dbName: (process.env.DB_NAME || 'tea_bot').trim(),
+  dbUser: (process.env.DB_USER || '').trim(),
 };
 
 function hasMetaCritical() {
@@ -114,6 +121,17 @@ export const validateConfig = () => {
         ', ',
       )}). Son opcionales en V1 TwiML y requeridas para envío async futuro.`,
     );
+  }
+
+  if (config.conversationDbEnabled) {
+    const missingDb = ['DB_SERVER', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'].filter(
+      (key) => !process.env[key] || !String(process.env[key]).trim(),
+    );
+    if (missingDb.length > 0) {
+      console.warn(
+        `⚠️ CONVERSATION_DB_ENABLED=true pero faltan: ${missingDb.join(', ')}`,
+      );
+    }
   }
 
   if (config.googleSheetsEnabled) {

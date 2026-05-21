@@ -1,3 +1,7 @@
+import { normalizeTwilioWhatsappNumber } from '../../utils/twilio-phone.js';
+
+export { normalizeTwilioWhatsappNumber };
+
 /**
  * Contrato canónico inbound:
  * {
@@ -11,6 +15,8 @@
  * }
  */
 export function normalizeTwilioWhatsappPhone(from) {
+  const normalized = normalizeTwilioWhatsappNumber(from);
+  if (normalized) return normalized;
   if (!from) return 'No informado';
   return String(from).replace(/^whatsapp:/i, '').trim() || 'No informado';
 }

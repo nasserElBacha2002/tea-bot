@@ -11,6 +11,7 @@ import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import { bootstrapFlows } from './utils/bootstrap-flows.js';
 import flowRepository from './repositories/flow.repository.js';
+import { isConversationDbEnabled, pingDatabase } from './db/index.js';
 
 const app = express();
 
@@ -38,6 +39,21 @@ validateConfig();
     // 3. Cargar sesiones
     await sessionService.loadSessions();
     conversationAbandonmentService.start();
+
+    if (isConversationDbEnabled()) {
+      try {
+        const dbPing = await pingDatabase();
+        if (dbPing.ok) {
+          console.log('🗄️  Persistencia de conversaciones (SQL Server) conectada.');
+        } else {
+          console.warn('⚠️ CONVERSATION_DB_ENABLED pero la base no respondió al ping.');
+        }
+      } catch (dbErr) {
+        console.warn(
+          `⚠️ CONVERSATION_DB_ENABLED pero falló la conexión: ${dbErr.message}`,
+        );
+      }
+    }
 
     console.log('🚀 Sistema de flujos (Fase 3) y sesiones inicializado.');
   } catch (err) {

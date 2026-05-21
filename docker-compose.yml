@@ -1,4 +1,22 @@
 services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: tea-sqlserver
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-TeaBot_Dev_Passw0rd!}
+    ports:
+      - "${DB_PORT:-1433}:1433"
+    volumes:
+      - tea-sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
   whatsapp-bot:
     build:
       context: ./whatsapp-bot
@@ -8,8 +26,20 @@ services:
       - "${WHATSAPP_BOT_PORT:-3000}:3000"
     env_file:
       - ./whatsapp-bot/.env
+    environment:
+      CONVERSATION_DB_ENABLED: ${CONVERSATION_DB_ENABLED:-true}
+      DB_SERVER: sqlserver
+      DB_PORT: 1433
+      DB_NAME: ${DB_NAME:-tea_bot}
+      DB_USER: sa
+      DB_PASSWORD: ${DB_PASSWORD:-TeaBot_Dev_Passw0rd!}
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      DB_ENCRYPT: "false"
     volumes:
       - ./whatsapp-bot/data:/app/data
+    depends_on:
+      sqlserver:
+        condition: service_healthy
     restart: unless-stopped
 
   frontend:
@@ -25,3 +55,6 @@ services:
       whatsapp-bot:
         condition: service_healthy
     restart: unless-stopped
+
+volumes:
+  tea-sqlserver-data:
