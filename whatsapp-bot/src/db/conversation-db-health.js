@@ -71,4 +71,6 @@ export async function ensureConversationDbReady() {
       'DB_CONNECTION_FAILED',
     );
   }
+
+  return { ok: true };
 }
