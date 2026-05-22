@@ -7,6 +7,7 @@ import {
   verifySignedSessionToken,
 } from '../services/admin-auth.service.js';
 import crypto from 'crypto';
+import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
 
 function timingSafeUser(a, b) {
   const ba = Buffer.from(String(a), 'utf8');
@@ -54,7 +55,13 @@ export const login = (req, res) => {
 
   const token = createSignedSessionToken(config.adminUsername, config.sessionSecret);
   res.setHeader('Set-Cookie', buildSessionCookieHeader(token, 7 * 24 * 60 * 60));
-  return res.json({ ok: true, user: { username: config.adminUsername } });
+  return res.json({
+    ok: true,
+    user: {
+      username: config.adminUsername,
+      agentId: resolveAgentIdFromUsername(config.adminUsername),
+    },
+  });
 };
 
 export const me = (req, res) => {
@@ -63,7 +70,13 @@ export const me = (req, res) => {
   if (!session) {
     return res.status(401).json({ ok: false, error: 'UNAUTHORIZED' });
   }
-  return res.json({ ok: true, user: { username: session.username } });
+  return res.json({
+    ok: true,
+    user: {
+      username: session.username,
+      agentId: resolveAgentIdFromUsername(session.username),
+    },
+  });
 };
 
 export const logout = (req, res) => {

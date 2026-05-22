@@ -21,7 +21,7 @@ export function runLocalValidationBeforeSave(
     buildConversationValidationSummary(viewModel, issues) ||
     'No se pudo guardar porque el flujo tiene errores de validación.';
   const focusStepId = firstInvalidStepIdInDisplayOrder(viewModel, issues);
-  return { ok: false, message: summary, focusStepId };
+  return { ok: false, message: summary, focusStepId: focusStepId ?? undefined };
 }
 
 export const SAVE_MESSAGES = {

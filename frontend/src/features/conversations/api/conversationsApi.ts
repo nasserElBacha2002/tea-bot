@@ -9,9 +9,9 @@ import type {
   InboxConversationItem,
 } from '../types/conversation.types';
 
-const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-  ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, '')
-  : 'http://localhost:3000';
+import { resolveApiOrigin } from '../../../utils/apiOrigin';
+
+const API_ORIGIN = resolveApiOrigin();
 
 const client = axios.create({
   baseURL: `${API_ORIGIN}/api/conversations`,

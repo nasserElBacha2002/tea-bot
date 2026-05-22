@@ -9,20 +9,37 @@ import { ConversationsPage } from './ConversationsPage';
 
 const refreshMock = vi.fn();
 
+vi.mock('../../auth/api/authApi', () => ({
+  authApi: {
+    me: vi.fn().mockResolvedValue({
+      ok: true,
+      user: { username: 'admin', agentId: 'agent-test-id' },
+    }),
+  },
+}));
+
+vi.mock('../hooks/useConversationsLiveUpdates', () => ({
+  useConversationsLiveUpdates: () => ({
+    status: 'live' as const,
+    markManual: vi.fn(),
+    reconnect: vi.fn(),
+  }),
+}));
+
 vi.mock('../hooks/useConversations', () => ({
   useConversations: () => ({
     data: {
       items: [
         {
           id: 'conv-1',
-          channel: 'whatsapp',
-          provider: 'twilio',
-          phoneNumber: '+5491111111111',
-          displayName: null,
+          channel: 'simulator',
+          provider: 'internal',
+          phoneNumber: null,
+          displayName: 'Simulación - Esperando humano',
           status: 'waiting_human',
           assignedAgentId: null,
           currentFlowId: 'main-menu',
-          currentFlowVersion: 'v21',
+          currentFlowVersion: 'v22',
           currentNodeKey: 'human_handoff',
           lastMessageAt: '2026-05-21T10:00:00.000Z',
           startedAt: '2026-05-21T09:00:00.000Z',
@@ -56,14 +73,14 @@ vi.mock('../hooks/useConversations', () => ({
       ? {
           conversation: {
             id: 'conv-1',
-            channel: 'whatsapp',
-            provider: 'twilio',
-            phoneNumber: '+5491111111111',
-            displayName: null,
+            channel: 'simulator',
+            provider: 'internal',
+            phoneNumber: null,
+            displayName: 'Simulación - Esperando humano',
             status: 'waiting_human',
             assignedAgentId: null,
             currentFlowId: 'main-menu',
-            currentFlowVersion: 'v21',
+            currentFlowVersion: 'v22',
             currentNodeKey: 'human_handoff',
             lastMessageAt: '2026-05-21T10:00:00.000Z',
             startedAt: '2026-05-21T09:00:00.000Z',
@@ -72,7 +89,7 @@ vi.mock('../hooks/useConversations', () => ({
           activeSession: {
             id: 's1',
             flowId: 'main-menu',
-            flowVersion: 'v21',
+            flowVersion: 'v22',
             currentNodeKey: 'human_handoff',
             status: 'paused',
             history: [],
@@ -83,7 +100,7 @@ vi.mock('../hooks/useConversations', () => ({
           humanHandoff: {
             id: 'h1',
             status: 'pending',
-            reason: 'Derivación',
+            reason: 'human_handoff',
             requestedBy: 'bot',
             requestedAt: '2026-05-21T09:55:00.000Z',
           },
@@ -103,7 +120,7 @@ vi.mock('../hooks/useConversations', () => ({
               direction: 'inbound',
               senderType: 'user',
               body: 'Quiero una persona',
-              provider: 'twilio',
+              provider: 'internal',
               providerMessageId: null,
               metadata: { botSkipped: true },
               createdAt: '2026-05-21T10:00:00.000Z',
@@ -127,7 +144,9 @@ vi.mock('../hooks/useConversations', () => ({
 }));
 
 function renderPage() {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={createTheme()}>
@@ -144,12 +163,33 @@ describe('ConversationsPage', () => {
     refreshMock.mockClear();
   });
 
-  it('renderiza titulo y lista con etiquetas en español', () => {
+  it('renderiza titulo y lista con etiquetas en español', async () => {
     renderPage();
     expect(screen.getByText('Conversaciones')).toBeInTheDocument();
+    expect(await screen.findByText('En vivo')).toBeInTheDocument();
     expect(screen.getByText('Esperando humano')).toBeInTheDocument();
-    expect(screen.getByText('+5491111111111')).toBeInTheDocument();
+    expect(screen.getByText('Simulación - Esperando humano')).toBeInTheDocument();
     expect(screen.getByText(/Quiero una persona/)).toBeInTheDocument();
+  });
+
+  it('no muestra datos técnicos por defecto al abrir detalle', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByText('Simulación - Esperando humano'));
+    expect(screen.queryByText('Flujo actual:')).toBeNull();
+    expect(screen.queryByText(/7319B35A/i)).toBeNull();
+    expect(screen.getByText('Detalles técnicos')).toBeInTheDocument();
+    expect(screen.getByText(/El usuario pidió hablar con una persona/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('muestra datos técnicos al expandir acordeón', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByText('Simulación - Esperando humano'));
+    await user.click(screen.getByRole('button', { name: /detalles técnicos/i }));
+    expect(await screen.findByText(/ID conversación:/)).toBeInTheDocument();
+    expect(screen.getAllByText(/main-menu/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('muestra empty state de detalle sin seleccion', () => {
@@ -157,15 +197,6 @@ describe('ConversationsPage', () => {
     expect(
       screen.getByText('Seleccioná una conversación para ver el detalle'),
     ).toBeInTheDocument();
-  });
-
-  it('al seleccionar conversacion carga detalle y mensajes', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(screen.getByText('+5491111111111'));
-    expect(screen.getByText('Flujo actual:')).toBeInTheDocument();
-    expect(screen.getByText(/Motivo de derivación/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /tomar conversación/i })).toBeInTheDocument();
   });
 
   it('boton Actualizar dispara refresh', async () => {

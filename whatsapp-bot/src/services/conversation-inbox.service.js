@@ -12,6 +12,12 @@ import {
   mapMessagePublic,
   mapSessionPublic,
 } from '../utils/conversation-inbox.mapper.js';
+import {
+  notifyConversationAssigned,
+  notifyConversationClosed,
+  notifyConversationMessageCreated,
+  notifyConversationReturnedToBot,
+} from '../realtime/conversation-live.notify.js';
 
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
 const ALLOWED_CHANNEL = new Set(['whatsapp', 'simulator']);
@@ -187,7 +193,9 @@ export class ConversationInboxService {
       });
     }
 
-    return { conversation: mapConversationPublic(updated) };
+    const result = { conversation: mapConversationPublic(updated) };
+    notifyConversationAssigned(updated, pending);
+    return result;
   }
 
   async sendAgentMessage(conversationId, body, agentId) {
@@ -285,10 +293,12 @@ export class ConversationInboxService {
       lastMessageAt: new Date(),
     });
 
-    return {
+    const result = {
       message: mapMessagePublic(message),
       conversation: mapConversationPublic(updatedConversation),
     };
+    notifyConversationMessageCreated(updatedConversation, message);
+    return result;
   }
 
   async closeConversation(conversationId, resolutionNote = null) {
@@ -330,7 +340,9 @@ export class ConversationInboxService {
       metadataJson: { event: 'conversation_closed', generatedBy: 'agent_inbox' },
     });
 
-    return { conversation: mapConversationPublic(updated) };
+    const result = { conversation: mapConversationPublic(updated) };
+    notifyConversationClosed(updated);
+    return result;
   }
 
   async _isSeedConversation(conversationId) {
@@ -381,7 +393,9 @@ export class ConversationInboxService {
       });
     }
 
-    return { conversation: mapConversationPublic(updated) };
+    const result = { conversation: mapConversationPublic(updated) };
+    notifyConversationReturnedToBot(updated);
+    return result;
   }
 }
 

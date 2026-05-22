@@ -119,7 +119,7 @@ function VersionRow({
   onEdit,
   onCreateDraft,
   onRollback,
-  flowId,
+  flowId: _flowId,
 }: {
   version: {
     id: string;

@@ -21,6 +21,7 @@ import type {
 import '@xyflow/react/dist/style.css';
 import { Box } from '@mui/material';
 import type { Flow, FlowNodeDataType, FlowTransition, GraphEdgeSelection } from '../types/flow.types';
+import type { MapViewStyle } from '../utils/flowMapDisplay';
 import {
   flowToGraph,
   applyNodePositions,
@@ -69,6 +70,7 @@ interface FlowGraphCanvasProps {
   readOnly?: boolean;
   /** Mapa legible: sin fitView inicial; centra en foco. */
   mapViewMode?: boolean;
+  mapViewStyle?: MapViewStyle;
   initialFocusNodeId?: string | null;
   onMapNodeActivate?: (nodeId: string) => void;
 }
@@ -85,6 +87,7 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
   onOrganizeLayout,
   readOnly = false,
   mapViewMode = false,
+  mapViewStyle = 'message',
   initialFocusNodeId = null,
   onMapNodeActivate,
 }) => {
@@ -103,10 +106,11 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
         compactEdgeLabels: mapViewMode,
         mapFocusNodeId: initialFocusNodeId,
         mapDisplayMode: mapViewMode,
+        mapViewStyle: mapViewMode ? mapViewStyle : undefined,
       }),
     // graphSignature ya refleja el contenido de `flow`
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, initialFocusNodeId]
+    [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, mapViewStyle, initialFocusNodeId]
   );
 
   const [nodes, setNodes] = useNodesState(derivedNodes);
@@ -122,11 +126,12 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
       compactEdgeLabels: mapViewMode,
       mapFocusNodeId: initialFocusNodeId,
       mapDisplayMode: mapViewMode,
+      mapViewStyle: mapViewMode ? mapViewStyle : undefined,
     });
     setNodes(n);
     setEdges(e);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, initialFocusNodeId, setNodes, setEdges]);
+  }, [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, mapViewStyle, initialFocusNodeId, setNodes, setEdges]);
 
   const centerOnNode = useCallback(
     (nodeId: string | null, zoom = 0.9) => {

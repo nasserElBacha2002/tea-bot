@@ -245,7 +245,7 @@ function TransitionRow({
 }
 
 function AddTransitionForm({
-  node,
+  node: _node,
   allNodes,
   onAdd,
 }: {

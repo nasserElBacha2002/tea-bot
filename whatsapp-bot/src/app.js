@@ -1,3 +1,4 @@
+import http from 'http';
 import express from 'express';
 import { config, validateConfig, hasMetaCritical } from './config.js';
 import { createCorsMiddleware } from './cors-middleware.js';
@@ -7,6 +8,7 @@ import authRouter from './routes/auth.routes.js';
 import flowAdminRouter from './routes/flow-admin.routes.js';
 import simulatorRouter from './routes/simulator.routes.js';
 import conversationsRouter from './routes/conversations.routes.js';
+import devConversationsRouter from './routes/dev-conversations.routes.js';
 import flowManagementRouter from './routes/flow-management.routes.js';
 import flowLoader from './utils/flow-loader.js';
 import compositeFlowLoader from './loaders/composite-flow-loader.js';
@@ -15,8 +17,10 @@ import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
+import { attachConversationLiveWebSocket } from './realtime/conversation-live.ws.js';
 
 const app = express();
+const httpServer = http.createServer(app);
 
 // Middleware para procesar JSON y habilitar CORS.
 // Límite >100kb: flujos grandes + payload del simulador (borrador completo) superan el default de express/body-parser.
@@ -72,6 +76,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/flows', flowAdminRouter);
 app.use('/api/simulator', simulatorRouter);
 app.use('/api/conversations', conversationsRouter);
+app.use('/api/dev/conversations', devConversationsRouter);
 app.use('/api/flow-management', flowManagementRouter);
 
 /**
@@ -133,9 +138,11 @@ app.get('/healthz', async (req, res) => {
   });
 });
 
-// Iniciamos el servidor
-app.listen(config.port, () => {
+attachConversationLiveWebSocket(httpServer);
+
+httpServer.listen(config.port, () => {
   console.log(`🚀 El servidor de WhatsApp bot se levantó correctamente.`);
   console.log(`🌐 Local: http://localhost:${config.port}`);
   console.log(`🔗 Webhook endpoint: ${config.appBaseUrl}/webhook`);
+  console.log(`📡 Conversaciones live: ws://localhost:${config.port}/api/conversations/live`);
 });

@@ -11,6 +11,8 @@ import {
   MenuItem,
   Select,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { Close, CenterFocusStrong, ZoomOutMap } from '@mui/icons-material';
@@ -23,6 +25,8 @@ import {
   searchFlowNodes,
   type MapDepthOption,
 } from '../../utils/flowMapSubgraph';
+import type { MapViewStyle } from '../../utils/flowMapDisplay';
+import { MapNodeDetailPanel } from './MapNodeDetailPanel';
 
 export interface AdvancedMapViewProps {
   open: boolean;
@@ -57,11 +61,16 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
   const [mapFocusId, setMapFocusId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchPick, setSearchPick] = useState<{ id: string; title: string } | null>(null);
+  const [mapViewStyle, setMapViewStyle] = useState<MapViewStyle>('message');
+  const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setMapFocusId(resolveMapFocusNodeId(flow, focusNodeId));
+      const focus = resolveMapFocusNodeId(flow, focusNodeId);
+      setMapFocusId(focus);
+      setDetailNodeId(focus);
       setDepth(2);
+      setMapViewStyle('message');
       setSearchQuery('');
       setSearchPick(null);
     }
@@ -75,10 +84,20 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
 
   const searchOptions = useMemo(() => searchFlowNodes(flow, searchQuery), [flow, searchQuery]);
 
+  const handleNodePick = useCallback(
+    (id: string) => {
+      setMapFocusId(id);
+      setDetailNodeId(id);
+      onNodeSelect?.(id);
+    },
+    [onNodeSelect],
+  );
+
   const handleSearchSelect = useCallback(
     (id: string | null) => {
       if (!id) return;
       setMapFocusId(id);
+      setDetailNodeId(id);
       setSearchPick({ id, title: id });
       onNodeSelect?.(id);
     },
@@ -119,6 +138,17 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
             Mapa de lectura
           </Typography>
 
+          <ToggleButtonGroup
+            size="small"
+            exclusive
+            value={mapViewStyle}
+            onChange={(_, v) => v && setMapViewStyle(v)}
+            aria-label="Vista del mapa"
+          >
+            <ToggleButton value="message">Vista mensaje</ToggleButton>
+            <ToggleButton value="technical">Vista técnica</ToggleButton>
+          </ToggleButtonGroup>
+
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="map-depth-label">Profundidad</InputLabel>
             <Select
@@ -153,7 +183,11 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
             size="small"
             variant="outlined"
             startIcon={<CenterFocusStrong />}
-            onClick={() => setMapFocusId(resolveMapFocusNodeId(flow, focusNodeId))}
+            onClick={() => {
+              const id = resolveMapFocusNodeId(flow, focusNodeId);
+              setMapFocusId(id);
+              setDetailNodeId(id);
+            }}
           >
             Centrar nodo actual
           </Button>
@@ -184,28 +218,38 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
         </Box>
 
         <Typography variant="caption" color="text.secondary" sx={{ px: 2, py: 0.5 }}>
-          Solo lectura. Mostrando {visibleFlow.nodes.length} pasos
+          Solo lectura · {mapViewStyle === 'message' ? 'Vista mensaje' : 'Vista técnica'} ·{' '}
+          {visibleFlow.nodes.length} pasos
           {depth !== 'all' ? ` (profundidad: ${depth === 1 ? '1 salto' : `${depth} saltos`})` : ''}.
-          Hacé clic en un nodo para ir al paso en el editor.
+          Clic en un nodo para ver detalle y abrir el paso en el editor.
         </Typography>
 
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <FlowGraphCanvas
-            flow={visibleFlow}
-            selectedNodeId={mapFocusId}
-            selectedEdge={null}
-            onNodeSelect={setMapFocusId}
-            onEdgeSelect={() => {}}
-            onFlowChange={noopFlow}
-            onQuickAddNode={() => {}}
-            onOrganizeLayout={() => {}}
-            readOnly
-            mapViewMode
-            initialFocusNodeId={mapFocusId}
-            onMapNodeActivate={(id) => {
-              setMapFocusId(id);
-              onNodeSelect?.(id);
-            }}
+        <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: { xs: 'column', md: 'row' } }}>
+          <Box sx={{ flex: 1, minHeight: 0, minWidth: 0 }}>
+            <FlowGraphCanvas
+              flow={visibleFlow}
+              selectedNodeId={mapFocusId}
+              selectedEdge={null}
+              onNodeSelect={(id) => {
+                if (id) setMapFocusId(id);
+              }}
+              onEdgeSelect={() => {}}
+              onFlowChange={noopFlow}
+              onQuickAddNode={() => {}}
+              onOrganizeLayout={() => {}}
+              readOnly
+              mapViewMode
+              mapViewStyle={mapViewStyle}
+              initialFocusNodeId={mapFocusId}
+              onMapNodeActivate={(id) => {
+                handleNodePick(id);
+              }}
+            />
+          </Box>
+          <MapNodeDetailPanel
+            flow={flow}
+            nodeId={detailNodeId}
+            onClose={() => setDetailNodeId(null)}
           />
         </Box>
       </Box>

@@ -12,7 +12,7 @@ const client = axios.create({
   },
 });
 
-export type AuthUser = { username: string };
+export type AuthUser = { username: string; agentId?: string };
 
 export const authApi = {
   login: async (username: string, password: string): Promise<{ ok: true; user: AuthUser }> => {

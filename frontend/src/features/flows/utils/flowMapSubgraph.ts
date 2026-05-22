@@ -1,4 +1,5 @@
 import type { Flow, FlowNode, FlowTransition } from '../types/flow.types';
+import { formatTransitionSummaryForEdge, getNodeDisplayTitle } from './flowMapDisplay';
 
 export type MapDepthOption = 1 | 2 | 3 | 'all';
 
@@ -88,7 +89,7 @@ export function searchFlowNodes(
 
   return flow.nodes
     .map((node) => {
-      const title = node.ui?.stepTitle?.trim() || node.id;
+      const title = getNodeDisplayTitle(node);
       const message = node.message ?? '';
       const haystack = `${node.id} ${title} ${message}`.toLowerCase();
       if (!haystack.includes(q)) return null;
@@ -111,32 +112,7 @@ export function truncateText(text: string, maxLen: number): string {
 export function summarizeOutgoingTransitions(
   transitions: FlowTransition[],
   targetNodeId: string,
+  flow?: Flow,
 ): { shortLabel: string; tooltip: string } {
-  if (transitions.length === 0) {
-    return { shortLabel: `→ ${targetNodeId}`, tooltip: `→ ${targetNodeId}` };
-  }
-  if (transitions.length === 1) {
-    const t = transitions[0]!;
-    const value =
-      t.value != null
-        ? Array.isArray(t.value)
-          ? t.value.join(', ')
-          : String(t.value)
-        : '';
-    const short = value ? `${value} → ${targetNodeId}` : `→ ${targetNodeId}`;
-    return { shortLabel: truncateText(short, 40), tooltip: short };
-  }
-  const parts = transitions.map((t) => {
-    const v =
-      t.value != null
-        ? Array.isArray(t.value)
-          ? t.value.join(', ')
-          : String(t.value)
-        : t.type ?? 'respuesta';
-    return String(v);
-  });
-  return {
-    shortLabel: `${transitions.length} respuestas → ${targetNodeId}`,
-    tooltip: parts.join('\n'),
-  };
+  return formatTransitionSummaryForEdge(transitions, targetNodeId, flow);
 }

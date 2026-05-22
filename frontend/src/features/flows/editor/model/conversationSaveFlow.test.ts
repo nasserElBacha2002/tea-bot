@@ -9,16 +9,15 @@ const vm: ConversationViewModel = {
   status: 'draft',
   entryStepId: 'a',
   fallbackStepId: 'b',
+  compatibilityWarnings: [],
   steps: [
     {
-      uiKey: '1',
+      uiId: '1',
       internalId: 'a',
       title: 'A',
-      type: 'message',
       message: '',
       responses: [],
-      isEntry: true,
-      isFallback: false,
+      metadata: { nodeType: 'message', position: { x: 0, y: 0 } },
     },
   ],
 };

@@ -3,7 +3,6 @@ import {
   Box,
   Typography,
   Stack,
-  Divider,
   Alert,
   CircularProgress,
   Button,
@@ -12,15 +11,20 @@ import type { ConversationDetailResponse } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
 import { ConversationMessageTimeline } from './ConversationMessageTimeline';
 import { ConversationComposer } from './ConversationComposer';
+import { ConversationTechnicalDetails } from './ConversationTechnicalDetails';
 import type { ConversationMessage } from '../types/conversation.types';
+import { formatConversationTitle } from '../utils/conversationUiLabels';
 import {
-  formatConversationTitle,
-  handoffStatusLabel,
-} from '../utils/conversationUiLabels';
+  formatAssignmentLabel,
+  formatDetailSubtitle,
+  handoffReasonHumanText,
+} from '../utils/conversationDisplay';
 
 interface Props {
   detail: ConversationDetailResponse | undefined;
   messages: ConversationMessage[];
+  conversationId?: string | null;
+  currentAgentId?: string | null;
   loadingDetail?: boolean;
   loadingMessages?: boolean;
   detailError?: string | null;
@@ -40,6 +44,8 @@ interface Props {
 export const ConversationDetail: React.FC<Props> = ({
   detail,
   messages,
+  conversationId,
+  currentAgentId,
   loadingDetail,
   loadingMessages,
   detailError,
@@ -60,7 +66,7 @@ export const ConversationDetail: React.FC<Props> = ({
 
   if (loadingDetail) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flex: 1, minHeight: 0 }}>
         <CircularProgress />
       </Box>
     );
@@ -75,6 +81,7 @@ export const ConversationDetail: React.FC<Props> = ({
       <Box
         sx={{
           flex: 1,
+          minHeight: 0,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -88,8 +95,21 @@ export const ConversationDetail: React.FC<Props> = ({
     );
   }
 
-  const { conversation, activeSession, humanHandoff } = detail;
+  const { conversation, humanHandoff } = detail;
   const title = formatConversationTitle(conversation.phoneNumber, conversation.displayName);
+  const subtitle = formatDetailSubtitle(
+    conversation.channel,
+    conversation.provider,
+    conversation.status,
+    conversation.lastMessageAt,
+  );
+  const assignment = formatAssignmentLabel(conversation.assignedAgentId, currentAgentId);
+  const motivo =
+    handoffReasonHumanText(humanHandoff?.reason)
+    ?? (conversation.status === 'waiting_human'
+      ? 'Esperando que un operador tome la conversación.'
+      : null);
+
   const canClose = conversation.status !== 'closed';
   const canReturn =
     conversation.status === 'waiting_human'
@@ -115,19 +135,64 @@ export const ConversationDetail: React.FC<Props> = ({
   };
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
-      <Box sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        minHeight: 0,
+        height: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        sx={{
+          flexShrink: 0,
+          maxHeight: { xs: '40vh', md: '36%' },
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          p: 2,
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+        }}
+      >
         <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
           <Typography variant="h6" fontWeight={800}>
             {title}
           </Typography>
           <ConversationStatusBadge status={conversation.status} size="medium" />
         </Stack>
+
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {conversation.channel} · {conversation.provider}
+          {subtitle}
         </Typography>
 
+        {assignment && (
+          <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 600 }}>
+            {assignment}
+          </Typography>
+        )}
+
+        {motivo && (
+          <Typography variant="body2" sx={{ mt: 0.75 }}>
+            <strong>Motivo:</strong> {motivo}
+          </Typography>
+        )}
+
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap">
+          {conversation.status === 'waiting_human' && !conversation.assignedAgentId && (
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              onClick={() => void onClaim()}
+              disabled={claiming}
+            >
+              {claiming ? 'Tomando…' : 'Tomar conversación'}
+            </Button>
+          )}
           {canClose && (
             <Button
               size="small"
@@ -161,58 +226,43 @@ export const ConversationDetail: React.FC<Props> = ({
           )}
         </Stack>
 
-        <Stack spacing={0.5} sx={{ mt: 1.5 }}>
-          <Typography variant="body2">
-            <strong>Flujo actual:</strong> {conversation.currentFlowId ?? '—'}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Versión:</strong> {conversation.currentFlowVersion ?? '—'}
-          </Typography>
-          <Typography variant="body2">
-            <strong>Nodo actual:</strong> {conversation.currentNodeKey ?? '—'}
-          </Typography>
-          {conversation.assignedAgentId && (
-            <Typography variant="body2">
-              <strong>Agente asignado:</strong> {conversation.assignedAgentId}
-            </Typography>
-          )}
-          {humanHandoff && (
-            <>
-              <Typography variant="body2">
-                <strong>Estado de atención:</strong>{' '}
-                {handoffStatusLabel(humanHandoff.status)}
-              </Typography>
-              {humanHandoff.reason && (
-                <Typography variant="body2">
-                  <strong>Motivo de derivación:</strong> {humanHandoff.reason}
-                </Typography>
-              )}
-            </>
-          )}
-          {activeSession && (
-            <Typography variant="caption" color="text.secondary">
-              Sesión {activeSession.status} · {activeSession.flowId} (
-              {activeSession.flowVersion ?? 'sin versión'})
-            </Typography>
-          )}
-        </Stack>
+        <Box sx={{ mt: 1 }}>
+          <ConversationTechnicalDetails detail={detail} />
+        </Box>
       </Box>
 
       <ConversationMessageTimeline
         messages={messages}
         loading={loadingMessages}
         error={messagesError}
+        conversationId={conversationId ?? conversation.id}
       />
 
-      <ConversationComposer
-        status={conversation.status}
-        sending={sending}
-        claiming={claiming}
-        actionError={actionError}
-        successMessage={successMessage}
-        onSend={onSend}
-        onClaim={onClaim}
-      />
+      <Box
+        sx={{
+          flexShrink: 0,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+        }}
+      >
+        <ConversationComposer
+          status={conversation.status}
+          assignedToCurrentAgent={
+            Boolean(
+              currentAgentId
+              && conversation.assignedAgentId
+              && conversation.assignedAgentId === currentAgentId,
+            )
+          }
+          sending={sending}
+          claiming={claiming}
+          actionError={actionError}
+          successMessage={successMessage}
+          onSend={onSend}
+          onClaim={onClaim}
+        />
+      </Box>
     </Box>
   );
 };

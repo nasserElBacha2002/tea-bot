@@ -132,7 +132,9 @@ export function useConversationSimulator({
     setError(null);
     setSending(true);
     try {
-      await simulatorApi.reset(sessionIdRef.current);
+      const previousSessionId = sessionIdRef.current;
+      await simulatorApi.reset(previousSessionId);
+      sessionIdRef.current = `sim-${flowId}-${Date.now()}`;
       const flow = draftFlowRef.current;
       const res = await simulatorApi.start({
         flowId,

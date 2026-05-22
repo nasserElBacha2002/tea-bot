@@ -2,6 +2,13 @@ import type { Node, Edge } from '@xyflow/react';
 import type { Flow, FlowTransition, FlowTransitionType, GraphEdgeSelection } from '../types/flow.types';
 import { getNodeIssues } from './flowGraph.validation';
 import { summarizeOutgoingTransitions } from './flowMapSubgraph';
+import {
+  getNodeDisplayTitle,
+  getNodeFooterHints,
+  getNodeMessagePreview,
+  groupTransitionsByTarget,
+  type MapViewStyle,
+} from './flowMapDisplay';
 import { UI_TRANSITION_TYPE } from './flowUiLabels';
 
 export const NODE_TYPE_COLORS: Record<string, string> = {
@@ -27,6 +34,8 @@ export interface FlowToGraphOptions {
   mapFocusNodeId?: string | null;
   /** Nodos más compactos en el mapa. */
   mapDisplayMode?: boolean;
+  /** Vista mensaje (default) o técnica en el mapa. */
+  mapViewStyle?: MapViewStyle;
 }
 
 export function selectionToEdgeId(sel: GraphEdgeSelection | null, flow: Flow): string | null {
@@ -75,14 +84,17 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
     compactEdgeLabels = false,
     mapFocusNodeId = null,
     mapDisplayMode = false,
+    mapViewStyle = 'message',
   } = opts;
   const pairCount = transitionPairCounts(flow);
   const pairIndex = new Map<string, number>();
 
   const nodes: Node[] = flow.nodes.map((node, idx) => {
     const defaultPosition = getDefaultPosition(idx);
-    const issues = mapDisplayMode ? [] : getNodeIssues(flow, node);
+    const issues = getNodeIssues(flow, node);
     const isMapFocus = Boolean(mapFocusNodeId && node.id === mapFocusNodeId);
+    const messagePreview = mapDisplayMode ? getNodeMessagePreview(node) : undefined;
+    const transitionGroups = mapDisplayMode ? groupTransitionsByTarget(node, flow) : undefined;
     return {
       id: node.id,
       type: 'flowNode',
@@ -94,9 +106,13 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
         issues,
         simActive: Boolean(simulatorNodeId && node.id === simulatorNodeId),
         mapDisplayMode,
+        mapViewStyle: mapDisplayMode ? mapViewStyle : undefined,
         mapFocus: isMapFocus,
-        displayTitle: node.ui?.stepTitle?.trim() || node.id,
+        displayTitle: mapDisplayMode ? getNodeDisplayTitle(node) : node.ui?.stepTitle?.trim() || node.id,
         transitionCount: node.transitions?.length ?? 0,
+        messagePreview,
+        transitionGroups,
+        footerHints: mapDisplayMode ? getNodeFooterHints(node, issues) : undefined,
       },
     };
   });
@@ -113,7 +129,7 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
           byTarget.set(t.nextNode, list);
         }
         for (const [target, group] of byTarget) {
-          const { shortLabel, tooltip } = summarizeOutgoingTransitions(group, target);
+          const { shortLabel, tooltip } = summarizeOutgoingTransitions(group, target, flow);
           const edgeId = `${node.id}->${target}-group`;
           const selected = edgeId === selectedEdgeId;
           const isPlaceholder = group.some((t) => !t.type);

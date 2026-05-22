@@ -5,12 +5,12 @@ import {
   Button,
   Stack,
   TextField,
-  Typography,
 } from '@mui/material';
 import type { ConversationStatus } from '../types/conversation.types';
 
 interface Props {
   status: ConversationStatus;
+  assignedToCurrentAgent?: boolean;
   sending?: boolean;
   actionError?: string | null;
   successMessage?: string | null;
@@ -21,6 +21,7 @@ interface Props {
 
 export const ConversationComposer: React.FC<Props> = ({
   status,
+  assignedToCurrentAgent = false,
   sending,
   actionError,
   successMessage,
@@ -41,20 +42,17 @@ export const ConversationComposer: React.FC<Props> = ({
   if (status === 'bot') {
     return (
       <Alert severity="warning" sx={{ m: 2 }}>
-        El bot está activo en esta conversación. La respuesta manual no está disponible hasta que
-        el usuario sea derivado al equipo humano.
+        El bot está activo. La respuesta manual estará disponible cuando el usuario sea derivado al
+        equipo humano.
       </Alert>
     );
   }
 
   if (status === 'waiting_human') {
     return (
-      <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Para responder, primero tomá la conversación.
-        </Typography>
-        <Button variant="contained" onClick={() => onClaim?.()} disabled={claiming}>
-          {claiming ? 'Tomando...' : 'Tomar conversación'}
+      <Box sx={{ p: 2 }}>
+        <Button variant="contained" fullWidth onClick={() => onClaim?.()} disabled={claiming}>
+          {claiming ? 'Tomando…' : 'Tomar conversación'}
         </Button>
         {actionError && (
           <Alert severity="error" sx={{ mt: 1 }}>
@@ -72,11 +70,14 @@ export const ConversationComposer: React.FC<Props> = ({
     setText('');
   };
 
+  const canReply = status === 'assigned' || status === 'paused';
+
+  if (!canReply) {
+    return null;
+  }
+
   return (
-    <Box sx={{ p: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-      <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
-        Responder
-      </Typography>
+    <Box sx={{ p: 2, flexShrink: 0 }}>
       {successMessage && (
         <Alert severity="success" sx={{ mb: 1 }}>
           {successMessage}
@@ -93,8 +94,8 @@ export const ConversationComposer: React.FC<Props> = ({
           multiline
           minRows={2}
           maxRows={6}
-          label="Escribí una respuesta..."
-          placeholder="Escribí una respuesta..."
+          label={assignedToCurrentAgent ? 'Responder' : 'Escribí una respuesta…'}
+          placeholder="Escribí una respuesta…"
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={sending}
@@ -110,7 +111,7 @@ export const ConversationComposer: React.FC<Props> = ({
           onClick={() => void handleSend()}
           disabled={sending || !text.trim()}
         >
-          {sending ? 'Enviando...' : 'Enviar'}
+          {sending ? 'Enviando…' : 'Enviar'}
         </Button>
       </Stack>
     </Box>

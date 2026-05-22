@@ -5,6 +5,11 @@ import sessionService from './session.service.js';
 import flowLoader from '../utils/flow-loader.js';
 import { normalizeTwilioWhatsappNumber } from '../utils/twilio-phone.js';
 import { isConversationDbEnabled } from '../db/index.js';
+import {
+  notifyConversationCreated,
+  notifyConversationMessageCreated,
+  notifyConversationUpdated,
+} from '../realtime/conversation-live.notify.js';
 
 const CHANNEL_WHATSAPP = 'whatsapp';
 
@@ -70,6 +75,7 @@ class ConversationService {
       console.log(
         `[ConversationDB] conversation_created id=${conversation.id} phone=${phoneNumber || 'n/a'}`,
       );
+      notifyConversationCreated(conversation);
       return { conversation, created: true };
     }
 
@@ -107,6 +113,8 @@ class ConversationService {
     });
 
     await conversationRepository.touchLastMessage(conversation.id);
+    const refreshed = await this.reloadConversation(conversation);
+    notifyConversationMessageCreated(refreshed, message);
     return message;
   }
 
@@ -233,11 +241,13 @@ class ConversationService {
   }
 
   async markWaitingHuman(conversationId, currentNodeKey) {
-    return conversationRepository.updateConversation(conversationId, {
+    const updated = await conversationRepository.updateConversation(conversationId, {
       status: 'waiting_human',
       assignedAgentId: null,
       currentNodeKey,
     });
+    notifyConversationUpdated(updated);
+    return updated;
   }
 
   async markAssigned(conversationId, agentId) {
@@ -283,6 +293,8 @@ class ConversationService {
     });
 
     await conversationRepository.touchLastMessage(conversation.id);
+    const refreshed = await this.reloadConversation(conversation);
+    notifyConversationMessageCreated(refreshed, message);
     return message;
   }
 }

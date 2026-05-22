@@ -47,7 +47,16 @@ export const AppShell: React.FC = () => {
           </Button>
         </Toolbar>
       </AppBar>
-      <Box component="main" sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <Box
+        component="main"
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
         <Outlet />
       </Box>
     </Box>

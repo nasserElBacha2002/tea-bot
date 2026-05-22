@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
-import { Box, Paper, Typography } from '@mui/material';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Box, Paper, Stack, Typography, Alert, Chip, Button } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
 import { ConversationList } from '../components/ConversationList';
 import { ConversationDetail } from '../components/ConversationDetail';
 import { ConversationPersistenceAlert } from '../components/ConversationPersistenceAlert';
+import { ConversationLiveIndicator } from '../components/ConversationLiveIndicator';
 import {
   useConversations,
   useConversationDetail,
@@ -14,8 +16,12 @@ import {
   useCloseConversation,
   useReturnToBot,
 } from '../hooks/useConversations';
+import { useConversationsLiveUpdates } from '../hooks/useConversationsLiveUpdates';
+import { useConversationReadState } from '../hooks/useConversationReadState';
 import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
+import { authApi } from '../../auth/api/authApi';
+import { isInboundUserLastMessage } from '../utils/conversationUnread';
 
 export const ConversationsPage: React.FC = () => {
   const [filters, setFilters] = useState<ConversationListFilters>({
@@ -26,6 +32,18 @@ export const ConversationsPage: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set());
+  const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [newConversationIds, setNewConversationIds] = useState<Set<string>>(() => new Set());
+  const [hiddenByFilterCount, setHiddenByFilterCount] = useState(0);
+
+  const meQuery = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: () => authApi.me(),
+    staleTime: 5 * 60_000,
+  });
+  const currentAgentId = meQuery.data?.user?.agentId ?? null;
+  const { markRead } = useConversationReadState(currentAgentId);
 
   const listQuery = useConversations(filters);
   const detailQuery = useConversationDetail(selectedId);
@@ -35,6 +53,50 @@ export const ConversationsPage: React.FC = () => {
   const sendMutation = useSendAgentMessage(filters);
   const closeMutation = useCloseConversation(filters);
   const returnMutation = useReturnToBot(filters);
+
+  const listItems = listQuery.data?.items ?? [];
+  const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
+
+  const bumpUnread = useCallback(
+    (conversationId: string) => {
+      if (!listIdSet.has(conversationId)) {
+        setHiddenByFilterCount((n) => n + 1);
+        return;
+      }
+      setUnreadIds((prev) => {
+        const next = new Set(prev);
+        next.add(conversationId);
+        return next;
+      });
+      setUnreadCounts((prev) => ({
+        ...prev,
+        [conversationId]: (prev[conversationId] ?? 0) + 1,
+      }));
+    },
+    [listIdSet],
+  );
+
+  const markNewConversation = useCallback(
+    (conversationId: string) => {
+      if (!listIdSet.has(conversationId)) {
+        setHiddenByFilterCount((n) => n + 1);
+        return;
+      }
+      setNewConversationIds((prev) => {
+        const next = new Set(prev);
+        next.add(conversationId);
+        return next;
+      });
+    },
+    [listIdSet],
+  );
+
+  const { status: liveStatus, markManual } = useConversationsLiveUpdates({
+    enabled: true,
+    selectedConversationId: selectedId,
+    onUnread: bumpUnread,
+    onNewConversation: markNewConversation,
+  });
 
   const stableFilters = useMemo(() => filters, [
     filters.status,
@@ -47,9 +109,11 @@ export const ConversationsPage: React.FC = () => {
 
   const handleFilterChange = (patch: Partial<ConversationListFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch, offset: 0 }));
+    setHiddenByFilterCount(0);
   };
 
   const handleRefresh = async () => {
+    markManual();
     await refresh(selectedId);
     await listQuery.refetch();
     if (selectedId) {
@@ -57,6 +121,62 @@ export const ConversationsPage: React.FC = () => {
       await messagesQuery.refetch();
     }
   };
+
+  const clearUnreadFor = useCallback(
+    (id: string) => {
+      markRead(id);
+      setUnreadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setUnreadCounts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setNewConversationIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [markRead],
+  );
+
+  const handleSelectConversation = (id: string) => {
+    setSelectedId(id);
+    setActionError(null);
+    setSuccessMessage(null);
+    clearUnreadFor(id);
+  };
+
+  const derivedUnreadIds = useMemo(() => {
+    const next = new Set(unreadIds);
+    for (const item of listItems) {
+      if (item.status === 'closed') continue;
+      if (selectedId === item.id) continue;
+      if (unreadCounts[item.id] > 0 || unreadIds.has(item.id)) continue;
+      if (isInboundUserLastMessage(item)) {
+        next.add(item.id);
+      }
+    }
+    return next;
+  }, [listItems, unreadIds, unreadCounts, selectedId]);
+
+  const globalUnread = useMemo(() => {
+    let unread = 0;
+    let waiting = 0;
+    for (const item of listItems) {
+      const count = unreadCounts[item.id] ?? 0;
+      const isUnread =
+        count > 0 || derivedUnreadIds.has(item.id) || newConversationIds.has(item.id);
+      if (!isUnread || item.status === 'closed') continue;
+      unread += count > 0 ? count : 1;
+      if (item.status === 'waiting_human') waiting += 1;
+    }
+    return { unread, waiting };
+  }, [listItems, unreadCounts, derivedUnreadIds, newConversationIds]);
 
   const listApiError = listQuery.isError ? extractApiError(listQuery.error) : null;
   const persistenceFailure =
@@ -87,7 +207,7 @@ export const ConversationsPage: React.FC = () => {
         : 'Error al cargar mensajes'
       : null;
 
-  const runAction = async (fn: () => Promise<void>, success: string) => {
+  const runAction = async (fn: () => Promise<unknown>, success: string) => {
     setActionError(null);
     setSuccessMessage(null);
     try {
@@ -99,11 +219,68 @@ export const ConversationsPage: React.FC = () => {
     }
   };
 
+  const hasActiveFilters = Boolean(filters.status || filters.channel || filters.search?.trim());
+
   return (
-    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 2 }}>
-      <Typography variant="h5" fontWeight={800} sx={{ mb: 2 }}>
-        Conversaciones
-      </Typography>
+    <Box
+      sx={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+        height: '100%',
+        overflow: 'hidden',
+        p: 2,
+      }}
+    >
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{ mb: 1, flexShrink: 0 }}
+        flexWrap="wrap"
+      >
+        <Typography variant="h5" fontWeight={800}>
+          Conversaciones
+        </Typography>
+        <ConversationLiveIndicator status={liveStatus} />
+        {globalUnread.unread > 0 && (
+          <Chip
+            size="small"
+            color="primary"
+            label={`${globalUnread.unread} sin leer`}
+            aria-label={`${globalUnread.unread} conversaciones sin leer`}
+          />
+        )}
+        {globalUnread.waiting > 0 && (
+          <Chip
+            size="small"
+            color="error"
+            variant="outlined"
+            label={`${globalUnread.waiting} esperando atención`}
+          />
+        )}
+      </Stack>
+
+      {hiddenByFilterCount > 0 && hasActiveFilters && (
+        <Alert
+          severity="info"
+          sx={{ mb: 1, flexShrink: 0 }}
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={() =>
+                handleFilterChange({ status: undefined, channel: undefined, search: '' })
+              }
+            >
+              Limpiar filtros
+            </Button>
+          }
+        >
+          Hay actividad nueva en conversaciones fuera de los filtros actuales.
+        </Alert>
+      )}
 
       {persistenceFailure && (
         <ConversationPersistenceAlert
@@ -128,11 +305,13 @@ export const ConversationsPage: React.FC = () => {
           sx={{
             width: { xs: '100%', md: 380 },
             maxWidth: '100%',
+            flexShrink: 0,
             display: 'flex',
             flexDirection: 'column',
             borderRight: { md: '1px solid' },
             borderColor: 'divider',
             minHeight: 0,
+            overflow: 'hidden',
           }}
         >
           <ConversationFilters
@@ -142,13 +321,12 @@ export const ConversationsPage: React.FC = () => {
             refreshing={listQuery.isFetching}
           />
           <ConversationList
-            conversations={listQuery.data?.items ?? []}
+            conversations={listItems}
             selectedId={selectedId}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setActionError(null);
-              setSuccessMessage(null);
-            }}
+            unreadIds={derivedUnreadIds}
+            unreadCounts={unreadCounts}
+            newConversationIds={newConversationIds}
+            onSelect={handleSelectConversation}
             loading={listQuery.isLoading && !persistenceFailure}
             error={listError}
           />
@@ -160,11 +338,14 @@ export const ConversationsPage: React.FC = () => {
             display: { xs: selectedId ? 'flex' : 'none', md: 'flex' },
             flexDirection: 'column',
             minHeight: 0,
+            overflow: 'hidden',
           }}
         >
           <ConversationDetail
             detail={detailQuery.data}
             messages={messagesQuery.data?.items ?? []}
+            conversationId={selectedId}
+            currentAgentId={currentAgentId}
             loadingDetail={detailQuery.isLoading && Boolean(selectedId)}
             loadingMessages={messagesQuery.isLoading && Boolean(selectedId)}
             detailError={detailError}

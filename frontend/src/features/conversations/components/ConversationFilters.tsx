@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Box,
   TextField,
   FormControl,
   InputLabel,
@@ -39,7 +38,15 @@ export const ConversationFilters: React.FC<Props> = ({
   refreshing,
 }) => {
   return (
-    <Stack spacing={1.5} sx={{ p: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+    <Stack
+      spacing={1.5}
+      sx={{
+        flexShrink: 0,
+        p: 2,
+        borderBottom: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
       <TextField
         size="small"
         fullWidth
