@@ -16,7 +16,7 @@ function upsertListItem(
 ): InboxConversationItem[] {
   const idx = items.findIndex((c) => c.id === item.id);
   const next = [...items];
-  if (idx >= 0) next[idx] = { ...next[idx], ...item };
+  if (idx >= 0) next[idx] = item;
   else next.unshift(item);
   next.sort((a, b) => {
     const ta = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : 0;
@@ -24,6 +24,21 @@ function upsertListItem(
     return tb - ta;
   });
   return next;
+}
+
+function mergeInboxListItem(
+  existing: InboxConversationItem | undefined,
+  conv: InboxConversationItem,
+  lastMessage: InboxConversationItem['lastMessage'] | undefined,
+  humanHandoff: InboxConversationItem['humanHandoff'] | undefined,
+): InboxConversationItem {
+  return {
+    ...(existing ?? {}),
+    ...conv,
+    id: conv.id,
+    lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
+    humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
+  };
 }
 
 function patchListQueries(
@@ -39,12 +54,24 @@ function patchListQueries(
   }
 }
 
+function isWaitingHumanHandoff(conv: InboxConversationItem | undefined): boolean {
+  return conv?.status === 'waiting_human';
+}
+
 export function applyConversationLiveEvent(
   queryClient: QueryClient,
   event: ConversationLiveEvent,
   selectedId: string | null,
-): { unreadConversationId?: string; newConversationId?: string } {
-  const result: { unreadConversationId?: string; newConversationId?: string } = {};
+): {
+  unreadConversationId?: string;
+  newConversationId?: string;
+  handoffConversationId?: string;
+} {
+  const result: {
+    unreadConversationId?: string;
+    newConversationId?: string;
+    handoffConversationId?: string;
+  } = {};
   const conv = event.data?.conversation;
   const message = event.data?.message;
   const lastMessage = event.data?.lastMessage ?? (message
@@ -55,6 +82,15 @@ export function applyConversationLiveEvent(
         createdAt: message.createdAt,
       }
     : undefined);
+  const humanHandoff = event.data?.humanHandoff ?? conv?.humanHandoff ?? undefined;
+
+  if (
+    (event.type === 'conversation.updated' || event.type === 'conversation.assigned')
+    && event.conversationId
+    && !conv
+  ) {
+    queryClient.invalidateQueries({ queryKey: conversationKeys.all });
+  }
 
   if (event.type === 'conversation.created' && event.conversationId) {
     if (!conv) {
@@ -69,26 +105,41 @@ export function applyConversationLiveEvent(
   }
 
   if (conv && event.conversationId) {
-    const listItem: InboxConversationItem = {
-      ...conv,
-      lastMessage: lastMessage ?? conv.lastMessage ?? null,
-      humanHandoff: event.data?.humanHandoff ?? conv.humanHandoff ?? null,
-    };
-
-    patchListQueries(queryClient, (data) => ({
-      ...data,
-      items: upsertListItem(data.items, listItem),
-      total: Math.max(data.total, data.items.some((i) => i.id === listItem.id) ? data.total : data.total + 1),
-    }));
+    patchListQueries(queryClient, (data) => {
+      const existing = data.items.find((i) => i.id === conv.id);
+      const listItem = mergeInboxListItem(existing, conv, lastMessage, humanHandoff);
+      return {
+        ...data,
+        items: upsertListItem(data.items, listItem),
+        total: Math.max(
+          data.total,
+          data.items.some((i) => i.id === listItem.id) ? data.total : data.total + 1,
+        ),
+      };
+    });
 
     const detailKey = conversationKeys.detail(event.conversationId);
     const prevDetail = queryClient.getQueryData<ConversationDetailResponse>(detailKey);
     if (prevDetail) {
       queryClient.setQueryData(detailKey, {
         ...prevDetail,
-        conversation: { ...prevDetail.conversation, ...conv },
-        humanHandoff: event.data?.humanHandoff ?? prevDetail.humanHandoff,
+        conversation: {
+          ...prevDetail.conversation,
+          ...conv,
+          assignedAgentId:
+            conv.assignedAgentId !== undefined
+              ? conv.assignedAgentId
+              : prevDetail.conversation.assignedAgentId,
+        },
+        humanHandoff: humanHandoff ?? prevDetail.humanHandoff,
       });
+    } else if (selectedId === event.conversationId && isWaitingHumanHandoff(conv)) {
+      void queryClient.invalidateQueries({ queryKey: detailKey });
+    }
+
+    if (isWaitingHumanHandoff(conv) && selectedId !== event.conversationId) {
+      result.handoffConversationId = event.conversationId;
+      result.unreadConversationId = event.conversationId;
     }
   }
 

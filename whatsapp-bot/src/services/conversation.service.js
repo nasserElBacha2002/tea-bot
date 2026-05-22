@@ -10,6 +10,7 @@ import {
   notifyConversationMessageCreated,
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
+import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 
 const CHANNEL_WHATSAPP = 'whatsapp';
 
@@ -114,7 +115,11 @@ class ConversationService {
 
     await conversationRepository.touchLastMessage(conversation.id);
     const refreshed = await this.reloadConversation(conversation);
-    notifyConversationMessageCreated(refreshed, message);
+    const notifyExtras = {};
+    if (context.handoff) {
+      notifyExtras.humanHandoff = mapHumanHandoffPublic(context.handoff);
+    }
+    notifyConversationMessageCreated(refreshed, message, notifyExtras);
     return message;
   }
 

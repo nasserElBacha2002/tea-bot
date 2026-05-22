@@ -2,6 +2,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
+import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import {
   isConversationInHumanMode,
   isEngineHumanHandoffResult,
@@ -88,7 +89,6 @@ export class HumanHandoffService {
       }
     }
 
-    notifyConversationUpdated(updatedConversation);
     return { conversation: updatedConversation, session: pausedSession };
   }
 
@@ -123,6 +123,10 @@ export class HumanHandoffService {
       dbSession,
       { nodeKey, flowId, flowVersion },
     );
+
+    notifyConversationUpdated(updatedConversation, {
+      humanHandoff: mapHumanHandoffPublic(handoff),
+    });
 
     const confirmationMessage = resolveHandoffConfirmationMessage(
       nodeKey,

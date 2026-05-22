@@ -6,6 +6,26 @@ export function isInboundUserLastMessage(item: InboxConversationItem): boolean {
   return lm.direction === 'inbound' && lm.senderType === 'user';
 }
 
+/** Último mensaje entrante del usuario posterior al instante de lectura. */
+export function isInboundUserMessageUnreadSinceRead(
+  lastMessage: InboxConversationItem['lastMessage'],
+  readAt: string | null,
+): boolean {
+  if (!lastMessage) return false;
+  if (lastMessage.direction !== 'inbound' || lastMessage.senderType !== 'user') return false;
+  if (!readAt) return true;
+  return new Date(lastMessage.createdAt).getTime() > new Date(readAt).getTime();
+}
+
+/** Sin leer por contenido (ignora contadores de sesión WS). */
+export function isConversationDerivedUnread(
+  item: InboxConversationItem,
+  readAt: string | null,
+): boolean {
+  if (item.status === 'closed') return false;
+  return isInboundUserMessageUnreadSinceRead(item.lastMessage, readAt);
+}
+
 export function conversationMatchesFilters(
   item: InboxConversationItem,
   filters: { status?: string; channel?: string; search?: string },

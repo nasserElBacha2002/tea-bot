@@ -116,6 +116,7 @@ class MessagePersistenceService {
           nodeKey: handoffResult.nodeKey,
           event: 'human_handoff_requested',
           handoffId: handoffResult.handoff.id,
+          handoff: handoffResult.handoff,
         },
       );
     }

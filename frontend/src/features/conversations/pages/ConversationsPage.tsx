@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
@@ -21,7 +21,7 @@ import { useConversationReadState } from '../hooks/useConversationReadState';
 import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
 import { authApi } from '../../auth/api/authApi';
-import { isInboundUserLastMessage } from '../utils/conversationUnread';
+import { isConversationDerivedUnread } from '../utils/conversationUnread';
 import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
 
 export const ConversationsPage: React.FC = () => {
@@ -44,7 +44,7 @@ export const ConversationsPage: React.FC = () => {
     staleTime: 5 * 60_000,
   });
   const currentAgentId = meQuery.data?.user?.agentId ?? null;
-  const { markRead } = useConversationReadState(currentAgentId);
+  const { markRead, getReadAt, readMap } = useConversationReadState(currentAgentId);
 
   const listQuery = useConversations(filters);
   const detailQuery = useConversationDetail(selectedId);
@@ -58,8 +58,34 @@ export const ConversationsPage: React.FC = () => {
   const listItems = listQuery.data?.items ?? [];
   const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
 
+  const clearUnreadFor = useCallback(
+    (id: string) => {
+      markRead(id);
+      setUnreadIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      setUnreadCounts((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      setNewConversationIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    },
+    [markRead],
+  );
+
   const bumpUnread = useCallback(
     (conversationId: string) => {
+      if (selectedId === conversationId) {
+        clearUnreadFor(conversationId);
+        return;
+      }
       if (!listIdSet.has(conversationId)) {
         setHiddenByFilterCount((n) => n + 1);
         return;
@@ -74,7 +100,7 @@ export const ConversationsPage: React.FC = () => {
         [conversationId]: (prev[conversationId] ?? 0) + 1,
       }));
     },
-    [listIdSet],
+    [listIdSet, selectedId, clearUnreadFor],
   );
 
   const markNewConversation = useCallback(
@@ -92,11 +118,36 @@ export const ConversationsPage: React.FC = () => {
     [listIdSet],
   );
 
+  const markHandoffWaiting = useCallback(
+    (conversationId: string) => {
+      if (selectedId === conversationId) {
+        clearUnreadFor(conversationId);
+        return;
+      }
+      if (!listIdSet.has(conversationId)) {
+        setHiddenByFilterCount((n) => n + 1);
+        return;
+      }
+      setNewConversationIds((prev) => {
+        const next = new Set(prev);
+        next.add(conversationId);
+        return next;
+      });
+      setUnreadIds((prev) => {
+        const next = new Set(prev);
+        next.add(conversationId);
+        return next;
+      });
+    },
+    [listIdSet, selectedId, clearUnreadFor],
+  );
+
   const { status: liveStatus, markManual } = useConversationsLiveUpdates({
     enabled: true,
     selectedConversationId: selectedId,
     onUnread: bumpUnread,
     onNewConversation: markNewConversation,
+    onHandoffWaiting: markHandoffWaiting,
   });
 
   const stableFilters = useMemo(() => filters, [
@@ -123,28 +174,6 @@ export const ConversationsPage: React.FC = () => {
     }
   };
 
-  const clearUnreadFor = useCallback(
-    (id: string) => {
-      markRead(id);
-      setUnreadIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-      setUnreadCounts((prev) => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
-      setNewConversationIds((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
-    },
-    [markRead],
-  );
-
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
     setActionError(null);
@@ -152,18 +181,39 @@ export const ConversationsPage: React.FC = () => {
     clearUnreadFor(id);
   };
 
+  const selectedListItem = useMemo(
+    () => listItems.find((i) => i.id === selectedId) ?? null,
+    [listItems, selectedId],
+  );
+  const lastVisibleMessageId =
+    messagesQuery.data?.items?.[messagesQuery.data.items.length - 1]?.id ?? null;
+
+  useEffect(() => {
+    if (!selectedId) return;
+    clearUnreadFor(selectedId);
+  }, [
+    selectedId,
+    lastVisibleMessageId,
+    selectedListItem?.lastMessageAt,
+    selectedListItem?.lastMessage?.createdAt,
+    clearUnreadFor,
+  ]);
+
   const derivedUnreadIds = useMemo(() => {
     const next = new Set(unreadIds);
     for (const item of listItems) {
       if (item.status === 'closed') continue;
       if (selectedId === item.id) continue;
-      if (unreadCounts[item.id] > 0 || unreadIds.has(item.id)) continue;
-      if (isInboundUserLastMessage(item)) {
+      if ((unreadCounts[item.id] ?? 0) > 0 || unreadIds.has(item.id)) {
+        next.add(item.id);
+        continue;
+      }
+      if (isConversationDerivedUnread(item, getReadAt(item.id))) {
         next.add(item.id);
       }
     }
     return next;
-  }, [listItems, unreadIds, unreadCounts, selectedId]);
+  }, [listItems, unreadIds, unreadCounts, selectedId, getReadAt, readMap]);
 
   const globalUnread = useMemo(() => {
     let unread = 0;

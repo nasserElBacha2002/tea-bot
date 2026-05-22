@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { HumanHandoffService } from './human-handoff.service.js';
+import {
+  registerLiveClient,
+  resetLiveClientsForTests,
+} from '../realtime/conversation-live.broadcaster.js';
 
 function createMocks() {
   const handoffs = [];
@@ -146,4 +150,39 @@ test('requestHumanHandoff no duplica confirmacion si ya estaba en human mode', a
 
   assert.equal(again.shouldSendConfirmation, false);
   assert.equal(mocks.getState().handoffs.length, 1);
+});
+
+test('requestHumanHandoff emite conversation.updated con waiting_human y humanHandoff', async () => {
+  resetLiveClientsForTests();
+  const liveEvents = [];
+  registerLiveClient({
+    readyState: 1,
+    send: (payload) => liveEvents.push(JSON.parse(payload)),
+    on: () => {},
+  });
+
+  const mocks = createMocks();
+  const service = new HumanHandoffService(mocks);
+  const { conversation, session } = mocks.getState();
+
+  await service.requestHumanHandoff(conversation, {
+    engineResult: {
+      reply: 'Te derivamos.',
+      flowId: 'main-menu',
+      currentNodeId: 'human_handoff',
+      terminalReason: 'human_handoff',
+      requiresHuman: true,
+    },
+    dbSession: session,
+  });
+
+  const updated = liveEvents.find((e) => e.type === 'conversation.updated');
+  assert.ok(updated, 'expected conversation.updated broadcast');
+  assert.equal(updated.conversationId, 'conv-1');
+  assert.equal(updated.data.conversation.status, 'waiting_human');
+  assert.equal(updated.data.conversation.assignedAgentId, null);
+  assert.equal(updated.data.conversation.currentNodeKey, 'human_handoff');
+  assert.equal(updated.data.humanHandoff.status, 'pending');
+  assert.equal(updated.data.humanHandoff.assignedAgentId, null);
+  resetLiveClientsForTests();
 });

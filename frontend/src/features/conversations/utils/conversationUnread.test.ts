@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   conversationMatchesFilters,
+  isConversationDerivedUnread,
   isInboundUserLastMessage,
+  isInboundUserMessageUnreadSinceRead,
   listPriorityAccent,
 } from './conversationUnread';
 import type { InboxConversationItem } from '../types/conversation.types';
@@ -50,5 +52,30 @@ describe('conversationUnread', () => {
   it('prioriza accent para waiting_human sin leer', () => {
     expect(listPriorityAccent('waiting_human', true)).toBe('high');
     expect(listPriorityAccent('closed', true)).toBe('none');
+  });
+
+  it('respeta readAt al derivar sin leer', () => {
+    const readAt = '2026-05-22T10:05:00.000Z';
+    expect(isConversationDerivedUnread(base, readAt)).toBe(false);
+    expect(
+      isConversationDerivedUnread(
+        {
+          ...base,
+          lastMessage: {
+            body: 'nuevo',
+            direction: 'inbound',
+            senderType: 'user',
+            createdAt: '2026-05-22T10:06:00.000Z',
+          },
+        },
+        readAt,
+      ),
+    ).toBe(true);
+    expect(
+      isInboundUserMessageUnreadSinceRead(
+        { body: 'ok', direction: 'outbound', senderType: 'bot', createdAt: '2026-05-22T11:00:00.000Z' },
+        null,
+      ),
+    ).toBe(false);
   });
 });

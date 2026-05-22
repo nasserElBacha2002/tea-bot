@@ -19,6 +19,7 @@ export interface UseConversationsLiveUpdatesOptions {
   selectedConversationId: string | null;
   onUnread?: (conversationId: string) => void;
   onNewConversation?: (conversationId: string) => void;
+  onHandoffWaiting?: (conversationId: string) => void;
 }
 
 export function useConversationsLiveUpdates({
@@ -26,6 +27,7 @@ export function useConversationsLiveUpdates({
   selectedConversationId,
   onUnread,
   onNewConversation,
+  onHandoffWaiting,
 }: UseConversationsLiveUpdatesOptions) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<LiveConnectionStatus>('manual');
@@ -69,15 +71,13 @@ export function useConversationsLiveUpdates({
         setStatus('live');
         return;
       }
-      const { unreadConversationId, newConversationId } = applyConversationLiveEvent(
-        queryClient,
-        event,
-        selectedIdRef.current,
-      );
+      const { unreadConversationId, newConversationId, handoffConversationId } =
+        applyConversationLiveEvent(queryClient, event, selectedIdRef.current);
       if (unreadConversationId) onUnread?.(unreadConversationId);
       if (newConversationId) onNewConversation?.(newConversationId);
+      if (handoffConversationId) onHandoffWaiting?.(handoffConversationId);
     },
-    [queryClient, onUnread, onNewConversation],
+    [queryClient, onUnread, onNewConversation, onHandoffWaiting],
   );
 
   const connect = useCallback(() => {
