@@ -7,8 +7,9 @@ import {
   TextField, Tooltip, Typography, Alert,
 } from '@mui/material';
 import {
-  Add, Archive, ContentCopy, Edit, CloudUpload,
+  Add, Archive, ContentCopy, Edit, CloudUpload, Download,
 } from '@mui/icons-material';
+import { downloadFlowJson } from '../utils/downloadFlowJson';
 import { useFlows, useCreateFlow, usePublishFlow, useDuplicateFlow, useArchiveFlow } from '../hooks/useFlows';
 import type { Flow } from '../types/flow.types';
 import { flowStatusLabel } from '../utils/flowUiLabels';
@@ -61,6 +62,21 @@ export const FlowListPage: React.FC = () => {
   const [dupSourceId, setDupSourceId] = useState('');
   const [dupNewId, setDupNewId] = useState('');
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownloadJson = async (flowId: string) => {
+    setDownloadingId(flowId);
+    try {
+      await downloadFlowJson(flowId);
+    } catch (e: unknown) {
+      setAlert({
+        type: 'error',
+        msg: e instanceof Error ? e.message : 'No se pudo descargar el flujo.',
+      });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   const handleCreate = async () => {
     if (!newId.trim() || !newName.trim()) return;
@@ -166,6 +182,19 @@ export const FlowListPage: React.FC = () => {
                       >
                         Editar
                       </Button>
+                    </Tooltip>
+                    <Tooltip title="Descargar JSON">
+                      <IconButton
+                        size="small"
+                        onClick={() => void handleDownloadJson(f.id)}
+                        disabled={downloadingId === f.id}
+                      >
+                        {downloadingId === f.id ? (
+                          <CircularProgress size={18} />
+                        ) : (
+                          <Download fontSize="small" />
+                        )}
+                      </IconButton>
                     </Tooltip>
                     <Tooltip title="Publicar"><IconButton size="small" color="primary" onClick={() => handlePublish(f.id)}><CloudUpload fontSize="small" /></IconButton></Tooltip>
                     <Tooltip title="Duplicar">

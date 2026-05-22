@@ -120,17 +120,21 @@ export const importJsonAsNewVersion = async (req, res) => {
         );
       }
     }
+    const status = imported.flow.status === 'published' ? 'published' : 'draft';
     return sendSuccess(
       res,
       {
+        ok: true,
         flowId,
         version: imported.createdVersion,
+        status,
         activeVersion: imported.activeVersion,
         activated: imported.wasActivated,
         publishedAt: imported.flow.publishedAt,
-        flow: imported.flow
+        message: 'Flujo importado correctamente en la base de datos.',
+        flow: imported.flow,
       },
-      HTTP_STATUS.CREATED
+      HTTP_STATUS.CREATED,
     );
   } catch (error) {
     return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);

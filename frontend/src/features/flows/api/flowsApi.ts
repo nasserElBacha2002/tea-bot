@@ -115,4 +115,14 @@ export const flowsApi = {
     );
     return data.data;
   },
+
+  /** Descarga JSON portable desde DB (no usa archivos en disco). */
+  exportFlow: (flowId: string) =>
+    client.get(`/${encodeURIComponent(flowId)}/export`, { responseType: 'blob' }),
+
+  exportFlowVersion: (flowId: string, version: string) =>
+    client.get(
+      `/${encodeURIComponent(flowId)}/versions/${encodeURIComponent(version)}/export`,
+      { responseType: 'blob' },
+    ),
 };

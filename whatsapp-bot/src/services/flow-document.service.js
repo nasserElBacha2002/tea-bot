@@ -377,6 +377,112 @@ class FlowDocumentService {
     };
   }
 
+  _exportFilename(flowKey, versionLabel) {
+    const safeKey = String(flowKey).replace(/[^\w.-]+/g, '_');
+    const safeVer = String(versionLabel).replace(/[^\w.-]+/g, '_');
+    return `${safeKey}-${safeVer}.json`;
+  }
+
+  async _getVersionDocumentByLabel(flowKey, versionParam) {
+    const normalized = normalizeVersionParam(versionParam);
+    if (!normalized) {
+      const err = new Error('No se encontró la versión solicitada del flujo.');
+      err.code = 'VERSION_NOT_FOUND';
+      throw err;
+    }
+
+    const flowRow = await this._getFlowRow(flowKey);
+    if (!flowRow) {
+      const err = new Error('No se encontró el flujo solicitado.');
+      err.code = 'FLOW_NOT_FOUND';
+      throw err;
+    }
+
+    const versions = await flowCatalogRepository.listVersions(flowRow.id);
+    const entry = versions.find(
+      (v) =>
+        v.versionLabel === normalized ||
+        v.versionLabel?.toLowerCase() === normalized ||
+        String(v.versionNumber) === normalized.replace(/^v/i, ''),
+    );
+    if (!entry) {
+      const err = new Error('No se encontró la versión solicitada del flujo.');
+      err.code = 'VERSION_NOT_FOUND';
+      throw err;
+    }
+
+    const graph = await flowCatalogRepository.getVersionGraph(entry.id);
+    return {
+      document: graphToFlowDocument(graph),
+      versionLabel: entry.versionLabel,
+      status: entry.status,
+    };
+  }
+
+  /**
+   * Exporta la versión publicada activa (mayor version_number publicada).
+   * Si no hay publicada, exporta el borrador actual.
+   */
+  async exportActivePublished(flowKey) {
+    await this.ensureReady();
+    const flowRow = await this._getFlowRow(flowKey);
+    if (!flowRow) {
+      const err = new Error('No se encontró el flujo solicitado.');
+      err.code = 'FLOW_NOT_FOUND';
+      throw err;
+    }
+
+    let version = await flowCatalogRepository.getLatestPublishedVersion(flowRow.id);
+    if (!version) {
+      version = await flowCatalogRepository.getLatestDraftVersion(flowRow.id);
+    }
+    if (!version) {
+      const err = new Error('No se encontró la versión solicitada del flujo.');
+      err.code = 'VERSION_NOT_FOUND';
+      throw err;
+    }
+
+    const graph = await flowCatalogRepository.getVersionGraph(version.id);
+    const document = graphToFlowDocument(graph);
+    return {
+      document,
+      filename: this._exportFilename(flowKey, version.versionLabel),
+    };
+  }
+
+  async exportVersion(flowKey, versionParam) {
+    await this.ensureReady();
+    const { document, versionLabel } = await this._getVersionDocumentByLabel(flowKey, versionParam);
+    return {
+      document,
+      filename: this._exportFilename(flowKey, versionLabel),
+    };
+  }
+
+  async exportAllFlows() {
+    await this.ensureReady();
+    const catalog = await flowCatalogRepository.listFlows();
+    const flows = [];
+
+    for (const row of catalog) {
+      try {
+        const { document, filename } = await this.exportActivePublished(row.flowKey);
+        flows.push({ flowId: row.flowKey, filename, flow: document });
+      } catch (err) {
+        if (err.code === 'VERSION_NOT_FOUND') continue;
+        throw err;
+      }
+    }
+
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    return {
+      exportedAt: new Date().toISOString(),
+      source: 'db',
+      flows,
+      bundleFilename: `tea-bot-flows-export-${stamp}.json`,
+    };
+  }
+
   /** No-op: la estructura vive en SQL Server. */
   async ensureStructure() {
     return undefined;

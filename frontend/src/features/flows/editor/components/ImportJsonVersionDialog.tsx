@@ -109,7 +109,8 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              Pegá un JSON completo del flujo. Se validará antes de crear la nueva versión.
+              Importá un archivo JSON para guardarlo como flujo o nueva versión en la base de datos.
+              Se validará antes de persistir; no se guardan archivos en carpetas del servidor.
             </Typography>
             <TextField
               label="JSON del flujo"

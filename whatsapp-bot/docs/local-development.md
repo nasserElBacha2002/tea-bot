@@ -79,7 +79,19 @@ npm run flows:migrate-json-to-db
 npm run flows:parity-check   # opcional, si aún tenés data/flows/published
 ```
 
-**UI:** menú **Flujos** → `/flows` (editor de conversación). **Importar JSON** carga una versión nueva en DB, no archivos en disco.
+**UI:** menú **Flujos** → `/flows` (editor de conversación).
+
+- **Descargar JSON** — export portable desde DB (`GET /api/flows/:flowId/export`).
+- **Importar JSON** — persiste en DB (`POST .../versions/import-json`), sin archivos en disco.
+
+**Migraciones SQL (servidor/local):**
+
+```bash
+npm run db:migrate:status
+npm run db:migrate
+```
+
+Motor: **SQL Server** (`DB_*` en `.env`). Ver `audit/flow-json-export-import-and-db-migrations.md`.
 
 Checklist completo: `audit/dod-verification.md`
 

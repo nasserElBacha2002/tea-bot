@@ -30,7 +30,9 @@ import {
   Add,
   CheckCircle,
   EditNote,
+  Download,
 } from '@mui/icons-material';
+import { downloadFlowJson } from '../utils/downloadFlowJson';
 import { flowsApi } from '../api/flowsApi';
 import {
   flowKeys,
@@ -87,6 +89,7 @@ export const ConversationEditorPage: React.FC = () => {
 
   const stepRefs = useRef<Record<string, HTMLElement | null>>({});
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
+  const [downloadingJson, setDownloadingJson] = useState(false);
   const [indexQuery, setIndexQuery] = useState('');
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [indexDrawerOpen, setIndexDrawerOpen] = useState(false);
@@ -232,6 +235,23 @@ export const ConversationEditorPage: React.FC = () => {
     }
   }, [remoteFlow, editor, validateFlow, scrollToStep]);
 
+  const handleDownloadJson = useCallback(async () => {
+    if (!flowId) return;
+    setDownloadingJson(true);
+    try {
+      await downloadFlowJson(flowId);
+      setSnackbar({ open: true, message: 'JSON descargado correctamente.', severity: 'success' });
+    } catch (e: unknown) {
+      setSnackbar({
+        open: true,
+        message: e instanceof Error ? e.message : 'No se pudo descargar el flujo.',
+        severity: 'error',
+      });
+    } finally {
+      setDownloadingJson(false);
+    }
+  }, [flowId]);
+
   const registerStepRef = useCallback((id: string, el: HTMLElement | null) => {
     stepRefs.current[id] = el;
   }, []);
@@ -354,6 +374,15 @@ export const ConversationEditorPage: React.FC = () => {
             disabled={validateFlow.isPending}
           >
             Validar
+          </Button>
+          <Button
+            size="small"
+            variant="outlined"
+            startIcon={<Download />}
+            onClick={() => void handleDownloadJson()}
+            disabled={downloadingJson}
+          >
+            Descargar JSON
           </Button>
           <Button
             size="small"
