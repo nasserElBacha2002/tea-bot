@@ -35,6 +35,8 @@ interface Props {
   returning?: boolean;
   actionError?: string | null;
   successMessage?: string | null;
+  readAt?: string | null;
+  onCaughtUp?: (readThroughAt: string) => void;
   onSend: (body: string) => Promise<void>;
   onClaim: () => Promise<void>;
   onClose: () => Promise<void>;
@@ -56,6 +58,8 @@ export const ConversationDetail: React.FC<Props> = ({
   returning,
   actionError,
   successMessage,
+  readAt = null,
+  onCaughtUp,
   onSend,
   onClaim,
   onClose,
@@ -237,6 +241,8 @@ export const ConversationDetail: React.FC<Props> = ({
         loading={loadingMessages}
         error={messagesError}
         conversationId={conversationId ?? conversation.id}
+        readAt={readAt}
+        onCaughtUp={onCaughtUp}
       />
 
       <Box

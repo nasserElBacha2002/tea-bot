@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Box, Paper, Typography, Stack, CircularProgress, Alert, Button } from '@mui/material';
 import type { ConversationMessage } from '../types/conversation.types';
 import { senderTypeLabel } from '../utils/conversationUiLabels';
@@ -6,12 +6,19 @@ import {
   messageDisplayBody,
   resolveMessageBubbleRole,
 } from '../utils/conversationMessageDisplay';
+import {
+  findFirstUnreadMessage,
+  getReadThroughAt,
+  hasUnreadMessagesForAgent,
+} from '../utils/conversationUnread';
 
 interface Props {
   messages: ConversationMessage[];
   loading?: boolean;
   error?: string | null;
   conversationId?: string | null;
+  readAt?: string | null;
+  onCaughtUp?: (readThroughAt: string) => void;
 }
 
 function formatTime(iso: string): string {
@@ -34,12 +41,24 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   loading,
   error,
   conversationId,
+  readAt = null,
+  onCaughtUp,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showNewBanner, setShowNewBanner] = useState(false);
   const prevLenRef = useRef(0);
   const prevConvRef = useRef(conversationId);
+  const initialAnchorDoneRef = useRef(false);
+
+  const sorted = useMemo(
+    () =>
+      [...messages].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+      ),
+    [messages],
+  );
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -56,31 +75,91 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
     bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
   }, []);
 
+  const notifyCaughtUp = useCallback(() => {
+    if (!sorted.length) return;
+    onCaughtUp?.(getReadThroughAt(sorted));
+  }, [onCaughtUp, sorted]);
+
+  const scrollToFirstUnread = useCallback(
+    (behavior: ScrollBehavior = 'auto') => {
+      const first = findFirstUnreadMessage(sorted, readAt);
+      if (!first) return false;
+      const el = messageRefs.current[first.id];
+      if (el) {
+        el.scrollIntoView({ behavior, block: 'start' });
+        const last = sorted[sorted.length - 1];
+        setShowNewBanner(Boolean(last && last.id !== first.id));
+        return true;
+      }
+      return false;
+    },
+    [sorted, readAt],
+  );
+
+  const runInitialAnchor = useCallback(() => {
+    if (!sorted.length) {
+      setShowNewBanner(false);
+      return;
+    }
+    const hasUnread = hasUnreadMessagesForAgent(sorted, readAt);
+    if (hasUnread) {
+      const anchored = scrollToFirstUnread('auto');
+      if (!anchored) scrollToBottomOnly('auto');
+    } else {
+      scrollToBottomOnly('auto');
+      setShowNewBanner(false);
+      notifyCaughtUp();
+    }
+  }, [sorted, readAt, scrollToFirstUnread, scrollToBottomOnly, notifyCaughtUp]);
+
   useEffect(() => {
     if (conversationId !== prevConvRef.current) {
       prevConvRef.current = conversationId;
-      prevLenRef.current = messages.length;
-      requestAnimationFrame(() => scrollToBottomOnly('auto'));
+      prevLenRef.current = 0;
+      initialAnchorDoneRef.current = false;
+      setShowNewBanner(false);
+      messageRefs.current = {};
     }
-  }, [conversationId, messages.length, scrollToBottomOnly]);
+  }, [conversationId]);
 
   useEffect(() => {
-    const grew = messages.length > prevLenRef.current;
-    prevLenRef.current = messages.length;
-    if (!grew) return;
+    if (loading || !conversationId) return;
+    if (sorted.length === 0) return;
+    const needsAnchor = !initialAnchorDoneRef.current || prevLenRef.current === 0;
+    if (!needsAnchor) return;
+    initialAnchorDoneRef.current = true;
+    prevLenRef.current = sorted.length;
+    requestAnimationFrame(() => runInitialAnchor());
+  }, [loading, conversationId, sorted.length, runInitialAnchor]);
+
+  useEffect(() => {
+    if (!initialAnchorDoneRef.current || loading) return;
+    const prevLen = prevLenRef.current;
+    const grew = sorted.length > prevLen;
+    prevLenRef.current = sorted.length;
+    if (!grew || prevLen === 0) return;
 
     queueMicrotask(() => {
       if (isNearBottom()) {
         scrollToBottomOnly('smooth');
+        setShowNewBanner(false);
+        notifyCaughtUp();
       } else {
         setShowNewBanner(true);
       }
     });
-  }, [messages, isNearBottom, scrollToBottomOnly]);
+  }, [sorted, loading, isNearBottom, scrollToBottomOnly, notifyCaughtUp]);
 
-  const sorted = [...messages].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-  );
+  const handleScroll = useCallback(() => {
+    if (!isNearBottom()) return;
+    setShowNewBanner(false);
+    notifyCaughtUp();
+  }, [isNearBottom, notifyCaughtUp]);
+
+  const handleJumpToLatest = useCallback(() => {
+    scrollToBottom('smooth');
+    notifyCaughtUp();
+  }, [scrollToBottom, notifyCaughtUp]);
 
   return (
     <Box
@@ -105,9 +184,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
           overscrollBehavior: 'contain',
           p: 2,
         }}
-        onScroll={() => {
-          if (isNearBottom()) setShowNewBanner(false);
-        }}
+        onScroll={handleScroll}
       >
         {loading && (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -133,7 +210,13 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
               const align = isSystem ? 'center' : isUser ? 'flex-start' : 'flex-end';
 
               return (
-                <Box key={msg.id} sx={{ display: 'flex', justifyContent: align }}>
+                <Box
+                  key={msg.id}
+                  ref={(el: HTMLDivElement | null) => {
+                    messageRefs.current[msg.id] = el;
+                  }}
+                  sx={{ display: 'flex', justifyContent: align }}
+                >
                   <Paper
                     elevation={0}
                     sx={{
@@ -178,8 +261,8 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
             zIndex: 2,
           }}
         >
-          <Button size="small" variant="contained" onClick={() => scrollToBottom('smooth')}>
-            Nuevos mensajes
+          <Button size="small" variant="contained" onClick={handleJumpToLatest}>
+            Ir al final
           </Button>
         </Box>
       )}

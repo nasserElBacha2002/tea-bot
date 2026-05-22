@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   conversationMatchesFilters,
+  findFirstUnreadMessage,
   isConversationDerivedUnread,
   isInboundUserLastMessage,
   isInboundUserMessageUnreadSinceRead,
+  isMessageUnreadForAgent,
   listPriorityAccent,
 } from './conversationUnread';
+import type { ConversationMessage } from '../types/conversation.types';
 import type { InboxConversationItem } from '../types/conversation.types';
 
 const base: InboxConversationItem = {
@@ -52,6 +55,50 @@ describe('conversationUnread', () => {
   it('prioriza accent para waiting_human sin leer', () => {
     expect(listPriorityAccent('waiting_human', true)).toBe('high');
     expect(listPriorityAccent('closed', true)).toBe('none');
+  });
+
+  it('encuentra el primer mensaje no leído para el agente', () => {
+    const msgs: ConversationMessage[] = [
+      {
+        id: 'm1',
+        conversationId: 'c1',
+        direction: 'inbound',
+        senderType: 'user',
+        body: 'viejo',
+        provider: 'internal',
+        providerMessageId: null,
+        metadata: null,
+        createdAt: '2026-05-22T10:00:00.000Z',
+      },
+      {
+        id: 'm2',
+        conversationId: 'c1',
+        direction: 'outbound',
+        senderType: 'bot',
+        body: 'ok',
+        provider: 'internal',
+        providerMessageId: null,
+        metadata: null,
+        createdAt: '2026-05-22T10:01:00.000Z',
+      },
+      {
+        id: 'm3',
+        conversationId: 'c1',
+        direction: 'inbound',
+        senderType: 'user',
+        body: 'nuevo',
+        provider: 'internal',
+        providerMessageId: null,
+        metadata: null,
+        createdAt: '2026-05-22T10:06:00.000Z',
+      },
+    ];
+    const readAt = '2026-05-22T10:05:00.000Z';
+    expect(isMessageUnreadForAgent(msgs[0], readAt)).toBe(false);
+    expect(isMessageUnreadForAgent(msgs[1], readAt)).toBe(false);
+    expect(isMessageUnreadForAgent(msgs[2], readAt)).toBe(true);
+    expect(findFirstUnreadMessage(msgs, readAt)?.id).toBe('m3');
+    expect(findFirstUnreadMessage(msgs, readAt)?.body).toBe('nuevo');
   });
 
   it('respeta readAt al derivar sin leer', () => {

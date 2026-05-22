@@ -1,4 +1,10 @@
-import type { InboxConversationItem } from '../types/conversation.types';
+import type { ConversationMessage, InboxConversationItem } from '../types/conversation.types';
+
+function sortMessagesChronologically(messages: ConversationMessage[]): ConversationMessage[] {
+  return [...messages].sort(
+    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+  );
+}
 
 export function isInboundUserLastMessage(item: InboxConversationItem): boolean {
   const lm = item.lastMessage;
@@ -24,6 +30,40 @@ export function isConversationDerivedUnread(
 ): boolean {
   if (item.status === 'closed') return false;
   return isInboundUserMessageUnreadSinceRead(item.lastMessage, readAt);
+}
+
+/** Mensaje que el agente aún no vio (excluye propios envíos). */
+export function isMessageUnreadForAgent(
+  message: ConversationMessage,
+  readAt: string | null,
+): boolean {
+  if (message.senderType === 'agent') return false;
+  if (!readAt) {
+    return message.direction === 'inbound' && message.senderType === 'user';
+  }
+  return new Date(message.createdAt).getTime() > new Date(readAt).getTime();
+}
+
+export function findFirstUnreadMessage(
+  messages: ConversationMessage[],
+  readAt: string | null,
+): ConversationMessage | null {
+  return (
+    sortMessagesChronologically(messages).find((m) => isMessageUnreadForAgent(m, readAt)) ?? null
+  );
+}
+
+export function hasUnreadMessagesForAgent(
+  messages: ConversationMessage[],
+  readAt: string | null,
+): boolean {
+  return findFirstUnreadMessage(messages, readAt) != null;
+}
+
+export function getReadThroughAt(messages: ConversationMessage[]): string {
+  const sorted = sortMessagesChronologically(messages);
+  const last = sorted[sorted.length - 1];
+  return last?.createdAt ?? new Date().toISOString();
 }
 
 export function conversationMatchesFilters(

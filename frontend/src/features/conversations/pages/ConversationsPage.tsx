@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
@@ -59,8 +59,8 @@ export const ConversationsPage: React.FC = () => {
   const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
 
   const clearUnreadFor = useCallback(
-    (id: string) => {
-      markRead(id);
+    (id: string, readThroughAt?: string) => {
+      markRead(id, readThroughAt);
       setUnreadIds((prev) => {
         const next = new Set(prev);
         next.delete(id);
@@ -82,10 +82,7 @@ export const ConversationsPage: React.FC = () => {
 
   const bumpUnread = useCallback(
     (conversationId: string) => {
-      if (selectedId === conversationId) {
-        clearUnreadFor(conversationId);
-        return;
-      }
+      if (selectedId === conversationId) return;
       if (!listIdSet.has(conversationId)) {
         setHiddenByFilterCount((n) => n + 1);
         return;
@@ -100,7 +97,7 @@ export const ConversationsPage: React.FC = () => {
         [conversationId]: (prev[conversationId] ?? 0) + 1,
       }));
     },
-    [listIdSet, selectedId, clearUnreadFor],
+    [listIdSet, selectedId],
   );
 
   const markNewConversation = useCallback(
@@ -120,10 +117,7 @@ export const ConversationsPage: React.FC = () => {
 
   const markHandoffWaiting = useCallback(
     (conversationId: string) => {
-      if (selectedId === conversationId) {
-        clearUnreadFor(conversationId);
-        return;
-      }
+      if (selectedId === conversationId) return;
       if (!listIdSet.has(conversationId)) {
         setHiddenByFilterCount((n) => n + 1);
         return;
@@ -139,7 +133,15 @@ export const ConversationsPage: React.FC = () => {
         return next;
       });
     },
-    [listIdSet, selectedId, clearUnreadFor],
+    [listIdSet, selectedId],
+  );
+
+  const handleConversationCaughtUp = useCallback(
+    (readThroughAt: string) => {
+      if (!selectedId) return;
+      clearUnreadFor(selectedId, readThroughAt);
+    },
+    [selectedId, clearUnreadFor],
   );
 
   const { status: liveStatus, markManual } = useConversationsLiveUpdates({
@@ -178,26 +180,9 @@ export const ConversationsPage: React.FC = () => {
     setSelectedId(id);
     setActionError(null);
     setSuccessMessage(null);
-    clearUnreadFor(id);
   };
 
-  const selectedListItem = useMemo(
-    () => listItems.find((i) => i.id === selectedId) ?? null,
-    [listItems, selectedId],
-  );
-  const lastVisibleMessageId =
-    messagesQuery.data?.items?.[messagesQuery.data.items.length - 1]?.id ?? null;
-
-  useEffect(() => {
-    if (!selectedId) return;
-    clearUnreadFor(selectedId);
-  }, [
-    selectedId,
-    lastVisibleMessageId,
-    selectedListItem?.lastMessageAt,
-    selectedListItem?.lastMessage?.createdAt,
-    clearUnreadFor,
-  ]);
+  const selectedReadAt = selectedId ? getReadAt(selectedId) : null;
 
   const derivedUnreadIds = useMemo(() => {
     const next = new Set(unreadIds);
@@ -410,6 +395,8 @@ export const ConversationsPage: React.FC = () => {
             detail={detailQuery.data}
             messages={messagesQuery.data?.items ?? []}
             conversationId={selectedId}
+            readAt={selectedReadAt}
+            onCaughtUp={handleConversationCaughtUp}
             currentAgentId={currentAgentId}
             loadingDetail={detailQuery.isLoading && Boolean(selectedId)}
             loadingMessages={messagesQuery.isLoading && Boolean(selectedId)}

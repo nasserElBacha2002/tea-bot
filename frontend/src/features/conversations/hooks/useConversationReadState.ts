@@ -58,9 +58,12 @@ export function useConversationReadState(agentId: string | null) {
   }, [serialized]);
 
   const markRead = useCallback(
-    (conversationId: string) => {
+    (conversationId: string, readThroughAt?: string) => {
       const map = loadMap(key);
-      map[conversationId] = new Date().toISOString();
+      const at = readThroughAt ?? new Date().toISOString();
+      const prev = map[conversationId];
+      if (prev && new Date(prev).getTime() >= new Date(at).getTime()) return;
+      map[conversationId] = at;
       saveMap(key, map);
       notify();
     },
