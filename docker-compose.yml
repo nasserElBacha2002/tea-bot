@@ -35,6 +35,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-TeaBot_Dev_Passw0rd!}
       DB_TRUST_SERVER_CERTIFICATE: "true"
       DB_ENCRYPT: "false"
+      FLOW_STORAGE_MODE: ${FLOW_STORAGE_MODE:-db}
+      ALLOW_DEV_SEED: ${ALLOW_DEV_SEED:-true}
     volumes:
       - ./whatsapp-bot/data:/app/data
     depends_on:

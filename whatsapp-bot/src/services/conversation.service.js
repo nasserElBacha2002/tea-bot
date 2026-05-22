@@ -2,6 +2,7 @@ import conversationRepository from '../repositories/conversation.repository.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import sessionService from './session.service.js';
+import flowLoader from '../utils/flow-loader.js';
 import { normalizeTwilioWhatsappNumber } from '../utils/twilio-phone.js';
 import { isConversationDbEnabled } from '../db/index.js';
 
@@ -21,9 +22,16 @@ export function buildTwilioConversationFields(event) {
 
 /** @internal exported for unit tests */
 export function buildSessionSyncPatch(memorySession, engineResult, conversation) {
+  const flowId = engineResult.flowId || memorySession?.flowId || conversation.currentFlowId;
+  const cacheVersion = flowId ? flowLoader.getCacheInfo(flowId)?.version : null;
   return {
-    flowId: engineResult.flowId || memorySession?.flowId || conversation.currentFlowId,
-    flowVersion: memorySession?.flowVersion || conversation.currentFlowVersion || null,
+    flowId,
+    flowVersion:
+      memorySession?.flowVersion
+      || cacheVersion
+      || engineResult.flowVersion
+      || conversation.currentFlowVersion
+      || null,
     currentNodeKey: engineResult.currentNodeId || memorySession?.currentNode || null,
     variablesJson: engineResult.variables || memorySession?.variables || {},
     historyJson: memorySession?.history || [],

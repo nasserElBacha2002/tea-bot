@@ -1,4 +1,5 @@
 import flowRepository from '../repositories/flow.repository.js';
+import compositeFlowLoader from '../loaders/composite-flow-loader.js';
 import flowLoader from '../utils/flow-loader.js';
 import sessionService from './session.service.js';
 import conversationTracker from './conversationTracker.service.js';
@@ -301,14 +302,14 @@ export class FlowEngine {
     const published = await flowLoader.getFlow(flowId);
     if (!published) {
       // Intento final desde repo por si el loader no refrescó
-      const repoPublished = await flowRepository.getLatestPublished(flowId);
-      if (!repoPublished) throw new Error(`[FlowEngine] Published "${flowId}" no encontrado.`);
-      perfContext?.add?.('flowSource', 'published_repo_fallback');
+      const loaded = await compositeFlowLoader.loadActivePublished(flowId);
+      if (!loaded?.flow) throw new Error(`[FlowEngine] Published "${flowId}" no encontrado.`);
+      perfContext?.add?.('flowSource', `published_${loaded.source?.storage || 'fallback'}`);
       perfContext?.add?.('flowCacheHit', false);
       perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
       return {
-        flow: repoPublished,
-        compiled: compileFlow(repoPublished),
+        flow: loaded.flow,
+        compiled: compileFlow(loaded.flow),
       };
     }
     perfContext?.add?.('flowSource', 'published_loader_cache');

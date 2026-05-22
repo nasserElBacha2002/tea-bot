@@ -226,7 +226,13 @@ export class ConversationInboxService {
     }
 
     let providerMessageId = null;
-    if (conversation.channel === 'whatsapp' && conversation.provider === 'twilio') {
+    const isSeedConversation = await this._isSeedConversation(conversation.id);
+
+    if (
+      conversation.channel === 'whatsapp'
+      && conversation.provider === 'twilio'
+      && !isSeedConversation
+    ) {
       if (!conversation.phoneNumber) {
         throw appError(
           'MISSING_PHONE',
@@ -325,6 +331,16 @@ export class ConversationInboxService {
     });
 
     return { conversation: mapConversationPublic(updated) };
+  }
+
+  async _isSeedConversation(conversationId) {
+    const messages = await conversationMessageRepository.listByConversationId(
+      conversationId,
+      { limit: 1, offset: 0, order: 'asc' },
+    );
+    if (messages[0]?.metadataJson?.seed === true) return true;
+    const conv = await conversationRepository.getConversationById(conversationId);
+    return conv?.externalUserId?.startsWith('SIM-') ?? false;
   }
 
   async returnConversationToBot(conversationId) {

@@ -26,14 +26,14 @@ export async function getPool() {
  * Ejecuta SQL con placeholders $1, $2… (se mapean a @p0, @p1 para mssql).
  * @returns {Promise<{ rows: object[] }>}
  */
-export async function query(text, params = []) {
+export async function query(text, params = [], { transaction } = {}) {
   const p = await getPool();
   if (!p) {
     throw new Error('Database pool is not available');
   }
 
   let sqlText = text;
-  const request = p.request();
+  const request = transaction ? new sql.Request(transaction) : p.request();
 
   params.forEach((value, index) => {
     const key = `p${index}`;
@@ -43,6 +43,29 @@ export async function query(text, params = []) {
 
   const result = await request.query(sqlText);
   return { rows: result.recordset ?? [] };
+}
+
+/**
+ * Ejecuta fn dentro de una transacción SQL Server.
+ * @param {(transaction: import('mssql').Transaction) => Promise<T>} fn
+ */
+export async function withTransaction(fn) {
+  const p = await getPool();
+  if (!p) throw new Error('Database pool is not available');
+  const transaction = new sql.Transaction(p);
+  await transaction.begin();
+  try {
+    const result = await fn(transaction);
+    await transaction.commit();
+    return result;
+  } catch (err) {
+    try {
+      await transaction.rollback();
+    } catch {
+      /* ignore rollback errors */
+    }
+    throw err;
+  }
 }
 
 export async function closePool() {

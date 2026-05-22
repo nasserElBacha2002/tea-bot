@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import flowLoader from './flow-loader.js';
-import flowRepository from '../repositories/flow.repository.js';
+import compositeFlowLoader from '../loaders/composite-flow-loader.js';
 
-function buildLoaded(version = 'v1') {
+function buildLoaded(version = 'v1', storage = 'json') {
   return {
     flow: {
       id: 'main-menu',
@@ -19,14 +19,15 @@ function buildLoaded(version = 'v1') {
       flowId: 'main-menu',
       version,
       file: `${version}.json`,
+      storage,
     },
   };
 }
 
 test('getFlow usa cache tras primera carga', async () => {
-  const original = flowRepository.loadActivePublishedWithSource;
+  const original = compositeFlowLoader.loadActivePublished;
   let calls = 0;
-  flowRepository.loadActivePublishedWithSource = async () => {
+  compositeFlowLoader.loadActivePublished = async () => {
     calls += 1;
     return buildLoaded('v1');
   };
@@ -38,15 +39,15 @@ test('getFlow usa cache tras primera carga', async () => {
     assert.equal(two.version, 'v1');
     assert.equal(calls, 1);
   } finally {
-    flowRepository.loadActivePublishedWithSource = original;
+    compositeFlowLoader.loadActivePublished = original;
     flowLoader.invalidateFlow('main-menu');
   }
 });
 
 test('reloadFlow reemplaza cache con nueva version', async () => {
-  const original = flowRepository.loadActivePublishedWithSource;
+  const original = compositeFlowLoader.loadActivePublished;
   let version = 'v1';
-  flowRepository.loadActivePublishedWithSource = async () => buildLoaded(version);
+  compositeFlowLoader.loadActivePublished = async () => buildLoaded(version);
   try {
     flowLoader.invalidateFlow('main-menu');
     await flowLoader.getFlow('main-menu');
@@ -55,15 +56,15 @@ test('reloadFlow reemplaza cache con nueva version', async () => {
     const info = flowLoader.getCacheInfo('main-menu');
     assert.equal(info.version, 'v2');
   } finally {
-    flowRepository.loadActivePublishedWithSource = original;
+    compositeFlowLoader.loadActivePublished = original;
     flowLoader.invalidateFlow('main-menu');
   }
 });
 
 test('invalidateFlow fuerza recarga en siguiente getFlow', async () => {
-  const original = flowRepository.loadActivePublishedWithSource;
+  const original = compositeFlowLoader.loadActivePublished;
   let calls = 0;
-  flowRepository.loadActivePublishedWithSource = async () => {
+  compositeFlowLoader.loadActivePublished = async () => {
     calls += 1;
     return buildLoaded(`v${calls}`);
   };
@@ -75,7 +76,7 @@ test('invalidateFlow fuerza recarga en siguiente getFlow', async () => {
     assert.equal(flow.version, 'v2');
     assert.equal(calls, 2);
   } finally {
-    flowRepository.loadActivePublishedWithSource = original;
+    compositeFlowLoader.loadActivePublished = original;
     flowLoader.invalidateFlow('main-menu');
   }
 });

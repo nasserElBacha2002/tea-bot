@@ -1,3 +1,5 @@
+import compositeFlowLoader from '../loaders/composite-flow-loader.js';
+import { getFlowStorageMode } from '../config/flow-storage.js';
 import flowRepository from '../repositories/flow.repository.js';
 import flowValidator from '../utils/flow-validator.js';
 import { compileFlow } from './compile-flow.js';
@@ -15,14 +17,24 @@ class FlowLoader {
   async load() {
     const start = nowMs();
     this.cache.clear();
-    const publishedFlowIds = await flowRepository.listPublishedFlows();
+    const publishedFlowIds = await compositeFlowLoader.listPublishedFlowKeys();
 
     for (const flowId of publishedFlowIds) {
       await this.reloadFlow(flowId);
     }
 
     if (publishedFlowIds.length === 0) {
-      console.warn('⚠️ FlowLoader: No se han encontrado carpetas de flujos publicados.');
+      const mode = getFlowStorageMode();
+      const hint =
+        mode === 'db'
+          ? 'Ejecutá npm run db:import-flows tras las migraciones.'
+          : 'Verificá data/flows/published o activá FLOW_STORAGE_MODE=db con import.';
+      console.warn(`⚠️ FlowLoader: No hay flujos publicados (${mode}). ${hint}`);
+      if (mode === 'db') {
+        throw new Error(
+          `[FlowLoader] FLOW_STORAGE_MODE=db pero no hay versiones publicadas en DB. ${hint}`,
+        );
+      }
     }
     logPerf('flow_loader_load', {
       flowCount: this.cache.size,
@@ -35,19 +47,20 @@ class FlowLoader {
    */
   async reloadFlow(flowId) {
     const start = nowMs();
-    const loaded = await flowRepository.loadActivePublishedWithSource(flowId);
+    const loaded = await compositeFlowLoader.loadActivePublished(flowId);
     if (!loaded) {
       this.cache.delete(flowId);
       return null;
     }
 
     const { flow, source } = loaded;
+    const fileHint = source.file || `${source.version}.snapshot`;
     let compiled;
     try {
       flowValidator.validate(flow);
       compiled = compileFlow(flow);
     } catch (err) {
-      const hint = `${source.flowId} versión ${source.version} (${source.file})`;
+      const hint = `${source.flowId} versión ${source.version} (${fileHint}, ${source.storage || 'json'})`;
       throw new Error(`Published flow inválido [${hint}]: ${err.message}`);
     }
 
@@ -61,7 +74,9 @@ class FlowLoader {
       nodeCount: compiled.stats.nodeCount,
     };
     this.cache.set(flowId, cacheEntry);
-    console.log(`✅ FlowLoader: Cargada versión activa ${source.version} de "${flowId}"`);
+    console.log(
+      `✅ FlowLoader: Cargada versión activa ${source.version} de "${flowId}" [${source.storage || 'json'}]`,
+    );
     logPerf('flow_compile', {
       flowId,
       version: source.version,

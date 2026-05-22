@@ -7,7 +7,10 @@ import authRouter from './routes/auth.routes.js';
 import flowAdminRouter from './routes/flow-admin.routes.js';
 import simulatorRouter from './routes/simulator.routes.js';
 import conversationsRouter from './routes/conversations.routes.js';
+import flowManagementRouter from './routes/flow-management.routes.js';
 import flowLoader from './utils/flow-loader.js';
+import compositeFlowLoader from './loaders/composite-flow-loader.js';
+import { getFlowStorageMode } from './config/flow-storage.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import { bootstrapFlows } from './utils/bootstrap-flows.js';
@@ -34,7 +37,8 @@ validateConfig();
     await flowRepository.ensureStructure();
     await bootstrapFlows();
 
-    // 2. Cargar flujos publicados en el runtime
+    // 2. Cargar flujos publicados en el runtime (origen según FLOW_STORAGE_MODE)
+    console.log(`📦 FLOW_STORAGE_MODE=${getFlowStorageMode()}`);
     await flowLoader.load();
 
     // 3. Cargar sesiones
@@ -70,6 +74,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/flows', flowAdminRouter);
 app.use('/api/simulator', simulatorRouter);
 app.use('/api/conversations', conversationsRouter);
+app.use('/api/flow-management', flowManagementRouter);
 
 /**
  * Health check endpoint.
@@ -100,13 +105,11 @@ app.get('/healthz', async (req, res) => {
   const timestamp = new Date().toISOString();
   let activePublishedFlow = false;
   try {
-    const ids = await flowRepository.listPublishedFlows();
+    const ids = await compositeFlowLoader.listPublishedFlowKeys();
     for (const flowId of ids) {
       try {
-        const meta = await flowRepository.getPublishedMetadata(flowId);
-        if (!meta?.activeVersion) continue;
-        const flow = await flowRepository.getLatestPublished(flowId);
-        if (flow) {
+        const loaded = await compositeFlowLoader.loadActivePublished(flowId);
+        if (loaded?.flow) {
           activePublishedFlow = true;
           break;
         }
