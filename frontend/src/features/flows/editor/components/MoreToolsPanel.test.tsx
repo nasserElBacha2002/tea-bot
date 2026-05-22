@@ -99,6 +99,7 @@ function renderPanel() {
           viewModel={vm}
           draftFlow={draftFlow}
           editorDirty={false}
+          focusNodeId="a"
           onRestoreSuccess={vi.fn()}
         />
       </ThemeProvider>

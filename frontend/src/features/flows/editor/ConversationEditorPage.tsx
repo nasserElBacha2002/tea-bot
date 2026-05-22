@@ -28,8 +28,6 @@ import {
   PlayArrow,
   CloudUpload,
   Add,
-  CheckCircle,
-  EditNote,
   Download,
 } from '@mui/icons-material';
 import { downloadFlowJson } from '../utils/downloadFlowJson';
@@ -62,6 +60,11 @@ import { StepCard } from './components/StepCard';
 import { MoreToolsPanel } from './components/MoreToolsPanel';
 import { FlowMetadataDialog } from './components/FlowMetadataDialog';
 import { ImportJsonVersionDialog } from './components/ImportJsonVersionDialog';
+import {
+  runLocalValidationBeforeSave,
+  SAVE_MESSAGES,
+  type SaveFlowPhase,
+} from './model/conversationSaveFlow';
 
 function statusLabel(status: string, version: string): { main: string; sub?: string } {
   if (status === 'published') return { main: 'En vivo', sub: version !== 'draft' ? version : undefined };
@@ -90,6 +93,7 @@ export const ConversationEditorPage: React.FC = () => {
   const stepRefs = useRef<Record<string, HTMLElement | null>>({});
   const [moreToolsOpen, setMoreToolsOpen] = useState(false);
   const [downloadingJson, setDownloadingJson] = useState(false);
+  const [savePhase, setSavePhase] = useState<SaveFlowPhase>('idle');
   const [indexQuery, setIndexQuery] = useState('');
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [indexDrawerOpen, setIndexDrawerOpen] = useState(false);
@@ -150,58 +154,67 @@ export const ConversationEditorPage: React.FC = () => {
     });
   }, [flowId, queryClient, editor]);
 
-  const handleSave = useCallback(async () => {
+  const handleSaveChanges = useCallback(async () => {
     if (!remoteFlow || !editor.viewModel || !editor.dirty) return;
     setSnackbar(s => ({ ...s, open: false }));
 
-    if (editor.validationIssues.length > 0) {
-      const vm = editor.viewModel;
-      const summary =
-        buildConversationValidationSummary(vm, editor.validationIssues) ||
-        'Revisá los avisos antes de guardar.';
-      const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
-      if (first) {
-        scrollToStep(first, { focusMessage: true });
-      }
-      setSnackbar({ open: true, message: summary, severity: 'error' });
+    const local = runLocalValidationBeforeSave(editor.viewModel, editor.validationIssues);
+    if (!local.ok) {
+      if (local.focusStepId) scrollToStep(local.focusStepId, { focusMessage: true });
+      setSnackbar({ open: true, message: local.message, severity: 'error' });
       return;
     }
 
+    const payload = editor.buildSavePayload(remoteFlow);
+    let phase: SaveFlowPhase = 'validating';
+    setSavePhase(phase);
     try {
-      const payload = editor.buildSavePayload(remoteFlow);
+      const res = await validateFlow.mutateAsync(payload);
+      if (!res.valid) {
+        setSnackbar({
+          open: true,
+          message: res.error ?? SAVE_MESSAGES.serverValidationFailed,
+          severity: 'error',
+        });
+        return;
+      }
+
+      phase = 'saving';
+      setSavePhase(phase);
       const saved = await updateFlow.mutateAsync(payload);
       editor.hydrateFromServer(flowToConversationViewModel(saved));
       setSnackbar({
         open: true,
-        message: 'Cambios guardados',
+        message: SAVE_MESSAGES.success,
         severity: 'success',
       });
     } catch (e: unknown) {
       const raw =
         (e as { response?: { data?: { error?: string } } }).response?.data?.error ??
-        (e instanceof Error ? e.message : undefined) ??
-        'Error desconocido';
-      console.warn('[ConversationEditor] guardar borrador', raw);
+        (e instanceof Error ? e.message : undefined);
 
-      const vm = editor.viewModel;
-      const stepTitles = vm.steps.map(s => ({ internalId: s.internalId, title: s.title }));
-      const userMsg = mapBackendFlowErrorToUserMessage(raw, stepTitles);
-
-      const nodeId = extractNodeIdFromNodoError(raw);
-      if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
-        scrollToStep(nodeId, { focusMessage: true });
+      if (phase === 'saving') {
+        const vm = editor.viewModel;
+        const stepTitles = vm.steps.map(s => ({ internalId: s.internalId, title: s.title }));
+        const userMsg = raw
+          ? mapBackendFlowErrorToUserMessage(raw, stepTitles)
+          : SAVE_MESSAGES.persistenceFailed;
+        const nodeId = raw ? extractNodeIdFromNodoError(raw) : null;
+        if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
+          scrollToStep(nodeId, { focusMessage: true });
+        }
+        setSnackbar({ open: true, message: userMsg, severity: 'error' });
       } else {
-        const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
-        if (first) scrollToStep(first, { focusMessage: true });
+        setSnackbar({
+          open: true,
+          message: raw ?? SAVE_MESSAGES.serverValidationFailed,
+          severity: 'error',
+        });
       }
-
-      setSnackbar({
-        open: true,
-        message: userMsg,
-        severity: 'error',
-      });
+    } finally {
+      setSavePhase('idle');
     }
-  }, [remoteFlow, editor, updateFlow, scrollToStep]);
+  }, [remoteFlow, editor, updateFlow, validateFlow, scrollToStep]);
 
   const handleValidate = useCallback(async () => {
     if (!remoteFlow || !editor.viewModel) return;
@@ -336,8 +349,13 @@ export const ConversationEditorPage: React.FC = () => {
             <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
               <Chip label={st.main} size="small" color={vm.status === 'published' ? 'success' : 'default'} />
               {st.sub && <Chip label={st.sub} size="small" variant="outlined" />}
-              {updateFlow.isPending && (
-                <Chip label="Guardando cambios…" size="small" color="primary" variant="outlined" />
+              {(savePhase !== 'idle' || updateFlow.isPending) && (
+                <Chip
+                  label={savePhase === 'validating' ? 'Validando…' : 'Guardando…'}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
               )}
               {!updateFlow.isPending && editor.dirty && (
                 <Chip label="Cambios sin guardar" size="small" color="warning" variant="outlined" />
@@ -350,55 +368,23 @@ export const ConversationEditorPage: React.FC = () => {
 
           <Button
             size="small"
-            variant="outlined"
+            variant="contained"
+            color="primary"
             startIcon={<Save />}
-            disabled={!editor.dirty || updateFlow.isPending}
-            onClick={() => void handleSave()}
+            disabled={
+              !editor.dirty ||
+              isLoading ||
+              savePhase !== 'idle' ||
+              updateFlow.isPending ||
+              validateFlow.isPending
+            }
+            onClick={() => void handleSaveChanges()}
           >
-            Guardar
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<EditNote />}
-            onClick={() => setMetadataDialogOpen(true)}
-            aria-label="Editar nombre y descripción"
-          >
-            Datos
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<CheckCircle />}
-            onClick={() => void handleValidate()}
-            disabled={validateFlow.isPending}
-          >
-            Validar
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            startIcon={<Download />}
-            onClick={() => void handleDownloadJson()}
-            disabled={downloadingJson}
-          >
-            Descargar JSON
-          </Button>
-          <Button
-            size="small"
-            variant="outlined"
-            onClick={() => setImportJsonOpen(true)}
-          >
-            Importar JSON
-          </Button>
-          <Button
-            size="small"
-            variant={moreToolsOpen ? 'contained' : 'outlined'}
-            color="secondary"
-            startIcon={<Build />}
-            onClick={() => setMoreToolsOpen(o => !o)}
-          >
-            Más herramientas
+            {savePhase === 'validating'
+              ? 'Validando…'
+              : savePhase === 'saving' || updateFlow.isPending
+                ? 'Guardando…'
+                : 'Guardar cambios'}
           </Button>
           <Button
             size="small"
@@ -422,14 +408,44 @@ export const ConversationEditorPage: React.FC = () => {
           <Button
             size="small"
             variant="contained"
-            color="primary"
+            color="secondary"
             startIcon={<CloudUpload />}
             disabled={
-              !publish.canOpenPublish || publish.isPublishing || updateFlow.isPending || !publishDraftVm
+              !publish.canOpenPublish ||
+              publish.isPublishing ||
+              savePhase !== 'idle' ||
+              updateFlow.isPending ||
+              !publishDraftVm
             }
             onClick={() => publish.startPublishFlow()}
           >
             {publish.isPublishing ? 'Publicando…' : 'Poner en vivo'}
+          </Button>
+          {isMdUp && (
+            <>
+              <Button
+                size="small"
+                variant="outlined"
+                startIcon={<Download />}
+                onClick={() => void handleDownloadJson()}
+                disabled={downloadingJson}
+              >
+                Descargar JSON
+              </Button>
+              <Button size="small" variant="outlined" onClick={() => setImportJsonOpen(true)}>
+                Importar JSON
+              </Button>
+            </>
+          )}
+          <Button
+            size="small"
+            variant={moreToolsOpen ? 'contained' : 'outlined'}
+            color="inherit"
+            startIcon={<Build />}
+            onClick={() => setMoreToolsOpen(o => !o)}
+            sx={{ ml: { md: 0 }, order: { xs: 10, md: 0 } }}
+          >
+            Más herramientas
           </Button>
           {!isMdUp && (
             <Button size="small" variant="outlined" onClick={() => setIndexDrawerOpen(true)}>
@@ -462,8 +478,17 @@ export const ConversationEditorPage: React.FC = () => {
             viewModel={vm}
             draftFlow={draftFlowForSimulator}
             editorDirty={editor.dirty}
+            focusNodeId={selectedStepId}
+            compactToolbar={!isMdUp}
             onRestoreSuccess={handleRestoreFromHistory}
             onConnectionRowActivate={row => scrollToStep(row.originStepId)}
+            onValidateWithoutSave={() => void handleValidate()}
+            onOpenMetadata={() => setMetadataDialogOpen(true)}
+            onDownloadJson={() => void handleDownloadJson()}
+            onImportJson={() => setImportJsonOpen(true)}
+            onMapNodeSelect={id => scrollToStep(id)}
+            validatePending={validateFlow.isPending}
+            downloadPending={downloadingJson}
           />
         )}
       </Drawer>
@@ -496,7 +521,7 @@ export const ConversationEditorPage: React.FC = () => {
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
             <Typography variant="body2" color="text.secondary">
-              Editá los pasos y las respuestas. Usá Guardar para persistir los cambios.
+              Editá los pasos y las respuestas. Usá Guardar cambios para validar y persistir en la base de datos.
             </Typography>
             <Button size="small" variant="contained" startIcon={<Add />} onClick={() => editor.addStep()}>
               Añadir paso

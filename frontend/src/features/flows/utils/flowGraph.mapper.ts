@@ -1,6 +1,7 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { Flow, FlowTransition, FlowTransitionType, GraphEdgeSelection } from '../types/flow.types';
 import { getNodeIssues } from './flowGraph.validation';
+import { summarizeOutgoingTransitions } from './flowMapSubgraph';
 import { UI_TRANSITION_TYPE } from './flowUiLabels';
 
 export const NODE_TYPE_COLORS: Record<string, string> = {
@@ -20,6 +21,12 @@ export const NODE_TYPE_BG: Record<string, string> = {
 export interface FlowToGraphOptions {
   selectedEdgeId?: string | null;
   simulatorNodeId?: string | null;
+  /** Agrupa etiquetas paralelas (mapa legible). */
+  compactEdgeLabels?: boolean;
+  /** Nodo resaltado en mapa de lectura. */
+  mapFocusNodeId?: string | null;
+  /** Nodos más compactos en el mapa. */
+  mapDisplayMode?: boolean;
 }
 
 export function selectionToEdgeId(sel: GraphEdgeSelection | null, flow: Flow): string | null {
@@ -62,13 +69,20 @@ function transitionPairCounts(flow: Flow): Map<string, number> {
 
 /** Maps a Flow to React Flow nodes and edges */
 export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes: Node[]; edges: Edge[] } {
-  const { selectedEdgeId = null, simulatorNodeId = null } = opts;
+  const {
+    selectedEdgeId = null,
+    simulatorNodeId = null,
+    compactEdgeLabels = false,
+    mapFocusNodeId = null,
+    mapDisplayMode = false,
+  } = opts;
   const pairCount = transitionPairCounts(flow);
   const pairIndex = new Map<string, number>();
 
   const nodes: Node[] = flow.nodes.map((node, idx) => {
     const defaultPosition = getDefaultPosition(idx);
-    const issues = getNodeIssues(flow, node);
+    const issues = mapDisplayMode ? [] : getNodeIssues(flow, node);
+    const isMapFocus = Boolean(mapFocusNodeId && node.id === mapFocusNodeId);
     return {
       id: node.id,
       type: 'flowNode',
@@ -79,6 +93,10 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
         isFallback: node.id === flow.fallbackNode,
         issues,
         simActive: Boolean(simulatorNodeId && node.id === simulatorNodeId),
+        mapDisplayMode,
+        mapFocus: isMapFocus,
+        displayTitle: node.ui?.stepTitle?.trim() || node.id,
+        transitionCount: node.transitions?.length ?? 0,
       },
     };
   });
@@ -87,6 +105,35 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
 
   for (const node of flow.nodes) {
     if (node.transitions) {
+      if (compactEdgeLabels) {
+        const byTarget = new Map<string, typeof node.transitions>();
+        for (const t of node.transitions) {
+          const list = byTarget.get(t.nextNode) ?? [];
+          list.push(t);
+          byTarget.set(t.nextNode, list);
+        }
+        for (const [target, group] of byTarget) {
+          const { shortLabel, tooltip } = summarizeOutgoingTransitions(group, target);
+          const edgeId = `${node.id}->${target}-group`;
+          const selected = edgeId === selectedEdgeId;
+          const isPlaceholder = group.some((t) => !t.type);
+          edges.push({
+            id: edgeId,
+            source: node.id,
+            target,
+            label: shortLabel,
+            style: {
+              stroke: selected ? '#1d4ed8' : isPlaceholder ? '#d97706' : '#94a3b8',
+              strokeWidth: selected ? 3 : 2,
+              strokeDasharray: isPlaceholder ? '6 4' : undefined,
+            },
+            labelStyle: { fontSize: 11, fill: '#334155', fontWeight: 600 },
+            type: 'smoothstep',
+            selected,
+            data: { tooltip, sourceNodeId: node.id, isDirect: false },
+          });
+        }
+      } else {
       for (let i = 0; i < node.transitions.length; i++) {
         const t = node.transitions[i];
         const isPlaceholder = !t.type;
@@ -120,6 +167,7 @@ export function flowToGraph(flow: Flow, opts: FlowToGraphOptions = {}): { nodes:
           data: { transitionIndex: i, sourceNodeId: node.id, isDirect: false },
           zIndex: selected ? 10 : total > 1 ? 2 : 1,
         });
+      }
       }
     }
     if (node.nextNode && (!node.transitions || node.transitions.length === 0)) {

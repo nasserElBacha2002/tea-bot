@@ -13,6 +13,10 @@ interface FlowGraphNodeData {
   isFallback: boolean;
   issues?: NodeIssue[];
   simActive?: boolean;
+  mapDisplayMode?: boolean;
+  mapFocus?: boolean;
+  displayTitle?: string;
+  transitionCount?: number;
 }
 
 interface FlowGraphNodeProps {
@@ -21,14 +25,32 @@ interface FlowGraphNodeProps {
 }
 
 export const FlowGraphNode: React.FC<FlowGraphNodeProps> = memo(({ data, selected }) => {
-  const { node, isEntry, isFallback, issues = [], simActive } = data;
+  const {
+    node,
+    isEntry,
+    isFallback,
+    issues = [],
+    simActive,
+    mapDisplayMode = false,
+    mapFocus = false,
+    displayTitle,
+    transitionCount = 0,
+  } = data;
   const color = NODE_TYPE_COLORS[node.type] ?? '#64748b';
   const bg = NODE_TYPE_BG[node.type] ?? '#f8fafc';
 
   const hasError = issues.some(i => i.severity === 'error');
   const hasWarn = issues.some(i => i.severity === 'warning');
 
-  const borderColor = selected ? color : hasError ? '#dc2626' : hasWarn ? '#d97706' : color;
+  const borderColor = mapFocus
+    ? '#ea580c'
+    : selected
+      ? color
+      : hasError
+        ? '#dc2626'
+        : hasWarn
+          ? '#d97706'
+          : color;
   const borderWidth = selected ? 2.5 : hasError || hasWarn ? 2 : 1.5;
 
   const issueTitle = issues.map(i => `• ${i.message}`).join('\n');
@@ -42,8 +64,8 @@ export const FlowGraphNode: React.FC<FlowGraphNodeProps> = memo(({ data, selecte
           borderLeft: hasError ? `5px solid` : hasWarn ? `5px solid` : undefined,
           borderLeftColor: hasError ? 'error.main' : hasWarn ? 'warning.main' : undefined,
           borderRadius: 2,
-          minWidth: 210,
-          maxWidth: 280,
+          minWidth: mapDisplayMode ? 180 : 210,
+          maxWidth: mapDisplayMode ? 240 : 280,
           boxShadow: selected
             ? `0 0 0 4px ${color}40`
             : simActive
@@ -124,22 +146,35 @@ export const FlowGraphNode: React.FC<FlowGraphNodeProps> = memo(({ data, selecte
 
         <Box sx={{ px: 1.5, py: 1.1 }}>
         <Typography variant="body2" fontWeight={800} color="text.primary" sx={{ letterSpacing: 0.2 }}>
-          {node.id}
+          {displayTitle ?? node.id}
         </Typography>
+        {mapDisplayMode && displayTitle !== node.id && (
+          <Typography variant="caption" color="text.disabled" display="block">
+            {node.id}
+          </Typography>
+        )}
+        {mapDisplayMode && transitionCount > 0 && (
+          <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.25 }}>
+            {transitionCount} {transitionCount === 1 ? 'respuesta' : 'respuestas'}
+          </Typography>
+        )}
         {node.message && (
           <Typography
             variant="caption"
             color="text.secondary"
             sx={{
               display: '-webkit-box',
-              WebkitLineClamp: 2,
+              WebkitLineClamp: mapDisplayMode ? 2 : 2,
               WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
               mt: 0.35,
               lineHeight: 1.35,
             }}
+            title={node.message}
           >
-            {node.message}
+            {mapDisplayMode && node.message.length > 48
+              ? `${node.message.slice(0, 47)}…`
+              : node.message}
           </Typography>
         )}
         {node.type === 'capture' && (

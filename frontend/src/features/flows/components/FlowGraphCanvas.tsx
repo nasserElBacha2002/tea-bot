@@ -10,7 +10,14 @@ import {
   useEdgesState,
   BackgroundVariant,
 } from '@xyflow/react';
-import type { NodeChange, EdgeChange, Connection, Node, Edge } from '@xyflow/react';
+import type {
+  NodeChange,
+  EdgeChange,
+  Connection,
+  Node,
+  Edge,
+  ReactFlowInstance,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Box } from '@mui/material';
 import type { Flow, FlowNodeDataType, FlowTransition, GraphEdgeSelection } from '../types/flow.types';
@@ -60,6 +67,10 @@ interface FlowGraphCanvasProps {
   onOrganizeLayout: () => void;
   /** Solo visualización: sin arrastre, conexiones ni cambios persistentes. */
   readOnly?: boolean;
+  /** Mapa legible: sin fitView inicial; centra en foco. */
+  mapViewMode?: boolean;
+  initialFocusNodeId?: string | null;
+  onMapNodeActivate?: (nodeId: string) => void;
 }
 
 export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
@@ -73,7 +84,11 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
   onQuickAddNode,
   onOrganizeLayout,
   readOnly = false,
+  mapViewMode = false,
+  initialFocusNodeId = null,
+  onMapNodeActivate,
 }) => {
+  const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
   const graphSignature = useMemo(() => flowGraphSignature(flow), [flow]);
   const selectedEdgeId = useMemo(
     () => selectionToEdgeId(selectedEdge, flow),
@@ -85,10 +100,13 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
       flowToGraph(flow, {
         selectedEdgeId,
         simulatorNodeId: simulatorHighlightNodeId,
+        compactEdgeLabels: mapViewMode,
+        mapFocusNodeId: initialFocusNodeId,
+        mapDisplayMode: mapViewMode,
       }),
     // graphSignature ya refleja el contenido de `flow`
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [graphSignature, selectedEdgeId, simulatorHighlightNodeId]
+    [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, initialFocusNodeId]
   );
 
   const [nodes, setNodes] = useNodesState(derivedNodes);
@@ -101,17 +119,44 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
     const { nodes: n, edges: e } = flowToGraph(flow, {
       selectedEdgeId,
       simulatorNodeId: simulatorHighlightNodeId,
+      compactEdgeLabels: mapViewMode,
+      mapFocusNodeId: initialFocusNodeId,
+      mapDisplayMode: mapViewMode,
     });
     setNodes(n);
     setEdges(e);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [graphSignature, selectedEdgeId, simulatorHighlightNodeId, setNodes, setEdges]);
+  }, [graphSignature, selectedEdgeId, simulatorHighlightNodeId, mapViewMode, initialFocusNodeId, setNodes, setEdges]);
+
+  const centerOnNode = useCallback(
+    (nodeId: string | null, zoom = 0.9) => {
+      const inst = rfInstanceRef.current;
+      if (!inst || !nodeId) return;
+      const n = inst.getNode(nodeId);
+      if (!n) return;
+      inst.setCenter(n.position.x + 100, n.position.y + 50, { zoom, duration: 280 });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (mapViewMode && initialFocusNodeId) {
+      centerOnNode(initialFocusNodeId, 0.88);
+    }
+  }, [mapViewMode, initialFocusNodeId, graphSignature, centerOnNode]);
 
   useEffect(() => {
     setNodes(prev =>
-      prev.map(n => ({ ...n, selected: n.id === selectedNodeId }))
+      prev.map(n => ({
+        ...n,
+        selected: n.id === selectedNodeId,
+        data: {
+          ...n.data,
+          mapFocus: mapViewMode && initialFocusNodeId === n.id,
+        },
+      })),
     );
-  }, [selectedNodeId, setNodes]);
+  }, [selectedNodeId, setNodes, mapViewMode, initialFocusNodeId]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -199,8 +244,24 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
     (_: React.MouseEvent, node: Node) => {
       onEdgeSelect(null);
       onNodeSelect(node.id);
+      if (mapViewMode && onMapNodeActivate) {
+        onMapNodeActivate(node.id);
+        centerOnNode(node.id, 0.9);
+      }
     },
-    [onNodeSelect, onEdgeSelect]
+    [onNodeSelect, onEdgeSelect, mapViewMode, onMapNodeActivate, centerOnNode],
+  );
+
+  const onInit = useCallback(
+    (instance: ReactFlowInstance) => {
+      rfInstanceRef.current = instance;
+      if (mapViewMode && initialFocusNodeId) {
+        requestAnimationFrame(() => centerOnNode(initialFocusNodeId, 0.88));
+      } else if (!mapViewMode) {
+        instance.fitView({ padding: 0.2 });
+      }
+    },
+    [mapViewMode, initialFocusNodeId, centerOnNode],
   );
 
   const onEdgeClick = useCallback(
@@ -237,10 +298,11 @@ export const FlowGraphCanvas: React.FC<FlowGraphCanvasProps> = ({
         nodesConnectable={!readOnly}
         edgesReconnectable={!readOnly}
         elementsSelectable
-        fitView
+        onInit={onInit}
+        fitView={!mapViewMode}
         fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.15}
-        maxZoom={1.8}
+        minZoom={0.2}
+        maxZoom={1.6}
         defaultEdgeOptions={{
           interactionWidth: 28,
         }}

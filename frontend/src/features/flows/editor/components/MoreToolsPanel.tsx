@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { Box, Button, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, Divider, Stack, Tab, Tabs, Typography } from '@mui/material';
+import {
+  CheckCircle,
+  Download,
+  EditNote,
+  Map,
+} from '@mui/icons-material';
 import type { Flow } from '../../types/flow.types';
 import type { ConversationViewModel } from '../model/conversationViewModel';
 import { ConnectionsTable } from './ConnectionsTable';
@@ -15,8 +21,17 @@ export interface MoreToolsPanelProps {
   viewModel: ConversationViewModel;
   draftFlow: Flow;
   editorDirty: boolean;
+  focusNodeId: string | null;
+  compactToolbar?: boolean;
   onRestoreSuccess: () => void | Promise<void>;
   onConnectionRowActivate?: (row: ConnectionRow) => void;
+  onValidateWithoutSave?: () => void;
+  onOpenMetadata?: () => void;
+  onDownloadJson?: () => void;
+  onImportJson?: () => void;
+  onMapNodeSelect?: (nodeId: string) => void;
+  validatePending?: boolean;
+  downloadPending?: boolean;
 }
 
 export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
@@ -24,8 +39,17 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
   viewModel,
   draftFlow,
   editorDirty,
+  focusNodeId,
+  compactToolbar = false,
   onRestoreSuccess,
   onConnectionRowActivate,
+  onValidateWithoutSave,
+  onOpenMetadata,
+  onDownloadJson,
+  onImportJson,
+  onMapNodeSelect,
+  validatePending = false,
+  downloadPending = false,
 }) => {
   const [tab, setTab] = useState<MoreToolsTabValue>('connections');
   const [introOpen, setIntroOpen] = useState(false);
@@ -60,6 +84,56 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
+      <Stack spacing={1} sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          Acciones secundarias
+        </Typography>
+        <Stack direction="row" flexWrap="wrap" gap={1}>
+          {onValidateWithoutSave && (
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<CheckCircle />}
+              onClick={onValidateWithoutSave}
+              disabled={validatePending}
+            >
+              Validar sin guardar
+            </Button>
+          )}
+          {onOpenMetadata && (
+            <Button size="small" variant="outlined" startIcon={<EditNote />} onClick={onOpenMetadata}>
+              Ver datos técnicos
+            </Button>
+          )}
+          <Button size="small" variant="outlined" startIcon={<Map />} onClick={openMapFlow}>
+            Ver mapa
+          </Button>
+        </Stack>
+        {compactToolbar && (
+          <>
+            <Divider />
+            <Stack direction="row" flexWrap="wrap" gap={1}>
+              {onDownloadJson && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={onDownloadJson}
+                  disabled={downloadPending}
+                >
+                  Descargar JSON
+                </Button>
+              )}
+              {onImportJson && (
+                <Button size="small" variant="outlined" onClick={onImportJson}>
+                  Importar JSON
+                </Button>
+              )}
+            </Stack>
+          </>
+        )}
+      </Stack>
+
       <Tabs
         value={tab}
         onChange={(_, v: MoreToolsTabValue) => {
@@ -90,10 +164,10 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
         {tab === 'map' && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start' }}>
             <Typography variant="body2" color="text.secondary">
-              Visualizá la conversación completa en un mapa. Es útil para flujos grandes; los cambios seguís
-              haciéndolos en la vista normal.
+              Mapa de lectura con profundidad y búsqueda. Los cambios se hacen en la vista principal del
+              editor.
             </Typography>
-            <Button variant="contained" color="secondary" onClick={openMapFlow}>
+            <Button variant="contained" color="secondary" startIcon={<Map />} onClick={openMapFlow}>
               Abrir mapa
             </Button>
           </Box>
@@ -105,7 +179,16 @@ export const MoreToolsPanel: React.FC<MoreToolsPanelProps> = ({
         onCancel={() => setIntroOpen(false)}
         onContinue={handleIntroContinue}
       />
-      <AdvancedMapView open={mapOpen} flow={draftFlow} onClose={() => setMapOpen(false)} />
+      <AdvancedMapView
+        open={mapOpen}
+        flow={draftFlow}
+        focusNodeId={focusNodeId}
+        onClose={() => setMapOpen(false)}
+        onNodeSelect={id => {
+          onMapNodeSelect?.(id);
+          setMapOpen(false);
+        }}
+      />
     </Box>
   );
 };

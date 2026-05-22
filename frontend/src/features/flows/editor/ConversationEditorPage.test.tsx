@@ -38,6 +38,7 @@ const mockFlow: Flow = {
 
 const flowMocks = vi.hoisted(() => ({
   mutateAsync: vi.fn(),
+  validateAsync: vi.fn().mockResolvedValue({ valid: true }),
   isPending: false,
 }));
 
@@ -69,7 +70,7 @@ vi.mock('../hooks/useFlows', () => ({
     },
   }),
   useValidateFlow: () => ({
-    mutateAsync: vi.fn().mockResolvedValue({ valid: true }),
+    mutateAsync: flowMocks.validateAsync,
     isPending: false,
   }),
   useImportJsonAsNewVersion: () => ({
@@ -157,16 +158,16 @@ describe('ConversationEditorPage', () => {
     expect(screen.queryByText(/vista técnica/i)).toBeNull();
   });
 
-  it('keeps Guardar disabled until the user edits', async () => {
+  it('keeps Guardar cambios disabled until the user edits', async () => {
     renderPage();
-    const saveBtn = await screen.findByRole('button', { name: /guardar/i });
+    const saveBtn = await screen.findByRole('button', { name: /guardar cambios/i });
     expect(saveBtn).toBeDisabled();
   });
 
-  it('enables Guardar after an edit', async () => {
+  it('enables Guardar cambios after an edit', async () => {
     const user = userEvent.setup();
     renderPage();
-    const saveBtn = await screen.findByRole('button', { name: /guardar/i });
+    const saveBtn = await screen.findByRole('button', { name: /guardar cambios/i });
     expect(saveBtn).toBeDisabled();
     const titleFields = await screen.findAllByLabelText(/nombre del paso/i);
     const titleField = titleFields[0]!;
@@ -175,10 +176,12 @@ describe('ConversationEditorPage', () => {
     await waitFor(() => expect(saveBtn).not.toBeDisabled());
   });
 
-  it('shows saving chip while mutation is pending', async () => {
+  it('shows saving state while mutation is pending', async () => {
     flowMocks.isPending = true;
     renderPage();
-    await screen.findByText('Guardando cambios…');
+    await screen.findByText('Mi flujo');
+    expect(screen.getByRole('button', { name: /guardando/i })).toBeDisabled();
+    expect(screen.getAllByText('Guardando…').length).toBeGreaterThanOrEqual(1);
   });
 
   it('initially keeps desktop simulator paused until user activates it', async () => {
@@ -218,26 +221,28 @@ describe('ConversationEditorPage', () => {
     ).toBeTruthy();
   });
 
-  it('blocks Guardar without calling the API when a message step has no message', async () => {
+  it('blocks Guardar cambios without calling the API when a message step has no message', async () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('Mi flujo');
     await user.click(screen.getByRole('button', { name: /añadir paso/i }));
-    const saveBtn = screen.getByRole('button', { name: /^guardar$/i });
+    const saveBtn = screen.getByRole('button', { name: /guardar cambios/i });
     await waitFor(() => expect(saveBtn).not.toBeDisabled());
     await user.click(saveBtn);
     expect(flowMocks.mutateAsync).not.toHaveBeenCalled();
   });
 
-  it('calls the API when saving a valid dirty draft', async () => {
+  it('calls validate then save API when saving a valid dirty draft', async () => {
     const user = userEvent.setup();
+    flowMocks.validateAsync.mockResolvedValue({ valid: true });
     renderPage();
     await screen.findByText('Mi flujo');
     const titleFields = await screen.findAllByLabelText(/nombre del paso/i);
     const titleField = titleFields[0]!;
     await user.clear(titleField);
     await user.type(titleField, 'Saludo');
-    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    await waitFor(() => expect(flowMocks.validateAsync).toHaveBeenCalled());
     await waitFor(() => expect(flowMocks.mutateAsync).toHaveBeenCalled());
   });
 
