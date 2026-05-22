@@ -28,7 +28,7 @@ class FlowLoader {
       const hint =
         mode === 'db'
           ? 'Ejecutá npm run db:import-flows tras las migraciones.'
-          : 'Verificá data/flows/published o activá FLOW_STORAGE_MODE=db con import.';
+          : 'Verificá que exista una versión publicada en DB (importá o publicá un borrador).';
       console.warn(`⚠️ FlowLoader: No hay flujos publicados (${mode}). ${hint}`);
       if (mode === 'db') {
         throw new Error(
@@ -60,7 +60,7 @@ class FlowLoader {
       flowValidator.validate(flow);
       compiled = compileFlow(flow);
     } catch (err) {
-      const hint = `${source.flowId} versión ${source.version} (${fileHint}, ${source.storage || 'json'})`;
+      const hint = `${source.flowId} versión ${source.version} (${fileHint}, ${source.storage || 'db'})`;
       throw new Error(`Published flow inválido [${hint}]: ${err.message}`);
     }
 
@@ -75,7 +75,7 @@ class FlowLoader {
     };
     this.cache.set(flowId, cacheEntry);
     console.log(
-      `✅ FlowLoader: Cargada versión activa ${source.version} de "${flowId}" [${source.storage || 'json'}]`,
+      `✅ FlowLoader: Cargada versión activa ${source.version} de "${flowId}" [${source.storage || 'db'}]`,
     );
     logPerf('flow_compile', {
       flowId,

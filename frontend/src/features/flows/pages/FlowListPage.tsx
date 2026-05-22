@@ -97,7 +97,9 @@ export const FlowListPage: React.FC = () => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Box>
           <Typography variant="h5" fontWeight={700}>Flujos</Typography>
-          <Typography variant="body2" color="text.secondary">Administra los borradores de tus flujos conversacionales.</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Flujos guardados en la base de datos. Editá, validá y publicá desde el editor de conversación.
+          </Typography>
         </Box>
         <Button variant="contained" startIcon={<Add />} onClick={() => { setNewId(''); setNewName(''); setCreateOpen(true); }}>
           Nuevo flujo
@@ -113,7 +115,10 @@ export const FlowListPage: React.FC = () => {
       {isLoading && <Box sx={{ display: 'flex', justifyContent: 'center', mt: 6 }}><CircularProgress /></Box>}
 
       {isError && (
-        <Alert severity="error">No se pudieron cargar los flujos. Comprueba que el servidor esté en ejecución (puerto 3000).</Alert>
+        <Alert severity="error">
+          No se pudieron cargar los flujos desde la base de datos. Verificá que el servidor esté en ejecución y que SQL Server
+          esté configurado (CONVERSATION_DB_ENABLED y variables DB_*).
+        </Alert>
       )}
 
       {!isLoading && !isError && flows?.length === 0 && (

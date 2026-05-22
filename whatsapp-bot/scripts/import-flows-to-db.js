@@ -6,7 +6,13 @@ import { getFlowStorageMode } from '../src/config/flow-storage.js';
 dotenv.config();
 
 async function main() {
+  const force = ['1', 'true', 'yes'].includes(
+    String(process.env.FORCE_FLOW_IMPORT || '').trim().toLowerCase(),
+  );
   console.log(`FLOW_STORAGE_MODE=${getFlowStorageMode()} (import siempre escribe en DB)`);
+  if (force) {
+    console.log('FORCE_FLOW_IMPORT=1 — se reimportan versiones aunque el checksum coincida.');
+  }
   const summary = await flowImportService.importAllFromDisk();
   console.log('Importación completada.');
   for (const p of summary.published) {

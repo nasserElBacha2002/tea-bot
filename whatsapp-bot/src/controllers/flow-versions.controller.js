@@ -1,4 +1,4 @@
-import flowRepository from '../repositories/flow.repository.js';
+import flowDocumentService from '../services/flow-document.service.js';
 import flowLoader from '../utils/flow-loader.js';
 import { sendSuccess, sendError, HTTP_STATUS } from '../utils/http-errors.js';
 
@@ -17,7 +17,7 @@ function isNotFoundMessage(msg) {
 export const listPublishedVersions = async (req, res) => {
   const { flowId } = req.params;
   try {
-    const summary = await flowRepository.listVersionSummary(flowId);
+    const summary = await flowDocumentService.listVersionSummary(flowId);
     if (!summary) {
       return sendSuccess(res, {
         flowId,
@@ -42,7 +42,7 @@ export const listPublishedVersions = async (req, res) => {
 export const getPublishedVersionDetail = async (req, res) => {
   const { flowId, version } = req.params;
   try {
-    const doc = await flowRepository.getPublishedVersionDocument(flowId, version);
+    const doc = await flowDocumentService.getPublishedVersionDocument(flowId, version);
     return sendSuccess(res, {
       version: doc.normalizedVersion,
       publishedAt: doc.entry.publishedAt,
@@ -67,7 +67,7 @@ export const duplicatePublishedVersionToDraft = async (req, res) => {
   const overwriteDraft = Boolean(req.body?.overwriteDraft);
 
   try {
-    const draft = await flowRepository.duplicatePublishedVersionToDraft(flowId, version, {
+    const draft = await flowDocumentService.duplicatePublishedVersionToDraft(flowId, version, {
       overwriteDraft
     });
     return sendSuccess(res, draft);
@@ -108,7 +108,7 @@ export const importJsonAsNewVersion = async (req, res) => {
   }
 
   try {
-    const imported = await flowRepository.importPublishedVersionFromJson(flowId, payloadFlow, { publish });
+    const imported = await flowDocumentService.importPublishedVersionFromJson(flowId, payloadFlow, { publish });
     if (imported.wasActivated) {
       try {
         await flowLoader.reloadFlow(flowId);

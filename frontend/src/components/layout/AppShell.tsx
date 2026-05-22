@@ -36,22 +36,11 @@ export const AppShell: React.FC = () => {
             Conversaciones
           </Button>
           <Button
-            variant={location.pathname.startsWith('/admin/flows') ? 'contained' : 'text'}
-            size="small"
-            onClick={() => navigate('/admin/flows')}
-          >
-            Flujos DB
-          </Button>
-          <Button
-            variant={
-              location.pathname.startsWith('/flows') && !location.pathname.startsWith('/admin')
-                ? 'contained'
-                : 'text'
-            }
+            variant={location.pathname.startsWith('/flows') ? 'contained' : 'text'}
             size="small"
             onClick={() => navigate('/flows')}
           >
-            Editor JSON
+            Flujos
           </Button>
           <Button variant="outlined" size="small" onClick={handleLogout} disabled={loggingOut}>
             Cerrar sesión

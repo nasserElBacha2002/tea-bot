@@ -61,21 +61,25 @@ cd ../frontend && npm run dev   # :5173
 
 Login admin → **Conversaciones** (`/conversations`).
 
-## 6. FLOW_STORAGE_MODE (independencia de JSON)
+## 6. Almacenamiento de flujos (solo DB)
 
-| Valor | Comportamiento |
-|--------|----------------|
-| `json` | Runtime lee `data/flows/` |
-| `db` | **Solo** `flow_version_snapshots` (sin fallback a JSON) |
-| `db_with_json_fallback` | DB primero; si falla, JSON + warning |
+La única fuente de verdad es **SQL Server** (`flows`, `flow_versions`, `flow_version_snapshots`).
 
 ```env
 FLOW_STORAGE_MODE=db
+CONVERSATION_DB_ENABLED=true
 ```
 
-Reiniciar el servidor tras cambiar el modo. Al arrancar verás `FLOW_STORAGE_MODE=db` y logs `[DbFlowLoader]`.
+Al arrancar verás `FLOW_STORAGE_MODE=db` y logs `[DbFlowLoader]`.
 
-**Prueba DoD:** renombrar `data/flows` → `data/flows_DISABLED` y confirmar que el bot sigue cargando `main-menu` desde DB.
+**Migración desde JSON local (una vez):**
+
+```bash
+npm run flows:migrate-json-to-db
+npm run flows:parity-check   # opcional, si aún tenés data/flows/published
+```
+
+**UI:** menú **Flujos** → `/flows` (editor de conversación). **Importar JSON** carga una versión nueva en DB, no archivos en disco.
 
 Checklist completo: `audit/dod-verification.md`
 
@@ -85,15 +89,15 @@ Conversaciones seed usan `provider=internal` → `POST .../messages` solo persis
 
 `provider=twilio` + canal WhatsApp real usa Twilio (no aplica a seeds `SIM-*`).
 
-## 8. Gestión de flujos (Fase 6)
+## 8. Gestión de flujos
 
-1. `npm run db:migrate` (incluye `004_audit_logs.sql`)
-2. Backend + frontend con sesión admin
-3. UI: **Flujos DB** → `/admin/flows`
-4. Crear borrador desde versión publicada → editar mensaje → **Validar** → **Publicar**
-5. API: prefijo `/api/flow-management` (ver `audit/phase6-flow-management.md`)
+1. `npm run db:migrate`
+2. `npm run flows:migrate-json-to-db` si venís de archivos en `data/flows/`
+3. Backend + frontend con sesión admin
+4. UI: **Flujos** → listado y editor de conversación (`/flows/:flowId/conversation`)
+5. API del editor: `/api/flows` (documento Flow ↔ tablas DB)
 
-El editor JSON legacy sigue en `/flows` (archivos en disco).
+Auditoría unificación: `audit/flow-db-unification-audit.md`
 
 ## 9. Verificación rápida del inbox
 

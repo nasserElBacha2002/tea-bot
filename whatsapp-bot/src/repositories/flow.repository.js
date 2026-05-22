@@ -1,3 +1,7 @@
+/**
+ * @deprecated Solo para referencia y migración JSON→DB (`npm run flows:migrate-json-to-db`).
+ * El runtime y /api/flows usan `flow-document.service.js` (SQL Server).
+ */
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';

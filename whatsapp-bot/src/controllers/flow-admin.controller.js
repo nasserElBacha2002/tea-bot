@@ -1,4 +1,4 @@
-import flowRepository from '../repositories/flow.repository.js';
+import flowDocumentService from '../services/flow-document.service.js';
 import flowValidator from '../utils/flow-validator.js';
 import flowLoader from '../utils/flow-loader.js';
 import { sendSuccess, sendError, HTTP_STATUS } from '../utils/http-errors.js';
@@ -8,7 +8,7 @@ import { sendSuccess, sendError, HTTP_STATUS } from '../utils/http-errors.js';
  */
 export const listDrafts = async (req, res) => {
   try {
-    const drafts = await flowRepository.listDrafts();
+    const drafts = await flowDocumentService.listDrafts();
     return sendSuccess(res, drafts);
   } catch (error) {
     return sendError(res, error.message);
@@ -21,7 +21,7 @@ export const listDrafts = async (req, res) => {
 export const getDraft = async (req, res) => {
   const { flowId } = req.params;
   try {
-    const draft = await flowRepository.getDraft(flowId);
+    const draft = await flowDocumentService.getDraft(flowId);
     if (!draft) return sendError(res, 'Flow no encontrado', HTTP_STATUS.NOT_FOUND);
     return sendSuccess(res, draft);
   } catch (error) {
@@ -38,10 +38,10 @@ export const createFlow = async (req, res) => {
   if (!flow.id) return sendError(res, 'El campo "id" es obligatorio', HTTP_STATUS.BAD_REQUEST);
 
   try {
-    const existing = await flowRepository.getDraft(flow.id);
+    const existing = await flowDocumentService.getDraft(flow.id);
     if (existing) return sendError(res, 'Ya existe un flujo con ese ID', HTTP_STATUS.CONFLICT);
 
-    await flowRepository.saveDraft(flow);
+    await flowDocumentService.saveDraft(flow);
     return sendSuccess(res, flow, HTTP_STATUS.CREATED);
   } catch (error) {
     return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
@@ -60,11 +60,11 @@ export const updateFlow = async (req, res) => {
   }
 
   try {
-    const existing = await flowRepository.getDraft(flowId);
+    const existing = await flowDocumentService.getDraft(flowId);
     if (!existing) return sendError(res, 'Flow no encontrado', HTTP_STATUS.NOT_FOUND);
 
     const updatedFlow = { ...flow, id: flowId };
-    await flowRepository.saveDraft(updatedFlow);
+    await flowDocumentService.saveDraft(updatedFlow);
     return sendSuccess(res, updatedFlow);
   } catch (error) {
     return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
@@ -81,7 +81,7 @@ export const duplicateFlow = async (req, res) => {
   if (!newId) return sendError(res, 'El campo "newId" es obligatorio', HTTP_STATUS.BAD_REQUEST);
 
   try {
-    const duplicated = await flowRepository.duplicateDraft(flowId, newId);
+    const duplicated = await flowDocumentService.duplicateDraft(flowId, newId);
     return sendSuccess(res, duplicated, HTTP_STATUS.CREATED);
   } catch (error) {
     return sendError(res, error.message);
@@ -94,7 +94,7 @@ export const duplicateFlow = async (req, res) => {
 export const archiveFlow = async (req, res) => {
   const { flowId } = req.params;
   try {
-    await flowRepository.archiveDraft(flowId);
+    await flowDocumentService.archiveDraft(flowId);
     return sendSuccess(res, { message: 'Flujo archivado correctamente' });
   } catch (error) {
     return sendError(res, error.message);
@@ -107,7 +107,7 @@ export const archiveFlow = async (req, res) => {
 export const publishFlow = async (req, res) => {
   const { flowId } = req.params;
   try {
-    const published = await flowRepository.publishDraft(flowId);
+    const published = await flowDocumentService.publishDraft(flowId);
     try {
       await flowLoader.reloadFlow(flowId);
     } catch (reloadErr) {

@@ -119,8 +119,11 @@ export class FlowImportService {
       },
     });
 
+    const forceImport = ['1', 'true', 'yes'].includes(
+      String(process.env.FORCE_FLOW_IMPORT || '').trim().toLowerCase(),
+    );
     const existingChecksum = await flowDbRepository.getSnapshotChecksum(versionRow.id);
-    if (existingChecksum === checksum) {
+    if (!forceImport && existingChecksum === checksum) {
       return { skipped: true, flowKey, versionLabel, checksum };
     }
 

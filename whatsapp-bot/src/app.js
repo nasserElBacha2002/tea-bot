@@ -13,8 +13,7 @@ import compositeFlowLoader from './loaders/composite-flow-loader.js';
 import { getFlowStorageMode } from './config/flow-storage.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
-import { bootstrapFlows } from './utils/bootstrap-flows.js';
-import flowRepository from './repositories/flow.repository.js';
+import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
 
 const app = express();
@@ -33,11 +32,10 @@ validateConfig();
 // Carga inicial de flujos y sesiones
 (async () => {
   try {
-    // 1. Asegurar estructura y migrar flujos heredados si es necesario
-    await flowRepository.ensureStructure();
-    await bootstrapFlows();
+    // 1. Flujos: solo DB (sin bootstrap ni archivos JSON)
+    await flowDocumentService.ensureStructure();
 
-    // 2. Cargar flujos publicados en el runtime (origen según FLOW_STORAGE_MODE)
+    // 2. Cargar flujos publicados en runtime desde DB
     console.log(`📦 FLOW_STORAGE_MODE=${getFlowStorageMode()}`);
     await flowLoader.load();
 

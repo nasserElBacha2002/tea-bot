@@ -7,10 +7,6 @@ import { RedirectToConversationEditor } from './RedirectToConversationEditor';
 import { RequireAuth } from '../features/auth/components/RequireAuth';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { ConversationsPage } from '../features/conversations/pages/ConversationsPage';
-import { FlowMgmtListPage } from '../features/flow-management/pages/FlowMgmtListPage';
-import { FlowMgmtDetailPage } from '../features/flow-management/pages/FlowMgmtDetailPage';
-import { FlowVersionInspectorPage } from '../features/flow-management/pages/FlowVersionInspectorPage';
-import { FlowDraftEditorPage } from '../features/flow-management/pages/FlowDraftEditorPage';
 
 export const AppRouter: React.FC = () => {
   return (
@@ -20,10 +16,9 @@ export const AppRouter: React.FC = () => {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route path="/conversations" element={<ConversationsPage />} />
-            <Route path="/admin/flows" element={<FlowMgmtListPage />} />
-            <Route path="/admin/flows/:flowId/versions" element={<FlowMgmtDetailPage />} />
-            <Route path="/admin/flow-versions/:versionId/edit" element={<FlowDraftEditorPage />} />
-            <Route path="/admin/flow-versions/:versionId" element={<FlowVersionInspectorPage />} />
+            <Route path="/admin/flows" element={<Navigate to="/flows" replace />} />
+            <Route path="/admin/flows/*" element={<Navigate to="/flows" replace />} />
+            <Route path="/admin/flow-versions/*" element={<Navigate to="/flows" replace />} />
             <Route path="/flows" element={<FlowListPage />} />
             <Route path="/flows/:flowId/conversation" element={<ConversationEditorPage />} />
             <Route path="/flows/:flowId" element={<RedirectToConversationEditor />} />

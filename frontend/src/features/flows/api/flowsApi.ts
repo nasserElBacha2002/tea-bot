@@ -20,6 +20,23 @@ const client = axios.create({
   },
 });
 
+function toFlowApiError(error: unknown): Error {
+  const ax = error as { response?: { data?: { message?: string; error?: string } }; message?: string };
+  const msg =
+    ax.response?.data?.message ||
+    (ax.response?.data?.error === 'CONVERSATION_PERSISTENCE_UNAVAILABLE'
+      ? 'No se pudo conectar con la base de datos de flujos. Verificá SQL Server y las variables DB_*.'
+      : null) ||
+    ax.message ||
+    'Error al comunicarse con el servidor de flujos.';
+  return new Error(msg);
+}
+
+client.interceptors.response.use(
+  (response) => response,
+  (error) => Promise.reject(toFlowApiError(error)),
+);
+
 export const flowsApi = {
   list: async (): Promise<FlowSummary[]> => {
     const { data } = await client.get('/');

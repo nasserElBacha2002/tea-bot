@@ -11,3 +11,6 @@ dist/
 # WhatsApp bot local/generated flow data
 whatsapp-bot/data/flows/
 whatsapp-bot/flows/
+
+# Local JSON backups (post-migración; no versionar)
+backups/
