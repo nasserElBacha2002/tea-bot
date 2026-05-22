@@ -52,26 +52,31 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
     setShowNewBanner(false);
   }, []);
 
+  const scrollToBottomOnly = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    bottomRef.current?.scrollIntoView({ behavior, block: 'end' });
+  }, []);
+
   useEffect(() => {
     if (conversationId !== prevConvRef.current) {
       prevConvRef.current = conversationId;
-      prevLenRef.current = 0;
-      setShowNewBanner(false);
-      requestAnimationFrame(() => scrollToBottom('auto'));
+      prevLenRef.current = messages.length;
+      requestAnimationFrame(() => scrollToBottomOnly('auto'));
     }
-  }, [conversationId, scrollToBottom]);
+  }, [conversationId, messages.length, scrollToBottomOnly]);
 
   useEffect(() => {
     const grew = messages.length > prevLenRef.current;
     prevLenRef.current = messages.length;
     if (!grew) return;
 
-    if (isNearBottom()) {
-      scrollToBottom('smooth');
-    } else {
-      setShowNewBanner(true);
-    }
-  }, [messages, isNearBottom, scrollToBottom]);
+    queueMicrotask(() => {
+      if (isNearBottom()) {
+        scrollToBottomOnly('smooth');
+      } else {
+        setShowNewBanner(true);
+      }
+    });
+  }, [messages, isNearBottom, scrollToBottomOnly]);
 
   const sorted = [...messages].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

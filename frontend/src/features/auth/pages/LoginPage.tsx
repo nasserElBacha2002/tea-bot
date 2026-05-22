@@ -33,44 +33,46 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ py: 8 }}>
-      <Paper elevation={0} sx={{ p: 3, border: '1px solid', borderColor: 'divider' }}>
-        <Typography variant="h5" fontWeight={800} gutterBottom>
-          Iniciar sesión
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Panel de administración Tea Bot
-        </Typography>
-        {error ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {error}
-          </Alert>
-        ) : null}
-        <Box component="form" onSubmit={onSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField
-            label="Usuario"
-            name="username"
-            autoComplete="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            fullWidth
-            required
-          />
-          <TextField
-            label="Contraseña"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            fullWidth
-            required
-          />
-          <Button type="submit" variant="contained" disabled={loading} size="large">
-            Ingresar
-          </Button>
-        </Box>
-      </Paper>
-    </Container>
+    <Box sx={{ height: '100%', overflowY: 'auto' }}>
+      <Container maxWidth="sm" sx={{ py: 8 }}>
+        <Paper elevation={0} sx={{ p: 3, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="h5" fontWeight={800} gutterBottom>
+            Iniciar sesión
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Panel de administración Tea Bot
+          </Typography>
+          {error ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          ) : null}
+          <Box component="form" onSubmit={onSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              label="Usuario"
+              name="username"
+              autoComplete="username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              fullWidth
+              required
+            />
+            <TextField
+              label="Contraseña"
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              fullWidth
+              required
+            />
+            <Button type="submit" variant="contained" disabled={loading} size="large">
+              Ingresar
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
+    </Box>
   );
 };

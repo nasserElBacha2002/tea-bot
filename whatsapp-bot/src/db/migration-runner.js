@@ -17,14 +17,18 @@ export function splitSqlBatches(content) {
 
 export async function ensureDatabaseExists(appConfig) {
   const dbName = appConfig.database;
-  const masterPool = await sql.connect({ ...appConfig, database: 'master' });
-  await masterPool.request().query(`
-    IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${dbName.replace(/'/g, "''")}')
-    BEGIN
-      CREATE DATABASE [${dbName.replace(/\]/g, ']]')}];
-    END
-  `);
-  await masterPool.close();
+  const masterPool = new sql.ConnectionPool({ ...appConfig, database: 'master' });
+  await masterPool.connect();
+  try {
+    await masterPool.request().query(`
+      IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${dbName.replace(/'/g, "''")}')
+      BEGIN
+        CREATE DATABASE [${dbName.replace(/\]/g, ']]')}];
+      END
+    `);
+  } finally {
+    await masterPool.close();
+  }
 }
 
 export async function ensureSchemaMigrationsTable(pool) {
@@ -45,6 +49,14 @@ export async function ensureSchemaMigrationsTable(pool) {
         ALTER TABLE dbo.schema_migrations ADD checksum NVARCHAR(64) NULL;
       IF COL_LENGTH('dbo.schema_migrations', 'success') IS NULL
         ALTER TABLE dbo.schema_migrations ADD success BIT NOT NULL CONSTRAINT DF_schema_migrations_success DEFAULT 1;
+      IF COL_LENGTH('dbo.schema_migrations', 'executed_at') IS NULL
+      BEGIN
+        IF COL_LENGTH('dbo.schema_migrations', 'applied_at') IS NOT NULL
+          EXEC sp_rename 'dbo.schema_migrations.applied_at', 'executed_at', 'COLUMN';
+        ELSE
+          ALTER TABLE dbo.schema_migrations ADD executed_at DATETIME2 NOT NULL
+            CONSTRAINT DF_schema_migrations_executed_at_legacy DEFAULT SYSUTCDATETIME();
+      END
     END
   `);
 }

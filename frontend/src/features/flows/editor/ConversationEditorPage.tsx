@@ -65,6 +65,7 @@ import {
   SAVE_MESSAGES,
   type SaveFlowPhase,
 } from './model/conversationSaveFlow';
+import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
 
 function statusLabel(status: string, version: string): { main: string; sub?: string } {
   if (status === 'published') return { main: 'En vivo', sub: version !== 'draft' ? version : undefined };
@@ -332,7 +333,8 @@ export const ConversationEditorPage: React.FC = () => {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: 'calc(100vh - 64px)',
+        height: APP_SHELL_CONTENT_HEIGHT,
+        maxHeight: APP_SHELL_CONTENT_HEIGHT,
         overflow: 'hidden',
         bgcolor: 'background.default',
       }}

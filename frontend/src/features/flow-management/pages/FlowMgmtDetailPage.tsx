@@ -102,7 +102,6 @@ export const FlowMgmtDetailPage: React.FC = () => {
                   onEdit={() => navigate(`/admin/flow-versions/${v.id}/edit`)}
                   onCreateDraft={() => handleCreateDraft(v.id)}
                   onRollback={() => handleRollback(v.id)}
-                  flowId={flowId!}
                 />
               ))}
             </TableBody>
@@ -119,7 +118,6 @@ function VersionRow({
   onEdit,
   onCreateDraft,
   onRollback,
-  flowId: _flowId,
 }: {
   version: {
     id: string;
@@ -133,7 +131,6 @@ function VersionRow({
   onEdit: () => void;
   onCreateDraft: () => void;
   onRollback: () => void;
-  flowId: string;
 }) {
   const discard = useDiscardDraft(version.id);
   const publish = usePublishFlowVersion(version.id);

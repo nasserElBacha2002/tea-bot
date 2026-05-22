@@ -1,5 +1,5 @@
 import React from 'react';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { Box, ThemeProvider, CssBaseline } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { theme } from '../theme/theme';
 
@@ -21,7 +21,18 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
-        {children}
+        <Box
+          sx={{
+            height: '100%',
+            maxHeight: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {children}
+        </Box>
       </ThemeProvider>
     </QueryClientProvider>
   );

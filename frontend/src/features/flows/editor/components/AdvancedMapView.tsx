@@ -65,15 +65,16 @@ export const AdvancedMapView: React.FC<AdvancedMapViewProps> = ({
   const [detailNodeId, setDetailNodeId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      const focus = resolveMapFocusNodeId(flow, focusNodeId);
-      setMapFocusId(focus);
-      setDetailNodeId(focus);
-      setDepth(2);
-      setMapViewStyle('message');
-      setSearchQuery('');
-      setSearchPick(null);
-    }
+    if (!open) return;
+    const focus = resolveMapFocusNodeId(flow, focusNodeId);
+    /* eslint-disable react-hooks/set-state-in-effect -- sync state when map dialog opens */
+    setMapFocusId(focus);
+    setDetailNodeId(focus);
+    setDepth(2);
+    setMapViewStyle('message');
+    setSearchQuery('');
+    setSearchPick(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open, flow, focusNodeId]);
 
   const visibleFlow = useMemo(() => {

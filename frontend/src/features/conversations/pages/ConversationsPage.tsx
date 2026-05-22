@@ -22,6 +22,7 @@ import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
 import { authApi } from '../../auth/api/authApi';
 import { isInboundUserLastMessage } from '../utils/conversationUnread';
+import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
 
 export const ConversationsPage: React.FC = () => {
   const [filters, setFilters] = useState<ConversationListFilters>({
@@ -224,13 +225,14 @@ export const ConversationsPage: React.FC = () => {
   return (
     <Box
       sx={{
-        flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        minHeight: 0,
-        height: '100%',
+        height: APP_SHELL_CONTENT_HEIGHT,
+        maxHeight: APP_SHELL_CONTENT_HEIGHT,
         overflow: 'hidden',
         p: 2,
+        boxSizing: 'border-box',
+        bgcolor: 'background.default',
       }}
     >
       <Stack
@@ -294,8 +296,9 @@ export const ConversationsPage: React.FC = () => {
         elevation={0}
         sx={{
           flex: 1,
-          display: 'flex',
           minHeight: 0,
+          display: 'flex',
+          flexDirection: 'row',
           border: '1px solid',
           borderColor: 'divider',
           overflow: 'hidden',
@@ -311,6 +314,7 @@ export const ConversationsPage: React.FC = () => {
             borderRight: { md: '1px solid' },
             borderColor: 'divider',
             minHeight: 0,
+            minWidth: 0,
             overflow: 'hidden',
           }}
         >
@@ -320,24 +324,35 @@ export const ConversationsPage: React.FC = () => {
             onRefresh={handleRefresh}
             refreshing={listQuery.isFetching}
           />
-          <ConversationList
-            conversations={listItems}
-            selectedId={selectedId}
-            unreadIds={derivedUnreadIds}
-            unreadCounts={unreadCounts}
-            newConversationIds={newConversationIds}
-            onSelect={handleSelectConversation}
-            loading={listQuery.isLoading && !persistenceFailure}
-            error={listError}
-          />
+          <Box
+            sx={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <ConversationList
+              conversations={listItems}
+              selectedId={selectedId}
+              unreadIds={derivedUnreadIds}
+              unreadCounts={unreadCounts}
+              newConversationIds={newConversationIds}
+              onSelect={handleSelectConversation}
+              loading={listQuery.isLoading && !persistenceFailure}
+              error={listError}
+            />
+          </Box>
         </Box>
 
         <Box
           sx={{
             flex: 1,
+            minHeight: 0,
+            minWidth: 0,
             display: { xs: selectedId ? 'flex' : 'none', md: 'flex' },
             flexDirection: 'column',
-            minHeight: 0,
             overflow: 'hidden',
           }}
         >

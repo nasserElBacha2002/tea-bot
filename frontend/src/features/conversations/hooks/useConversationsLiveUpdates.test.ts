@@ -14,7 +14,8 @@ class MockWebSocket {
   onmessage: ((ev: { data: string }) => void) | null = null;
   onerror: (() => void) | null = null;
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    void url;
     MockWebSocket.instances.push(this);
     queueMicrotask(() => {
       this.readyState = 1;

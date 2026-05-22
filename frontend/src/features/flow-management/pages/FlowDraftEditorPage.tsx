@@ -195,7 +195,6 @@ export const FlowDraftEditorPage: React.FC = () => {
                 />
               ))}
               <AddTransitionForm
-                node={selectedNode}
                 allNodes={data.nodes}
                 onAdd={async (body) => {
                   await createTransition.mutateAsync({ nodeId: selectedNode.id, body });
@@ -245,11 +244,9 @@ function TransitionRow({
 }
 
 function AddTransitionForm({
-  node: _node,
   allNodes,
   onAdd,
 }: {
-  node: FlowNodeRecord;
   allNodes: FlowNodeRecord[];
   onAdd: (body: { type: string; value?: string; nextNodeKey: string }) => Promise<void>;
 }) {

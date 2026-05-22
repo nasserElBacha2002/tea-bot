@@ -8,6 +8,7 @@ const listScrollSx = {
   minHeight: 0,
   overflowY: 'auto',
   overflowX: 'hidden',
+  WebkitOverflowScrolling: 'touch',
 } as const;
 
 interface Props {

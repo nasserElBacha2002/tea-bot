@@ -232,6 +232,7 @@ export const ConversationDetail: React.FC<Props> = ({
       </Box>
 
       <ConversationMessageTimeline
+        key={conversationId ?? conversation.id}
         messages={messages}
         loading={loadingMessages}
         error={messagesError}

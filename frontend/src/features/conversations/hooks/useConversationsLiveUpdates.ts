@@ -33,8 +33,12 @@ export function useConversationsLiveUpdates({
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffRef = useRef(INITIAL_BACKOFF_MS);
   const mountedRef = useRef(true);
+  const connectRef = useRef<() => void>(() => {});
   const selectedIdRef = useRef(selectedConversationId);
-  selectedIdRef.current = selectedConversationId;
+
+  useEffect(() => {
+    selectedIdRef.current = selectedConversationId;
+  }, [selectedConversationId]);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -130,10 +134,14 @@ export function useConversationsLiveUpdates({
       devLog('reconnect scheduled', delay);
       clearReconnectTimer();
       reconnectTimerRef.current = setTimeout(() => {
-        if (mountedRef.current && enabled) connect();
+        if (mountedRef.current && enabled) connectRef.current();
       }, delay);
     };
   }, [enabled, closeSocket, handleEvent, clearReconnectTimer]);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -141,13 +149,13 @@ export function useConversationsLiveUpdates({
       connect();
     } else {
       closeSocket();
-      setStatus('manual');
+      queueMicrotask(() => setStatus('manual'));
     }
     return () => {
       mountedRef.current = false;
       devLog('cleanup');
       closeSocket();
-      setStatus('manual');
+      queueMicrotask(() => setStatus('manual'));
     };
   }, [enabled, connect, closeSocket]);
 

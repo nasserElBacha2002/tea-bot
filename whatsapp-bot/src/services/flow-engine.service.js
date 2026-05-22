@@ -1,4 +1,4 @@
-import flowRepository from '../repositories/flow.repository.js';
+import flowDocumentService from './flow-document.service.js';
 import compositeFlowLoader from '../loaders/composite-flow-loader.js';
 import flowLoader from '../utils/flow-loader.js';
 import sessionService from './session.service.js';
@@ -286,8 +286,8 @@ export class FlowEngine {
       };
     }
     if (flowMode === 'draft') {
-      const draft = await flowRepository.getDraft(flowId);
-      if (!draft) throw new Error(`[FlowEngine] Draft "${flowId}" no encontrado.`);
+      const draft = await flowDocumentService.getDraft(flowId);
+      if (!draft) throw new Error(`[FlowEngine] Draft "${flowId}" no encontrado en DB.`);
       perfContext?.add?.('flowSource', 'draft_repo');
       perfContext?.add?.('flowCacheHit', false);
       perfContext?.add?.('getFlowMs', roundMs(nowMs() - start));
