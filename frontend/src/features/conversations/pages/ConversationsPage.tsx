@@ -14,8 +14,9 @@ import {
   useClaimConversation,
   useSendAgentMessage,
   useCloseConversation,
-  useReturnToBot,
+  useUpdateContact,
 } from '../hooks/useConversations';
+import { DEFAULT_CONVERSATION_CHANNEL, resolveChannelForApi } from '../constants/conversationChannels';
 import { useConversationsLiveUpdates } from '../hooks/useConversationsLiveUpdates';
 import { useConversationReadState } from '../hooks/useConversationReadState';
 import type { ConversationListFilters } from '../types/conversation.types';
@@ -29,6 +30,7 @@ export const ConversationsPage: React.FC = () => {
     limit: 50,
     offset: 0,
     sort: 'last_message_at_desc',
+    channel: DEFAULT_CONVERSATION_CHANNEL,
   });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -53,7 +55,7 @@ export const ConversationsPage: React.FC = () => {
   const claimMutation = useClaimConversation(filters);
   const sendMutation = useSendAgentMessage(filters);
   const closeMutation = useCloseConversation(filters);
-  const returnMutation = useReturnToBot(filters);
+  const updateContactMutation = useUpdateContact(filters);
 
   const listItems = listQuery.data?.items ?? [];
   const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
@@ -255,7 +257,11 @@ export const ConversationsPage: React.FC = () => {
     }
   };
 
-  const hasActiveFilters = Boolean(filters.status || filters.channel || filters.search?.trim());
+  const hasActiveFilters = Boolean(
+    filters.status
+    || resolveChannelForApi(filters.channel) !== DEFAULT_CONVERSATION_CHANNEL
+    || filters.search?.trim(),
+  );
 
   return (
     <Box
@@ -308,7 +314,11 @@ export const ConversationsPage: React.FC = () => {
               color="inherit"
               size="small"
               onClick={() =>
-                handleFilterChange({ status: undefined, channel: undefined, search: '' })
+                handleFilterChange({
+                  status: undefined,
+                  channel: DEFAULT_CONVERSATION_CHANNEL,
+                  search: '',
+                })
               }
             >
               Limpiar filtros
@@ -405,7 +415,12 @@ export const ConversationsPage: React.FC = () => {
             sending={sendMutation.isPending}
             claiming={claimMutation.isPending}
             closing={closeMutation.isPending}
-            returning={returnMutation.isPending}
+            savingContact={updateContactMutation.isPending}
+            contactError={
+              updateContactMutation.isError
+                ? extractApiError(updateContactMutation.error)
+                : null
+            }
             actionError={actionError}
             successMessage={successMessage}
             onSend={(body) =>
@@ -426,10 +441,10 @@ export const ConversationsPage: React.FC = () => {
                 'Conversación cerrada correctamente.',
               )
             }
-            onReturnToBot={() =>
+            onUpdateContact={(name) =>
               runAction(
-                () => returnMutation.mutateAsync(selectedId!),
-                'Conversación devuelta al bot.',
+                () => updateContactMutation.mutateAsync({ conversationId: selectedId!, name }),
+                'Nombre del contacto actualizado.',
               )
             }
           />

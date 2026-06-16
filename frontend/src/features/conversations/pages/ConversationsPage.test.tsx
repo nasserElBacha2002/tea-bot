@@ -140,7 +140,7 @@ vi.mock('../hooks/useConversations', () => ({
   useClaimConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSendAgentMessage: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCloseConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
-  useReturnToBot: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useUpdateContact: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),
 }));
 
 function renderPage() {
@@ -197,6 +197,13 @@ describe('ConversationsPage', () => {
     expect(
       screen.getByText('Seleccioná una conversación para ver el detalle'),
     ).toBeInTheDocument();
+  });
+
+  it('no muestra el botón Devolver al bot', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await user.click(screen.getByText('Simulación - Esperando humano'));
+    expect(screen.queryByRole('button', { name: /devolver al bot/i })).not.toBeInTheDocument();
   });
 
   it('boton Actualizar dispara refresh', async () => {

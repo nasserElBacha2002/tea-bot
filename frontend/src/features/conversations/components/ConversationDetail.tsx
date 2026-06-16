@@ -12,9 +12,14 @@ import { ConversationStatusBadge } from './ConversationStatusBadge';
 import { ConversationMessageTimeline } from './ConversationMessageTimeline';
 import { ConversationComposer } from './ConversationComposer';
 import { ConversationTechnicalDetails } from './ConversationTechnicalDetails';
+import { ContactNameEditor } from './ContactNameEditor';
 import type { ConversationMessage } from '../types/conversation.types';
-import { formatConversationTitle } from '../utils/conversationUiLabels';
 import {
+  formatConversationTitle,
+  formatListItemSecondary,
+} from '../utils/conversationUiLabels';
+import {
+  channelLabel,
   formatAssignmentLabel,
   formatDetailSubtitle,
   handoffReasonHumanText,
@@ -32,7 +37,8 @@ interface Props {
   sending?: boolean;
   claiming?: boolean;
   closing?: boolean;
-  returning?: boolean;
+  savingContact?: boolean;
+  contactError?: string | null;
   actionError?: string | null;
   successMessage?: string | null;
   readAt?: string | null;
@@ -40,7 +46,7 @@ interface Props {
   onSend: (body: string) => Promise<void>;
   onClaim: () => Promise<void>;
   onClose: () => Promise<void>;
-  onReturnToBot: () => Promise<void>;
+  onUpdateContact: (name: string) => Promise<void>;
 }
 
 export const ConversationDetail: React.FC<Props> = ({
@@ -55,7 +61,8 @@ export const ConversationDetail: React.FC<Props> = ({
   sending,
   claiming,
   closing,
-  returning,
+  savingContact,
+  contactError,
   actionError,
   successMessage,
   readAt = null,
@@ -63,10 +70,9 @@ export const ConversationDetail: React.FC<Props> = ({
   onSend,
   onClaim,
   onClose,
-  onReturnToBot,
+  onUpdateContact,
 }) => {
   const [closeConfirm, setCloseConfirm] = useState(false);
-  const [returnConfirm, setReturnConfirm] = useState(false);
 
   if (loadingDetail) {
     return (
@@ -101,6 +107,11 @@ export const ConversationDetail: React.FC<Props> = ({
 
   const { conversation, humanHandoff } = detail;
   const title = formatConversationTitle(conversation.phoneNumber, conversation.displayName);
+  const contactSecondary = formatListItemSecondary(
+    conversation.phoneNumber,
+    conversation.displayName,
+    channelLabel(conversation.channel),
+  );
   const subtitle = formatDetailSubtitle(
     conversation.channel,
     conversation.provider,
@@ -115,10 +126,6 @@ export const ConversationDetail: React.FC<Props> = ({
       : null);
 
   const canClose = conversation.status !== 'closed';
-  const canReturn =
-    conversation.status === 'waiting_human'
-    || conversation.status === 'assigned'
-    || conversation.status === 'paused';
 
   const handleClose = async () => {
     if (!closeConfirm) {
@@ -127,15 +134,6 @@ export const ConversationDetail: React.FC<Props> = ({
     }
     await onClose();
     setCloseConfirm(false);
-  };
-
-  const handleReturn = async () => {
-    if (!returnConfirm) {
-      setReturnConfirm(true);
-      return;
-    }
-    await onReturnToBot();
-    setReturnConfirm(false);
   };
 
   return (
@@ -166,8 +164,20 @@ export const ConversationDetail: React.FC<Props> = ({
           <Typography variant="h6" fontWeight={800}>
             {title}
           </Typography>
+          <ContactNameEditor
+            displayName={conversation.displayName}
+            saving={savingContact}
+            error={contactError}
+            onSave={onUpdateContact}
+          />
           <ConversationStatusBadge status={conversation.status} size="medium" />
         </Stack>
+
+        {conversation.displayName?.trim() && conversation.phoneNumber && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            {contactSecondary}
+          </Typography>
+        )}
 
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           {subtitle}
@@ -208,23 +218,8 @@ export const ConversationDetail: React.FC<Props> = ({
               {closeConfirm ? 'Confirmar cierre' : 'Cerrar conversación'}
             </Button>
           )}
-          {canReturn && (
-            <Button
-              size="small"
-              variant="outlined"
-              onClick={() => void handleReturn()}
-              disabled={returning}
-            >
-              {returnConfirm ? 'Confirmar devolución' : 'Devolver al bot'}
-            </Button>
-          )}
           {closeConfirm && (
             <Button size="small" onClick={() => setCloseConfirm(false)}>
-              Cancelar
-            </Button>
-          )}
-          {returnConfirm && (
-            <Button size="small" onClick={() => setReturnConfirm(false)}>
               Cancelar
             </Button>
           )}

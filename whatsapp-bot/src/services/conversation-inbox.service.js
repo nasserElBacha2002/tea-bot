@@ -16,11 +16,13 @@ import {
   notifyConversationAssigned,
   notifyConversationClosed,
   notifyConversationMessageCreated,
-  notifyConversationReturnedToBot,
+  notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
+import { validateContactName } from '../utils/contact-name.js';
+import { CONVERSATION_CHANNELS } from '../constants/conversation-channels.js';
 
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
-const ALLOWED_CHANNEL = new Set(['whatsapp', 'simulator']);
+const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
 const ALLOWED_PROVIDER = new Set(['twilio', 'internal']);
 const ALLOWED_SORT = new Set([
   'last_message_at_desc',
@@ -355,47 +357,51 @@ export class ConversationInboxService {
     return conv?.externalUserId?.startsWith('SIM-') ?? false;
   }
 
+  async updateConversationContact(conversationId, rawName) {
+    await this.ensureReady();
+    const conversation = await conversationRepository.getConversationById(conversationId);
+    if (!conversation) {
+      throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
+    }
+
+    const displayName = rawName === null || rawName === undefined
+      ? null
+      : validateContactName(rawName);
+
+    const updated = await conversationRepository.updateConversation(conversationId, {
+      displayName,
+    });
+
+    if (displayName && conversation.phoneNumber) {
+      await conversationRepository.syncDisplayNameByPhoneAndChannel(
+        conversation.phoneNumber,
+        conversation.channel,
+        displayName,
+      );
+    }
+
+    notifyConversationUpdated(updated);
+
+    return {
+      conversationId: updated.id,
+      phone: updated.phoneNumber ?? null,
+      contactName: updated.displayName ?? null,
+      displayName: updated.displayName ?? null,
+      conversation: mapConversationPublic(updated),
+    };
+  }
+
   async returnConversationToBot(conversationId) {
     await this.ensureReady();
     const conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
-    if (conversation.status === 'bot') {
-      return { conversation: mapConversationPublic(conversation) };
-    }
-    if (conversation.status === 'closed') {
-      throw appError(
-        'CONVERSATION_CLOSED',
-        'No se puede devolver al bot una conversación cerrada',
-        409,
-      );
-    }
-    if (!['waiting_human', 'assigned', 'paused'].includes(conversation.status)) {
-      throw appError('INVALID_STATE', 'Estado no compatible para devolver al bot', 409);
-    }
-
-    const updated = await conversationService.markBotActive(conversationId);
-
-    const openSession = await conversationSessionRepository.findLatestOpenByConversationId(
-      conversationId,
+    throw appError(
+      'RETURN_TO_BOT_DISABLED',
+      'La función de devolver una conversación al bot está desactivada.',
+      410,
     );
-    if (openSession) {
-      await conversationSessionRepository.updateSession(openSession.id, { status: 'active' });
-    }
-
-    const handoff = await humanHandoffRepository.findLatestByConversationId(conversationId);
-    if (handoff && ['pending', 'assigned'].includes(handoff.status)) {
-      await humanHandoffRepository.updateHandoff(handoff.id, {
-        status: 'resolved',
-        resolvedAt: new Date(),
-        resolutionNote: 'Devuelto al bot',
-      });
-    }
-
-    const result = { conversation: mapConversationPublic(updated) };
-    notifyConversationReturnedToBot(updated);
-    return result;
   }
 }
 

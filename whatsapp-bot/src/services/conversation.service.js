@@ -11,8 +11,8 @@ import {
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
-
-const CHANNEL_WHATSAPP = 'whatsapp';
+import conversationReopenService from './conversation-reopen.service.js';
+import { CHANNEL_WHATSAPP } from '../constants/conversation-channels.js';
 
 /** @internal exported for unit tests */
 export function buildTwilioConversationFields(event) {
@@ -279,6 +279,15 @@ class ConversationService {
   async reloadConversation(conversation) {
     if (!conversation?.id) return conversation;
     return (await conversationRepository.findById(conversation.id)) || conversation;
+  }
+
+  /**
+   * Reabre una conversación cerrada antes de persistir un mensaje entrante.
+   * @returns {Promise<object>} conversación actualizada (reabierta o sin cambios)
+   */
+  async reopenClosedConversationIfNeeded(conversation) {
+    const result = await conversationReopenService.reopenFromInboundMessage(conversation);
+    return result.conversation;
   }
 
   async persistInboundMessage(conversation, event, extraMetadata = {}) {

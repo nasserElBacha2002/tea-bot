@@ -8,7 +8,7 @@ import {
 } from '@mui/material';
 import type { InboxConversationItem } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
-import { formatConversationTitle } from '../utils/conversationUiLabels';
+import { formatListItemPrimary, formatListItemSecondary } from '../utils/conversationUiLabels';
 import {
   channelLabel,
   formatShortDateTime,
@@ -48,7 +48,12 @@ export const ConversationListItem: React.FC<Props> = ({
   isNew = false,
   onSelect,
 }) => {
-  const title = formatConversationTitle(conversation.phoneNumber, conversation.displayName);
+  const title = formatListItemPrimary(conversation.phoneNumber, conversation.displayName);
+  const listCaption = formatListItemSecondary(
+    conversation.phoneNumber,
+    conversation.displayName,
+    channelLabel(conversation.channel),
+  );
   const preview =
     conversation.lastMessage?.body?.trim() || 'Sin mensajes';
   const prefix = lastMessagePreviewPrefix(
@@ -56,7 +61,6 @@ export const ConversationListItem: React.FC<Props> = ({
     conversation.lastMessage?.senderType,
   );
   const time = formatShortDateTime(conversation.lastMessageAt);
-  const channel = channelLabel(conversation.channel);
   const accent = listPriorityAccent(conversation.status, unread || unreadCount > 0);
   const badge = listItemBadge(conversation.status, unread, unreadCount, isNew);
   const highlight = (unread || isNew) && !selected && conversation.status !== 'closed';
@@ -136,7 +140,7 @@ export const ConversationListItem: React.FC<Props> = ({
               fontWeight={highlight ? 600 : 400}
             >
               {time ? `${time} · ` : ''}
-              {channel}
+              {listCaption}
             </Typography>
           </Stack>
         }

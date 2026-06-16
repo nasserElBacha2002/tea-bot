@@ -27,7 +27,11 @@ class MessagePersistenceService {
     if (!this.isEnabled()) return null;
 
     const { conversation: initial } = await conversationService.findOrCreateTwilioConversation(event);
-    const conversation = await conversationService.reloadConversation(initial);
+    let conversation = await conversationService.reloadConversation(initial);
+
+    if (conversation.status === 'closed') {
+      conversation = await conversationService.reopenClosedConversationIfNeeded(conversation);
+    }
 
     if (isConversationInHumanMode(conversation)) {
       await conversationService.persistInboundMessage(

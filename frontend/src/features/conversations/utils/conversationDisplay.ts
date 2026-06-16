@@ -1,19 +1,15 @@
 import type { ConversationChannel, ConversationProvider } from '../types/conversation.types';
 import { conversationStatusLabel } from './conversationUiLabels';
+import { CHANNEL_LABELS } from '../constants/conversationChannels';
 
-const CHANNEL_LABELS: Record<ConversationChannel, string> = {
-  whatsapp: 'WhatsApp',
-  simulator: 'Simulador',
-};
+export function channelLabel(channel: ConversationChannel): string {
+  return CHANNEL_LABELS[channel] ?? channel;
+}
 
 const PROVIDER_LABELS: Record<ConversationProvider, string> = {
   twilio: 'Twilio',
   internal: 'Canal interno',
 };
-
-export function channelLabel(channel: ConversationChannel): string {
-  return CHANNEL_LABELS[channel] ?? channel;
-}
 
 export function providerLabel(provider: ConversationProvider): string {
   return PROVIDER_LABELS[provider] ?? provider;

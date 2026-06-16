@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { conversationsApi } from '../api/conversationsApi';
-import type { ConversationListFilters } from '../types/conversation.types';
+import type { ConversationListFilters, InboxConversationItem } from '../types/conversation.types';
 
 export const conversationKeys = {
   all: ['conversations'] as const,
@@ -85,13 +85,26 @@ export function useCloseConversation(filters: ConversationListFilters) {
   });
 }
 
-export function useReturnToBot(filters: ConversationListFilters) {
+export function useUpdateContact(filters: ConversationListFilters) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (conversationId: string) => conversationsApi.returnToBot(conversationId),
-    onSuccess: (_data, conversationId) => {
+    mutationFn: ({ conversationId, name }: { conversationId: string; name: string }) =>
+      conversationsApi.updateContact(conversationId, name),
+    onSuccess: (data, { conversationId }) => {
       queryClient.invalidateQueries({ queryKey: conversationKeys.list(filters) });
       queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) });
+      const detailKey = conversationKeys.detail(conversationId);
+      const prev = queryClient.getQueryData(detailKey);
+      if (prev && data.conversation) {
+        queryClient.setQueryData(detailKey, {
+          ...prev,
+          conversation: {
+            ...(prev as { conversation: InboxConversationItem }).conversation,
+            ...data.conversation,
+            displayName: data.contactName,
+          },
+        });
+      }
     },
   });
 }

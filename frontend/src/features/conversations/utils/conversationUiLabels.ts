@@ -19,6 +19,8 @@ export const CHANNEL_FILTER_LABELS = {
   simulator: 'Simulador',
 } as const;
 
+/** @deprecated Usar constants/conversationChannels.ts */
+
 export function formatConversationTitle(
   phoneNumber: string | null,
   displayName: string | null,
@@ -26,6 +28,24 @@ export function formatConversationTitle(
   if (displayName?.trim()) return displayName.trim();
   if (phoneNumber?.trim()) return phoneNumber;
   return 'Sin identificar';
+}
+
+export function formatListItemPrimary(
+  phoneNumber: string | null,
+  displayName: string | null,
+): string {
+  return formatConversationTitle(phoneNumber, displayName);
+}
+
+export function formatListItemSecondary(
+  phoneNumber: string | null,
+  displayName: string | null,
+  channelLabelText: string,
+): string {
+  const name = displayName?.trim();
+  const phone = phoneNumber?.trim();
+  if (name && phone) return `${phone} · ${channelLabelText}`;
+  return channelLabelText;
 }
 
 export function senderTypeLabel(senderType: string): string {

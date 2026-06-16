@@ -8,6 +8,7 @@ import type {
   ConversationMessagesResponse,
   InboxConversationItem,
 } from '../types/conversation.types';
+import { resolveChannelForApi } from '../constants/conversationChannels';
 
 import { resolveApiOrigin } from '../../../utils/apiOrigin';
 
@@ -27,7 +28,8 @@ client.interceptors.response.use(
 function buildParams(filters: ConversationListFilters): Record<string, string | number> {
   const params: Record<string, string | number> = {};
   if (filters.status) params.status = filters.status;
-  if (filters.channel) params.channel = filters.channel;
+  const channel = resolveChannelForApi(filters.channel);
+  if (channel) params.channel = channel;
   if (filters.provider) params.provider = filters.provider;
   if (filters.search?.trim()) params.search = filters.search.trim();
   if (filters.limit != null) params.limit = filters.limit;
@@ -83,10 +85,17 @@ export const conversationsApi = {
     return data.data;
   },
 
-  returnToBot: async (
+  updateContact: async (
     conversationId: string,
-  ): Promise<{ conversation: InboxConversationItem }> => {
-    const { data } = await client.post(`/${conversationId}/return-to-bot`);
+    name: string,
+  ): Promise<{
+    conversationId: string;
+    phone: string | null;
+    contactName: string | null;
+    displayName: string | null;
+    conversation: InboxConversationItem;
+  }> => {
+    const { data } = await client.patch(`/${conversationId}/contact`, { name });
     return data.data;
   },
 };

@@ -100,6 +100,18 @@ export const closeConversation = async (req, res) => {
   }
 };
 
+export const updateConversationContact = async (req, res) => {
+  try {
+    const data = await conversationInboxService.updateConversationContact(
+      req.params.conversationId,
+      req.body?.name,
+    );
+    return sendSuccess(res, data);
+  } catch (error) {
+    return handleServiceError(res, error);
+  }
+};
+
 export const returnConversationToBot = async (req, res) => {
   try {
     const data = await conversationInboxService.returnConversationToBot(

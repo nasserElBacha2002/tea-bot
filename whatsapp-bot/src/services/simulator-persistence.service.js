@@ -13,6 +13,7 @@ import {
   notifyConversationMessageCreated,
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
+import conversationReopenService from './conversation-reopen.service.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import {
   isConversationInHumanMode,
@@ -83,12 +84,18 @@ class SimulatorPersistenceService {
   }
 
   async findOrCreateSessionConversation(sessionId, { flowId, flowVersion }) {
-    const active = await this.findActiveBySessionId(sessionId);
-    if (active) {
-      return { conversation: active, created: false };
+    let conv = await this.findBySessionId(sessionId);
+    if (conv) {
+      if (conv.status === 'closed') {
+        const reopened = await conversationReopenService.reopenFromInboundMessage(conv, {
+          flowId,
+        });
+        conv = reopened.conversation;
+      }
+      return { conversation: conv, created: false };
     }
 
-    const conv = await conversationRepository.createConversation({
+    const created = await conversationRepository.createConversation({
       channel: SIMULATOR_CHANNEL,
       provider: SIMULATOR_PROVIDER,
       externalUserId: simulatorExternalUserId(sessionId),
@@ -98,8 +105,8 @@ class SimulatorPersistenceService {
       currentFlowVersion: flowVersion ?? null,
     });
 
-    notifyConversationCreated(conv);
-    return { conversation: conv, created: true };
+    notifyConversationCreated(created);
+    return { conversation: created, created: true };
   }
 
   async persistInboundUserMessage(conversation, sessionId, text) {
@@ -132,10 +139,18 @@ class SimulatorPersistenceService {
     const trimmed = String(text ?? '').trim();
     if (!trimmed) return null;
 
-    const { conversation, created } = await this.findOrCreateSessionConversation(sessionId, {
-      flowId,
-      flowVersion,
-    });
+    let conversation = await this.findBySessionId(sessionId);
+    let created = false;
+    if (!conversation) {
+      const row = await this.findOrCreateSessionConversation(sessionId, { flowId, flowVersion });
+      conversation = row.conversation;
+      created = row.created;
+    } else if (conversation.status === 'closed') {
+      const reopened = await conversationReopenService.reopenFromInboundMessage(conversation, {
+        flowId,
+      });
+      conversation = reopened.conversation;
+    }
 
     const inbound = await this.persistInboundUserMessage(conversation, sessionId, trimmed);
     await this.emitUserInbound(conversation, inbound);

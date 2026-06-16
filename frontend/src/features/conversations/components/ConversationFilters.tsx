@@ -9,11 +9,18 @@ import {
   Stack,
 } from '@mui/material';
 import { Refresh } from '@mui/icons-material';
-import type { ConversationListFilters, ConversationStatus } from '../types/conversation.types';
+import type {
+  ConversationChannel,
+  ConversationListFilters,
+  ConversationStatus,
+} from '../types/conversation.types';
 import {
+  CHANNEL_FILTER_ALL,
   CHANNEL_FILTER_LABELS,
-  CONVERSATION_STATUS_LABELS,
-} from '../utils/conversationUiLabels';
+  channelFilterLabel,
+  resolveChannelFilterValue,
+} from '../constants/conversationChannels';
+import { CONVERSATION_STATUS_LABELS } from '../utils/conversationUiLabels';
 
 interface Props {
   filters: ConversationListFilters;
@@ -37,6 +44,8 @@ export const ConversationFilters: React.FC<Props> = ({
   onRefresh,
   refreshing,
 }) => {
+  const channelValue = resolveChannelFilterValue(filters.channel);
+
   return (
     <Stack
       spacing={1.5}
@@ -73,14 +82,24 @@ export const ConversationFilters: React.FC<Props> = ({
           </Select>
         </FormControl>
         <FormControl size="small" fullWidth>
-          <InputLabel id="conv-channel-filter">Canal</InputLabel>
+          <InputLabel id="conv-channel-filter" shrink>
+            Canal
+          </InputLabel>
           <Select
             labelId="conv-channel-filter"
             label="Canal"
-            value={filters.channel ?? ''}
-            onChange={(e) => onChange({ channel: e.target.value as ConversationListFilters['channel'] })}
+            value={channelValue}
+            displayEmpty
+            renderValue={(selected) =>
+              channelFilterLabel(selected as ConversationChannel | typeof CHANNEL_FILTER_ALL)
+            }
+            onChange={(e) =>
+              onChange({
+                channel: e.target.value as ConversationListFilters['channel'],
+              })
+            }
           >
-            <MenuItem value="">{CHANNEL_FILTER_LABELS.all}</MenuItem>
+            <MenuItem value={CHANNEL_FILTER_ALL}>{CHANNEL_FILTER_LABELS.all}</MenuItem>
             <MenuItem value="whatsapp">{CHANNEL_FILTER_LABELS.whatsapp}</MenuItem>
             <MenuItem value="simulator">{CHANNEL_FILTER_LABELS.simulator}</MenuItem>
           </Select>

@@ -36,6 +36,7 @@ function mergeInboxListItem(
     ...(existing ?? {}),
     ...conv,
     id: conv.id,
+    displayName: conv.displayName ?? existing?.displayName ?? null,
     lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
     humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
   };
@@ -126,6 +127,7 @@ export function applyConversationLiveEvent(
         conversation: {
           ...prevDetail.conversation,
           ...conv,
+          displayName: conv.displayName ?? prevDetail.conversation.displayName,
           assignedAgentId:
             conv.assignedAgentId !== undefined
               ? conv.assignedAgentId

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ConversationInboxService, parseListFilters } from './conversation-inbox.service.js';
+import conversationRepository from '../repositories/conversation.repository.js';
 
 const sampleConversation = {
   id: 'conv-1',
@@ -222,4 +223,51 @@ test('listInboxConversations respeta filtros en repositorio', async () => {
   assert.equal(captured.status, 'bot');
   assert.equal(captured.channel, 'whatsapp');
   assert.equal(captured.search, '549');
+});
+
+test('updateConversationContact persiste displayName y sincroniza por teléfono', async () => {
+  const service = createService();
+  let synced = null;
+  const prevGet = conversationRepository.getConversationById;
+  const prevUpdate = conversationRepository.updateConversation;
+  const prevSync = conversationRepository.syncDisplayNameByPhoneAndChannel;
+
+  conversationRepository.getConversationById = async () => ({
+    ...sampleConversation,
+    phoneNumber: '+5491111111111',
+    channel: 'whatsapp',
+  });
+  conversationRepository.updateConversation = async (_id, patch) => ({
+    ...sampleConversation,
+    ...patch,
+  });
+  conversationRepository.syncDisplayNameByPhoneAndChannel = async (phone, channel, name) => {
+    synced = { phone, channel, name };
+  };
+
+  try {
+    const result = await service.updateConversationContact('conv-1', 'Juan Pérez');
+    assert.equal(result.contactName, 'Juan Pérez');
+    assert.equal(synced.name, 'Juan Pérez');
+    assert.equal(synced.channel, 'whatsapp');
+  } finally {
+    conversationRepository.getConversationById = prevGet;
+    conversationRepository.updateConversation = prevUpdate;
+    conversationRepository.syncDisplayNameByPhoneAndChannel = prevSync;
+  }
+});
+
+test('returnConversationToBot está desactivado', async () => {
+  const service = createService();
+  const prevGet = conversationRepository.getConversationById;
+  conversationRepository.getConversationById = async () => sampleConversation;
+
+  try {
+    await assert.rejects(
+      () => service.returnConversationToBot('conv-1'),
+      (err) => err.code === 'RETURN_TO_BOT_DISABLED' && err.httpStatus === 410,
+    );
+  } finally {
+    conversationRepository.getConversationById = prevGet;
+  }
 });

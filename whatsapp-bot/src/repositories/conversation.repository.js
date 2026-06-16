@@ -55,6 +55,16 @@ class ConversationRepository {
     return mapRow(rows[0]);
   }
 
+  async syncDisplayNameByPhoneAndChannel(phoneNumber, channel, displayName) {
+    if (!phoneNumber || !channel || displayName == null) return;
+    await query(
+      `UPDATE dbo.conversations
+       SET display_name = $1, updated_at = SYSUTCDATETIME()
+       WHERE phone_number = $2 AND channel = $3`,
+      [displayName, phoneNumber, channel],
+    );
+  }
+
   async createConversation(data) {
     const {
       channel,

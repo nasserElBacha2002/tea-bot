@@ -1,25 +1,19 @@
-// @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import {
-  conversationStatusLabel,
-  formatConversationTitle,
-  senderTypeLabel,
+  formatListItemPrimary,
+  formatListItemSecondary,
 } from './conversationUiLabels';
 
-describe('conversationUiLabels', () => {
-  it('usa etiquetas en español para estados', () => {
-    expect(conversationStatusLabel('waiting_human')).toBe('Esperando humano');
-    expect(conversationStatusLabel('bot')).toBe('Bot activo');
+describe('formatListItemPrimary/Secondary', () => {
+  it('con nombre muestra nombre primero y teléfono secundario', () => {
+    expect(formatListItemPrimary('+5491111111111', 'Juan Pérez')).toBe('Juan Pérez');
+    expect(formatListItemSecondary('+5491111111111', 'Juan Pérez', 'WhatsApp')).toBe(
+      '+5491111111111 · WhatsApp',
+    );
   });
 
-  it('formatea titulo con telefono o nombre', () => {
-    expect(formatConversationTitle('+54911', null)).toBe('+54911');
-    expect(formatConversationTitle(null, 'María')).toBe('María');
-    expect(formatConversationTitle(null, null)).toBe('Sin identificar');
-  });
-
-  it('traduce sender types', () => {
-    expect(senderTypeLabel('user')).toBe('Usuario');
-    expect(senderTypeLabel('bot')).toBe('Bot');
+  it('sin nombre usa teléfono como título', () => {
+    expect(formatListItemPrimary('+5491111111111', null)).toBe('+5491111111111');
+    expect(formatListItemSecondary('+5491111111111', null, 'WhatsApp')).toBe('WhatsApp');
   });
 });

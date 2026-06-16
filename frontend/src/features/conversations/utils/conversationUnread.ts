@@ -1,4 +1,5 @@
 import type { ConversationMessage, InboxConversationItem } from '../types/conversation.types';
+import { resolveChannelForApi } from '../constants/conversationChannels';
 
 function sortMessagesChronologically(messages: ConversationMessage[]): ConversationMessage[] {
   return [...messages].sort(
@@ -71,7 +72,8 @@ export function conversationMatchesFilters(
   filters: { status?: string; channel?: string; search?: string },
 ): boolean {
   if (filters.status && item.status !== filters.status) return false;
-  if (filters.channel && item.channel !== filters.channel) return false;
+  const channel = resolveChannelForApi(filters.channel);
+  if (channel && item.channel !== channel) return false;
   if (filters.search?.trim()) {
     const q = filters.search.trim().toLowerCase();
     const hay = `${item.displayName ?? ''} ${item.phoneNumber ?? ''} ${item.lastMessage?.body ?? ''}`.toLowerCase();
