@@ -418,7 +418,7 @@ export const ConversationsPage: React.FC = () => {
             savingContact={updateContactMutation.isPending}
             contactError={
               updateContactMutation.isError
-                ? extractApiError(updateContactMutation.error)
+                ? extractApiError(updateContactMutation.error).message
                 : null
             }
             actionError={actionError}
