@@ -17,6 +17,8 @@
     "db:import-flows": "node scripts/import-flows-to-db.js",
     "flows:migrate-json-to-db": "node scripts/import-flows-to-db.js",
     "flows:parity-check": "node scripts/flow-json-db-parity.js",
+  "flows:inspect-text": "node scripts/inspect-flow-snapshot-text.js",
+  "flows:repair-text": "node scripts/repair-flow-text-fields.js",
     "db:seed-conversations": "node scripts/seed-local-conversations.js",
     "db:seed-local": "node scripts/seed-local-conversations.js",
     "conversations:simulate-message": "node scripts/conversations-simulate-message.js",

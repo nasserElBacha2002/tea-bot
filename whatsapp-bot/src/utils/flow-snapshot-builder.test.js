@@ -55,6 +55,21 @@ test('checksum cambia tras editar mensaje', () => {
   assert.notEqual(a.checksum, b.checksum);
 });
 
+test('snapshot builder coerces numeric transition values to strings', () => {
+  const numericTransitions = new Map([
+    [
+      'welcome',
+      [
+        { type: 'match', value: 1, nextNodeKey: 'next_step', priority: 0, metadataJson: null },
+      ],
+    ],
+  ]);
+  const doc = buildFlowDocumentFromTables(flow, version, nodes, numericTransitions);
+  const welcome = doc.nodes.find((n) => n.id === 'welcome');
+  assert.equal(welcome.transitions[0].value, '1');
+  assert.doesNotThrow(() => flowValidator.validate(doc));
+});
+
 test('checksum estable sin cambios', () => {
   const a = buildSnapshotPayload(flow, version, nodes, transitionsByNodeKey);
   const b = buildSnapshotPayload(flow, version, nodes, transitionsByNodeKey);

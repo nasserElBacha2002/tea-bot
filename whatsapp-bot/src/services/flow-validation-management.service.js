@@ -1,4 +1,6 @@
 import flowValidator from '../utils/flow-validator.js';
+import { compileFlow } from '../utils/compile-flow.js';
+import { validateTransitionValueForPublish } from '../utils/flow-transition-value.js';
 import { buildFlowDocumentFromTables } from '../utils/flow-snapshot-builder.js';
 import flowCatalogRepository from '../repositories/flow-catalog.repository.js';
 
@@ -142,6 +144,22 @@ class FlowValidationManagementService {
           nodeKey: trans.sourceNodeKey,
         });
       }
+      if (trans.value !== undefined && trans.value !== null) {
+        try {
+          validateTransitionValueForPublish(trans.type, trans.value, {
+            flowKey: flow.flowKey,
+            version: version.versionLabel,
+            nodeId: trans.sourceNodeKey,
+            path: `nodes.${trans.sourceNodeKey}.transitions[].value`,
+          });
+        } catch (err) {
+          errors.push({
+            code: 'FLOW_TRANSITION_VALUE_INVALID',
+            message: err.message,
+            nodeKey: trans.sourceNodeKey,
+          });
+        }
+      }
     }
 
     if (version.entryNodeKey && nodeKeys.has(version.entryNodeKey)) {
@@ -186,6 +204,7 @@ class FlowValidationManagementService {
       try {
         const doc = buildFlowDocumentFromTables(flow, version, nodes, byKey);
         flowValidator.validate(doc);
+        compileFlow(doc);
       } catch (err) {
         errors.push({
           code: 'FLOW_VALIDATION_ENGINE',

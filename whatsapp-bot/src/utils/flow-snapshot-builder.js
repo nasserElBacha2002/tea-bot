@@ -1,4 +1,5 @@
 import { computeFlowChecksum } from './flow-checksum.js';
+import { coerceTransitionValueForDocument } from './flow-transition-value.js';
 
 /**
  * Reconstruye el documento de flujo esperado por FlowEngine desde tablas normalizadas.
@@ -33,7 +34,12 @@ export function buildFlowDocumentFromTables(flow, version, nodes, transitionsByN
           nextNode: t.nextNodeKey,
         };
         if (t.value !== undefined && t.value !== null) {
-          tr.value = t.value;
+          tr.value = coerceTransitionValueForDocument(t.value, {
+            flowKey: flow.flowKey,
+            version: version.versionLabel,
+            nodeId: node.nodeKey,
+            path: `nodes.${node.nodeKey}.transitions[].value`,
+          });
         }
         if (t.priority != null) tr.priority = t.priority;
         if (t.metadataJson && typeof t.metadataJson === 'object') {

@@ -1,7 +1,22 @@
 import { normalizeGlobalCommandInput } from './global-commands.js';
+import { FlowFieldValidationError } from './flow-field-validation.js';
 
-function normalizeMessage(text) {
-  return (text || '').trim().toLowerCase();
+function normalizeMessage(text, ctx) {
+  if (text == null || text === '') return '';
+  if (typeof text === 'number' || typeof text === 'boolean') {
+    return String(text).trim().toLowerCase();
+  }
+  if (typeof text !== 'string') {
+    throw new FlowFieldValidationError({
+      flowKey: ctx?.flowKey || 'unknown',
+      version: ctx?.version,
+      nodeId: ctx?.nodeId,
+      path: ctx?.path || 'transition.value',
+      expectedType: 'string',
+      value: text,
+    });
+  }
+  return text.trim().toLowerCase();
 }
 
 export function compileFlow(flow) {
@@ -21,6 +36,8 @@ export function compileFlow(flow) {
   let transitionCount = 0;
   let exactValueCount = 0;
   let includesRuleCount = 0;
+  const flowKey = flow.id || 'unknown';
+  const flowVersion = flow.version;
 
   for (const node of flow.nodes) {
     if (nodesById.has(node.id)) {
@@ -40,9 +57,15 @@ export function compileFlow(flow) {
     const commandTransitions = new Map();
 
     for (const transition of transitions) {
+      const ctx = {
+        flowKey,
+        version: flowVersion,
+        nodeId: node.id,
+        path: `nodes.${node.id}.transitions[].value`,
+      };
       const type = transition?.type;
       if (type === 'match') {
-        const key = normalizeMessage(transition.value);
+        const key = normalizeMessage(transition.value, ctx);
         if (key && !exactMap.has(key)) {
           exactMap.set(key, transition);
           exactValueCount += 1;
@@ -51,7 +74,10 @@ export function compileFlow(flow) {
       }
       if (type === 'matchAny' && Array.isArray(transition.value)) {
         for (const rawValue of transition.value) {
-          const key = normalizeMessage(rawValue);
+          const key = normalizeMessage(rawValue, {
+            ...ctx,
+            path: `nodes.${node.id}.transitions[].value[]`,
+          });
           if (key && !exactMap.has(key)) {
             exactMap.set(key, transition);
             exactValueCount += 1;
@@ -60,7 +86,7 @@ export function compileFlow(flow) {
         continue;
       }
       if (type === 'matchIncludes') {
-        const needle = normalizeMessage(transition.value);
+        const needle = normalizeMessage(transition.value, ctx);
         if (needle) {
           includesRules.push({ needle, transition });
           includesRuleCount += 1;

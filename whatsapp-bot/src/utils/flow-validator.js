@@ -2,6 +2,9 @@
  * Validador de flujos conversacionales.
  * Verifica la integridad lógica y estructural de los archivos JSON.
  */
+import { FlowFieldValidationError } from './flow-field-validation.js';
+import { validateTransitionValueForPublish } from './flow-transition-value.js';
+
 class FlowValidator {
   constructor() {
     this.supportedTypes = ['message', 'capture', 'redirect', 'end'];
@@ -18,7 +21,9 @@ class FlowValidator {
    * @throws {Error} - Si el flujo es inválido.
    */
   validate(flow) {
-    const { id, entryNode, fallbackNode, nodes, schemaVersion } = flow;
+    const { id, entryNode, fallbackNode, nodes, schemaVersion, version } = flow;
+    const flowKey = id;
+    const flowVersion = version;
 
     // 1. Campos base
     if (!id) throw new Error('El flujo debe tener un "id" único.');
@@ -55,33 +60,52 @@ class FlowValidator {
 
     // 3. Validar cada nodo individualmente
     for (const node of nodes) {
-      this.validateNode(node, nodeIds, id);
+      this.validateNode(node, nodeIds, flowKey, flowVersion);
     }
   }
 
   /**
    * Valida la estructura de un nodo.
    */
-  validateNode(node, allNodeIds, flowId) {
-    // Campos extra (p.ej. ui, priority en transiciones) se ignoran; no afectan al runtime.
-    const { id, type, message, transitions, nextNode } = node;
+  validateNode(node, allNodeIds, flowId, flowVersion) {
+    const { id, type, message, transitions, nextNode, text } = node;
 
     if (!id) throw new Error(`Un nodo en el flujo "${flowId}" no tiene "id".`);
     if (!type || !this.supportedTypes.includes(type)) {
       throw new Error(`El nodo "${id}" tiene un tipo inválido o no soportado: "${type}".`);
     }
 
-    if (!message || typeof message !== 'string') {
+    if (message == null || message === '') {
       throw new Error(`El nodo "${id}" de tipo "${type}" requiere un campo "message".`);
     }
+    if (typeof message !== 'string') {
+      throw new FlowFieldValidationError({
+        flowKey: flowId,
+        version: flowVersion,
+        nodeId: id,
+        path: `nodes.${id}.message`,
+        expectedType: 'string',
+        value: message,
+      });
+    }
 
-    // Validar transiciones si existen
+    if (text != null && typeof text !== 'string') {
+      throw new FlowFieldValidationError({
+        flowKey: flowId,
+        version: flowVersion,
+        nodeId: id,
+        path: `nodes.${id}.text`,
+        expectedType: 'string',
+        value: text,
+      });
+    }
+
     if (transitions) {
       if (!Array.isArray(transitions)) {
         throw new Error(`Las transiciones del nodo "${id}" deben ser un array.`);
       }
 
-      for (const trans of transitions) {
+      transitions.forEach((trans, index) => {
         if (!trans.nextNode) {
           throw new Error(`Una transición en el nodo "${id}" no define "nextNode".`);
         }
@@ -91,7 +115,25 @@ class FlowValidator {
         if (trans.type && !this.supportedTransitions.includes(trans.type)) {
           throw new Error(`El nodo "${id}" tiene una transición con tipo desconocido: "${trans.type}".`);
         }
-      }
+        if (trans.text != null && typeof trans.text !== 'string') {
+          throw new FlowFieldValidationError({
+            flowKey: flowId,
+            version: flowVersion,
+            nodeId: id,
+            path: `nodes.${id}.transitions[${index}].text`,
+            expectedType: 'string',
+            value: trans.text,
+          });
+        }
+        if (trans.value !== undefined) {
+          validateTransitionValueForPublish(trans.type, trans.value, {
+            flowKey: flowId,
+            version: flowVersion,
+            nodeId: id,
+            path: `nodes.${id}.transitions[${index}].value`,
+          });
+        }
+      });
     }
 
     // Validar nextNode directo (usado en redirect o message sin opciones)

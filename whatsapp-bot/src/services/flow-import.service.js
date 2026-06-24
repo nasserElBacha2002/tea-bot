@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import flowValidator from '../utils/flow-validator.js';
+import { coerceTransitionValueForDocument } from '../utils/flow-transition-value.js';
 import flowDbRepository from '../repositories/flow-db.repository.js';
 import { computeFlowChecksum } from '../utils/flow-checksum.js';
 import {
@@ -42,7 +43,14 @@ function buildTransitionRows(node) {
       const { type, value, nextNode, priority, ...rest } = trans;
       rows.push({
         type,
-        value: value ?? null,
+        value:
+          value === undefined || value === null
+            ? null
+            : coerceTransitionValueForDocument(value, {
+                flowKey: node.id,
+                nodeId: node.id,
+                path: `nodes.${node.id}.transitions[${index}].value`,
+              }),
         nextNodeKey: nextNode,
         priority: priority ?? index,
         metadataJson: Object.keys(rest).length ? rest : null,
