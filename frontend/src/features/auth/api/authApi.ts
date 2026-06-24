@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AuthUser } from '../types/auth.types';
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
   ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, '')
@@ -12,7 +13,7 @@ const client = axios.create({
   },
 });
 
-export type AuthUser = { username: string; agentId?: string };
+export type { AuthUser };
 
 export const authApi = {
   login: async (username: string, password: string): Promise<{ ok: true; user: AuthUser }> => {

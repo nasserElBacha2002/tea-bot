@@ -10,6 +10,7 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/authApi';
+import { defaultHomePath } from '../utils/authPermissions';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -23,8 +24,8 @@ export const LoginPage: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      await authApi.login(username.trim(), password);
-      navigate('/flows', { replace: true });
+      const res = await authApi.login(username.trim(), password);
+      navigate(defaultHomePath(res.user.role), { replace: true });
     } catch {
       setError('Credenciales inválidas.');
     } finally {

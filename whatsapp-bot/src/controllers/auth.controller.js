@@ -3,18 +3,11 @@ import {
   createSignedSessionToken,
   getSessionCookieName,
   readSessionTokenFromRequest,
-  verifyPasswordHash,
   verifySignedSessionToken,
 } from '../services/admin-auth.service.js';
-import crypto from 'crypto';
+import { authenticateAdminUser } from '../services/admin-users.service.js';
 import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
-
-function timingSafeUser(a, b) {
-  const ba = Buffer.from(String(a), 'utf8');
-  const bb = Buffer.from(String(b), 'utf8');
-  if (ba.length !== bb.length) return false;
-  return crypto.timingSafeEqual(ba, bb);
-}
+import { normalizeSessionRole } from '../auth/roles.js';
 
 function buildSessionCookieHeader(token, maxAgeSec) {
   const name = getSessionCookieName();
@@ -40,26 +33,35 @@ function clearSessionCookieHeader() {
   return parts.join('; ');
 }
 
+function buildAuthUser(session) {
+  const role = normalizeSessionRole(session.role);
+  return {
+    username: session.username,
+    role,
+    agentId: resolveAgentIdFromUsername(session.username),
+  };
+}
+
 export const login = (req, res) => {
   const { username, password } = req.body || {};
+  const authenticated = authenticateAdminUser(username, password);
 
-  const userOk =
-    typeof username === 'string'
-    && typeof config.adminUsername === 'string'
-    && timingSafeUser(username.trim(), config.adminUsername);
-  const passOk = verifyPasswordHash(password, config.adminPasswordHash);
-
-  if (!userOk || !passOk) {
+  if (!authenticated) {
     return res.status(401).json({ ok: false, error: 'INVALID_CREDENTIALS' });
   }
 
-  const token = createSignedSessionToken(config.adminUsername, config.sessionSecret);
+  const token = createSignedSessionToken(
+    authenticated.username,
+    config.sessionSecret,
+    authenticated.role,
+  );
   res.setHeader('Set-Cookie', buildSessionCookieHeader(token, 7 * 24 * 60 * 60));
   return res.json({
     ok: true,
     user: {
-      username: config.adminUsername,
-      agentId: resolveAgentIdFromUsername(config.adminUsername),
+      username: authenticated.username,
+      role: authenticated.role,
+      agentId: resolveAgentIdFromUsername(authenticated.username),
     },
   });
 };
@@ -72,10 +74,7 @@ export const me = (req, res) => {
   }
   return res.json({
     ok: true,
-    user: {
-      username: session.username,
-      agentId: resolveAgentIdFromUsername(session.username),
-    },
+    user: buildAuthUser(session),
   });
 };
 

@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { normalizeSessionRole } from '../auth/roles.js';
 
 const COOKIE_NAME = 'tea_session';
 
@@ -21,9 +22,12 @@ export function verifyPasswordHash(plainPassword, storedHashHex) {
   return timingSafeEqualStrings(digest, normalized);
 }
 
-export function createSignedSessionToken(username, sessionSecret) {
+export function createSignedSessionToken(username, sessionSecret, role) {
   const exp = Date.now() + 7 * 24 * 60 * 60 * 1000;
-  const payload = Buffer.from(JSON.stringify({ u: username, exp }), 'utf8').toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({ u: username, exp, r: normalizeSessionRole(role) }),
+    'utf8',
+  ).toString('base64url');
   const sig = crypto.createHmac('sha256', sessionSecret).update(payload).digest('base64url');
   return `${payload}.${sig}`;
 }
@@ -47,7 +51,11 @@ export function verifySignedSessionToken(token, sessionSecret) {
   }
   if (!data || typeof data.u !== 'string' || typeof data.exp !== 'number') return null;
   if (data.exp < Date.now()) return null;
-  return { username: data.u, exp: data.exp };
+  return {
+    username: data.u,
+    exp: data.exp,
+    role: normalizeSessionRole(data.r),
+  };
 }
 
 export function parseCookies(header) {

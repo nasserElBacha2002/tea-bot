@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../middleware/require-auth.middleware.js';
+import { requireAdmin } from '../middleware/require-admin.middleware.js';
 import {
   listDrafts,
   getDraft,
@@ -25,6 +26,7 @@ import {
 const router = express.Router();
 
 router.use(requireAuth);
+router.use(requireAdmin);
 
 router.post('/validate', validateFlow);
 

@@ -21,6 +21,10 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || '',
   adminUsername: (process.env.ADMIN_USERNAME || '').trim(),
   adminPasswordHash: (process.env.ADMIN_PASSWORD_HASH || '').trim().toLowerCase(),
+  conversationsOperatorUsername: (process.env.CONVERSATIONS_OPERATOR_USERNAME || '').trim(),
+  conversationsOperatorPasswordHash: (
+    process.env.CONVERSATIONS_OPERATOR_PASSWORD_HASH || ''
+  ).trim().toLowerCase(),
   sessionSecret: process.env.SESSION_SECRET || '',
   googleSheetsEnabled: ['1', 'true', 'yes', 'on'].includes(
     String(process.env.GOOGLE_SHEETS_ENABLED || '').trim().toLowerCase()
@@ -72,6 +76,30 @@ export const validateConfig = () => {
   if (String(config.sessionSecret).length < 32) {
     console.error('❌ SESSION_SECRET debe tener al menos 32 caracteres.');
     process.exit(1);
+  }
+
+  if (config.conversationsOperatorUsername || config.conversationsOperatorPasswordHash) {
+    if (!config.conversationsOperatorUsername || !config.conversationsOperatorPasswordHash) {
+      console.error(
+        '❌ CONVERSATIONS_OPERATOR_USERNAME y CONVERSATIONS_OPERATOR_PASSWORD_HASH deben definirse juntos.',
+      );
+      process.exit(1);
+    }
+    if (!/^[a-f0-9]{64}$/.test(config.conversationsOperatorPasswordHash)) {
+      console.error(
+        '❌ CONVERSATIONS_OPERATOR_PASSWORD_HASH debe ser SHA-256 en hexadecimal (64 caracteres).',
+      );
+      process.exit(1);
+    }
+    if (
+      config.adminUsername
+      && config.conversationsOperatorUsername.toLowerCase() === config.adminUsername.toLowerCase()
+    ) {
+      console.error(
+        '❌ CONVERSATIONS_OPERATOR_USERNAME no puede ser igual a ADMIN_USERNAME.',
+      );
+      process.exit(1);
+    }
   }
 
   const metaKeys = ['META_VERIFY_TOKEN', 'META_ACCESS_TOKEN', 'META_PHONE_NUMBER_ID'];

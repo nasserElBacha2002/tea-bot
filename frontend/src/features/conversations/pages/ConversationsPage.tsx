@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
@@ -17,7 +17,8 @@ import {
   useUpdateContact,
 } from '../hooks/useConversations';
 import { DEFAULT_CONVERSATION_CHANNEL, resolveChannelForApi } from '../constants/conversationChannels';
-import { useConversationsLiveUpdates } from '../hooks/useConversationsLiveUpdates';
+import { useConversationLive } from '../context/conversationLiveContext';
+import { useConversationLiveHandlers } from '../hooks/useConversationLiveHandlers';
 import { useConversationReadState } from '../hooks/useConversationReadState';
 import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
@@ -146,9 +147,13 @@ export const ConversationsPage: React.FC = () => {
     [selectedId, clearUnreadFor],
   );
 
-  const { status: liveStatus, markManual } = useConversationsLiveUpdates({
-    enabled: true,
-    selectedConversationId: selectedId,
+  const { status: liveStatus, markManual, setSelectedConversationId } = useConversationLive();
+
+  useEffect(() => {
+    setSelectedConversationId(selectedId);
+  }, [selectedId, setSelectedConversationId]);
+
+  useConversationLiveHandlers({
     onUnread: bumpUnread,
     onNewConversation: markNewConversation,
     onHandoffWaiting: markHandoffWaiting,

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/require-auth.middleware.js';
+import { requireAdmin } from '../middleware/require-admin.middleware.js';
 import simulatorService from '../services/simulator.service.js';
 import { sendSuccess, sendError, HTTP_STATUS } from '../utils/http-errors.js';
 import flowLoader from '../utils/flow-loader.js';
@@ -12,6 +13,7 @@ function devToolsEnabled() {
 }
 
 router.use(requireAuth);
+router.use(requireAdmin);
 router.use((req, res, next) => {
   if (!devToolsEnabled()) {
     return res.status(404).json({ ok: false, error: 'NOT_FOUND' });

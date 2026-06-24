@@ -1,5 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../middleware/require-auth.middleware.js';
+import { requireAdmin } from '../middleware/require-admin.middleware.js';
 import {
   listFlows,
   getFlowDetail,
@@ -26,6 +27,7 @@ const nodesRouter = express.Router();
 const transitionsRouter = express.Router();
 
 router.use(requireAuth);
+router.use(requireAdmin);
 
 // /api/flow-management/flows
 router.get('/flows', listFlows);

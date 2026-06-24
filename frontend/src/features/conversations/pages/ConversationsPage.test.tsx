@@ -13,17 +13,27 @@ vi.mock('../../auth/api/authApi', () => ({
   authApi: {
     me: vi.fn().mockResolvedValue({
       ok: true,
-      user: { username: 'admin', agentId: 'agent-test-id' },
+      user: { username: 'admin', agentId: 'agent-test-id', role: 'admin' },
     }),
   },
 }));
 
-vi.mock('../hooks/useConversationsLiveUpdates', () => ({
-  useConversationsLiveUpdates: () => ({
+vi.mock('../context/conversationLiveContext', () => ({
+  useConversationLive: () => ({
     status: 'live' as const,
     markManual: vi.fn(),
     reconnect: vi.fn(),
+    setSelectedConversationId: vi.fn(),
+    registerHandlers: vi.fn(() => () => {}),
+    soundAlertsEnabled: true,
+    setSoundAlertsEnabled: vi.fn(),
+    soundBlocked: false,
+    unlockSound: vi.fn(async () => true),
   }),
+}));
+
+vi.mock('../hooks/useConversationLiveHandlers', () => ({
+  useConversationLiveHandlers: vi.fn(),
 }));
 
 vi.mock('../hooks/useConversations', () => ({
