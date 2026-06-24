@@ -3,6 +3,7 @@ import { getFlowStorageMode } from '../config/flow-storage.js';
 import flowRepository from '../repositories/flow.repository.js';
 import flowValidator from '../utils/flow-validator.js';
 import { compileFlow } from './compile-flow.js';
+import { normalizeFlowDocumentForRuntime } from './flow-document-runtime-normalize.js';
 import { logPerf, nowMs, roundMs } from './perf-timer.js';
 
 class FlowLoader {
@@ -53,8 +54,9 @@ class FlowLoader {
       return null;
     }
 
-    const { flow, source } = loaded;
+    const { flow: rawFlow, source } = loaded;
     const fileHint = source.file || `${source.version}.snapshot`;
+    const flow = normalizeFlowDocumentForRuntime(rawFlow);
     let compiled;
     try {
       flowValidator.validate(flow);
