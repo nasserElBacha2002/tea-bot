@@ -14,7 +14,7 @@ vi.mock('@mui/material', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@mui/material')>();
   return {
     ...mod,
-    useMediaQuery: (...args: unknown[]) => useMediaQueryMock(...args),
+    useMediaQuery: (() => useMediaQueryMock()) as typeof mod.useMediaQuery,
   };
 });
 
