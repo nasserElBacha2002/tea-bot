@@ -107,7 +107,22 @@ export const importJsonAsNewVersion = async (req, res) => {
     );
   }
 
+  const importTarget = req.body?.target === 'draft' ? 'draft' : 'new_version';
+
   try {
+    if (importTarget === 'draft') {
+      const draft = await flowDocumentService.importJsonToDraft(flowId, payloadFlow);
+      return sendSuccess(res, {
+        ok: true,
+        flowId,
+        version: draft.version,
+        status: 'draft',
+        activated: false,
+        message: 'JSON importado al borrador actual sin crear una nueva versión.',
+        flow: draft,
+      });
+    }
+
     const imported = await flowDocumentService.importPublishedVersionFromJson(flowId, payloadFlow, { publish });
     if (imported.wasActivated) {
       try {

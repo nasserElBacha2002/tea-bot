@@ -11,6 +11,7 @@ import { mergeValidationIssues, validateConversationViewModel } from '../model/c
 import { validateFlowPayload } from '../model/flowPayloadValidation';
 import { buildPublishChangeSummary, flowFingerprintForPublish } from '../model/publishSummary';
 import { buildPublishWarnings } from '../model/publishWarnings';
+import { extractApiError } from '../../../../utils/apiError';
 
 export type PublishDialogStep = 'closed' | 'review' | 'confirm' | 'risky';
 
@@ -112,8 +113,9 @@ export function useConversationPublish({
       await publishFlow.mutateAsync(flowId);
       setStep('closed');
       return true;
-    } catch {
-      setPublishError('No se pudo poner en vivo la conversación. Intenta nuevamente.');
+    } catch (err) {
+      const { message } = extractApiError(err);
+      setPublishError(message || 'No se pudo poner en vivo la conversación. Intenta nuevamente.');
       return false;
     }
   }, [saveDraft, publishFlow, flowId]);

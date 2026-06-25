@@ -37,7 +37,9 @@ const PublishConfirmDialogBody: React.FC<
         />
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
+            <Typography component="div" variant="body2" sx={{ whiteSpace: 'pre-line' }}>
+              {error}
+            </Typography>
           </Alert>
         )}
       </DialogContent>

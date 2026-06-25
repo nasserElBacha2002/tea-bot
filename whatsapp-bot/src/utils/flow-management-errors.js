@@ -6,6 +6,7 @@ export const FLOW_ERROR_MESSAGES = {
   FLOW_VERSION_NOT_DRAFT: 'Solo se pueden editar versiones en estado borrador.',
   FLOW_PUBLISH_VALIDATION_FAILED:
     'No se puede publicar el borrador porque tiene errores de validación.',
+  FLOW_VALIDATION_FAILED: 'El flujo tiene errores de validación.',
   FLOW_ENTRY_NODE_MISSING: 'El nodo de entrada no existe.',
   FLOW_FALLBACK_NODE_MISSING: 'El nodo fallback no existe.',
   FLOW_TRANSITION_TARGET_MISSING: 'Una transición apunta a un nodo que no existe.',

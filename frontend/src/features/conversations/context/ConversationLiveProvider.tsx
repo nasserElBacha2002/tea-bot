@@ -6,7 +6,6 @@ import { useAuthUser } from '../../auth/context/AuthContext';
 import { canAccessConversations } from '../../auth/utils/authPermissions';
 import { useConversationsLiveUpdates } from '../hooks/useConversationsLiveUpdates';
 import { useConversationAlerts } from '../hooks/useConversationAlerts';
-import type { ConversationLiveEvent } from '../types/conversationLive.types';
 import {
   ConversationLiveContext,
   type ConversationLiveContextValue,
@@ -46,12 +45,8 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
     };
   }, []);
 
-  const onLiveEvent = useCallback(
-    (event: ConversationLiveEvent) => {
-      void alerts.processEvent(event);
-    },
-    [alerts],
-  );
+  const onLiveEventRef = useRef(alerts.processEvent);
+  onLiveEventRef.current = alerts.processEvent;
 
   const { status, markManual, reconnect } = useConversationsLiveUpdates({
     enabled: canListen,
@@ -59,7 +54,7 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
     onUnread: (id) => handlersRef.current.onUnread?.(id),
     onNewConversation: (id) => handlersRef.current.onNewConversation?.(id),
     onHandoffWaiting: (id) => handlersRef.current.onHandoffWaiting?.(id),
-    onLiveEvent,
+    onLiveEvent: (event) => void onLiveEventRef.current(event),
   });
 
   const value = useMemo<ConversationLiveContextValue>(

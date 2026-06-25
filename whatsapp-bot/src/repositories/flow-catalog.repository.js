@@ -2,7 +2,7 @@ import { query, parseJsonColumn, isConversationDbEnabled } from '../db/index.js'
 
 function serializeJson(value) {
   if (value == null) return null;
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  return JSON.stringify(value);
 }
 
 function mapFlow(row) {

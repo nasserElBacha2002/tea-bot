@@ -49,8 +49,10 @@ export function useConversationHistory(flowId: string, options?: { enabled?: boo
     restoreVersionToDraft,
     isRestoring: duplicateMutation.isPending,
     validateImportedFlow: (flow: Partial<Flow>) => validateMutation.mutateAsync(flow),
-    importJsonAsNewVersion: (flow: Partial<Flow>, publish = false) =>
-      importMutation.mutateAsync({ flowId, flow, publish }),
+    importJsonAsNewVersion: (
+      flow: Partial<Flow>,
+      options: { publish?: boolean; target?: 'draft' | 'new_version' } = {}
+    ) => importMutation.mutateAsync({ flowId, flow, ...options }),
     isValidatingImport: validateMutation.isPending,
     isImporting: importMutation.isPending,
     lastError,

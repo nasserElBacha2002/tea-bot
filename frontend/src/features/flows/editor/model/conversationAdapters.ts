@@ -32,18 +32,25 @@ function mapTransitionToResponse(
   const displayOrder = index;
   const enginePriority = t.priority;
 
-  if (t.type === 'match' && typeof t.value === 'string') {
-    return {
-      response: {
-        uiId,
-        kind: 'exact',
-        values: [t.value],
-        destinationStepId: next,
-        displayOrder,
-        enginePriority,
-      },
-      preserved: false,
-    };
+  if (t.type === 'match') {
+    let matchValue: string | null = null;
+    if (typeof t.value === 'string') matchValue = t.value;
+    else if (typeof t.value === 'number' || typeof t.value === 'boolean') {
+      matchValue = String(t.value);
+    }
+    if (matchValue !== null) {
+      return {
+        response: {
+          uiId,
+          kind: 'exact',
+          values: [matchValue],
+          destinationStepId: next,
+          displayOrder,
+          enginePriority,
+        },
+        preserved: false,
+      };
+    }
   }
 
   if (t.type === 'matchAny' && Array.isArray(t.value)) {

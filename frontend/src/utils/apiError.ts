@@ -40,29 +40,63 @@ const ERROR_MESSAGES: Record<string, string> = {
   FLOW_TRANSITION_NOT_FOUND: 'Transición no encontrada.',
 };
 
+export interface FlowValidationErrorDetail {
+  code: string;
+  message: string;
+  nodeKey?: string | null;
+  field?: string;
+  path?: string;
+  expectedType?: string;
+  receivedType?: string;
+  receivedValue?: unknown;
+  transitionType?: string | null;
+  priority?: number | null;
+  transitionIndex?: number | null;
+}
+
+export interface FlowValidationDetails {
+  valid?: boolean;
+  errors?: FlowValidationErrorDetail[];
+  warnings?: FlowValidationErrorDetail[];
+}
+
+type ApiErrorBody = {
+  error?: string;
+  message?: string;
+  details?: FlowValidationDetails & { cause?: string };
+};
+
 export function mapApiErrorCode(code: string | undefined, fallback?: string): string {
   if (!code) return fallback || ERROR_MESSAGES.UNKNOWN_ERROR;
   return ERROR_MESSAGES[code] || fallback || code;
+}
+
+export function formatFlowValidationErrors(details?: FlowValidationDetails): string | null {
+  const errors = details?.errors;
+  if (!errors?.length) return null;
+  const lines = errors.map(e => e.message).filter(Boolean);
+  return lines.length ? lines.join('\n') : null;
 }
 
 export function extractApiError(error: unknown): {
   code: string;
   message: string;
   status?: number;
+  details?: FlowValidationDetails;
 } {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
-    const data = error.response?.data as
-      | { error?: string; message?: string; details?: { cause?: string } }
-      | undefined;
+    const data = error.response?.data as ApiErrorBody | undefined;
     const code =
       data?.error
       || data?.details?.cause
       || (status === 503 ? 'CONVERSATION_PERSISTENCE_UNAVAILABLE' : 'REQUEST_FAILED');
+    const validationLines = formatFlowValidationErrors(data?.details);
     const message =
-      data?.message
+      validationLines
+      || data?.message
       || mapApiErrorCode(code, typeof data?.error === 'string' ? data.error : undefined);
-    return { code, message, status };
+    return { code, message, status, details: data?.details };
   }
   if (error instanceof Error) {
     return { code: 'UNKNOWN_ERROR', message: error.message };

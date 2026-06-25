@@ -11,7 +11,7 @@ import {
 import { MoreVert } from '@mui/icons-material';
 import type { ConversationStep } from '../model/conversationViewModel';
 import type { ConversationValidationIssue } from '../model/conversationValidation';
-import { issuesForResponse, issuesForStep } from '../model/conversationValidation';
+import { issuesForResponse, issuesForStep, issuesForPreservedTransitions } from '../model/conversationValidation';
 import { EmptyResponsesState } from './EmptyResponsesState';
 import { AddResponseMenu } from './AddResponseMenu';
 import { ResponseRow } from './ResponseRow';
@@ -61,6 +61,7 @@ export const StepCard: React.FC<StepCardProps> = ({
   const menuOpen = Boolean(menuAnchor);
 
   const stepIssues = issuesForStep(step.internalId, validationIssues);
+  const preservedIssues = issuesForPreservedTransitions(step.internalId, validationIssues);
   const messageIssue = stepIssues.find(i => i.code === 'STEP_MESSAGE_EMPTY');
   const needsResponseIssue = stepIssues.find(i => i.code === 'STEP_NEEDS_RESPONSE');
 
@@ -194,6 +195,28 @@ export const StepCard: React.FC<StepCardProps> = ({
               />
             );
           })}
+        </Box>
+      )}
+
+      {preservedIssues.length > 0 && (
+        <Box
+          sx={{
+            mt: 2,
+            p: 1.5,
+            borderRadius: 1,
+            bgcolor: 'error.50',
+            border: '1px solid',
+            borderColor: 'error.light',
+          }}
+        >
+          <Typography variant="caption" color="error" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+            Respuestas avanzadas incompletas (vista clásica)
+          </Typography>
+          {preservedIssues.map((issue, idx) => (
+            <Typography key={`${issue.code}-${idx}`} variant="caption" color="error" display="block">
+              {issue.message}
+            </Typography>
+          ))}
         </Box>
       )}
 

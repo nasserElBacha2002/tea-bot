@@ -5,6 +5,7 @@
 
 import type { Flow, FlowNode, FlowTransition } from '../../types/flow.types';
 import type { ConversationValidationIssue } from './conversationValidation';
+import { validateFlowTransitionValue } from './flowTransitionValidation';
 
 const SUPPORTED_TYPES = new Set(['message', 'capture', 'redirect', 'end']);
 const SUPPORTED_TRANSITIONS = new Set(['match', 'matchAny', 'matchIncludes', 'default']);
@@ -187,6 +188,8 @@ function validatePayloadNode(
             responseUiId: `t-${idx}`,
           });
         }
+        const valueIssue = validateFlowTransitionValue(nid, trans, idx);
+        if (valueIssue) issues.push(valueIssue);
       });
     }
   }

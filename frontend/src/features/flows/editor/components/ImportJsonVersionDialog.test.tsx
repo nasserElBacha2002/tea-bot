@@ -35,13 +35,13 @@ describe('ImportJsonVersionDialog', () => {
     expect(onValidate).not.toHaveBeenCalled();
   });
 
-  it('no habilita crear nueva versión hasta validar correctamente', async () => {
+  it('no habilita importar al borrador hasta validar correctamente', async () => {
     const user = userEvent.setup();
     const onValidate = vi.fn().mockResolvedValue({ valid: true });
     renderDialog({ onValidate });
 
-    const createButton = screen.getByRole('button', { name: /crear nueva versión/i });
-    expect(createButton).toBeDisabled();
+    const importButton = screen.getByRole('button', { name: /importar al borrador/i });
+    expect(importButton).toBeDisabled();
 
     fireEvent.change(screen.getByLabelText(/json del flujo/i), {
       target: {
@@ -51,6 +51,6 @@ describe('ImportJsonVersionDialog', () => {
     await user.click(screen.getByRole('button', { name: /validar json/i }));
 
     expect(onValidate).toHaveBeenCalledTimes(1);
-    expect(createButton).not.toBeDisabled();
+    expect(importButton).not.toBeDisabled();
   });
 });

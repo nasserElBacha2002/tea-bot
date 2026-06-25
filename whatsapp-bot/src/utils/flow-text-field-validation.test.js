@@ -64,7 +64,7 @@ test('invalid transition value object fails with clear path', () => {
         id: 'start',
         type: 'message',
         message: 'Hola',
-        transitions: [{ type: 'match', value: { text: '1', id: 'btn' }, nextNode: 'end' }],
+        transitions: [{ type: 'match', value: { id: 'btn' }, nextNode: 'end' }],
       },
       { id: 'fallback', type: 'message', message: 'No entendí', nextNode: 'end' },
       { id: 'end', type: 'end', message: 'Bye' },
@@ -76,6 +76,22 @@ test('invalid transition value object fails with clear path', () => {
   );
 });
 
+test('legacy transition value object with text field is coerced', () => {
+  const flow = buildFlow({
+    nodes: [
+      {
+        id: 'start',
+        type: 'message',
+        message: 'Hola',
+        transitions: [{ type: 'match', value: { text: '1', id: 'btn' }, nextNode: 'end' }],
+      },
+      { id: 'fallback', type: 'message', message: 'No entendí', nextNode: 'end' },
+      { id: 'end', type: 'end', message: 'Bye' },
+    ],
+  });
+  assert.doesNotThrow(() => flowValidator.validate(flow));
+});
+
 test('invalid matchAny array item fails with clear path', () => {
   const flow = buildFlow({
     nodes: [
@@ -83,7 +99,7 @@ test('invalid matchAny array item fails with clear path', () => {
         id: 'start',
         type: 'message',
         message: 'Hola',
-        transitions: [{ type: 'matchAny', value: ['si', { text: 'ok' }], nextNode: 'end' }],
+        transitions: [{ type: 'matchAny', value: ['si', { foo: 'bar' }], nextNode: 'end' }],
       },
       { id: 'fallback', type: 'message', message: 'No entendí', nextNode: 'end' },
       { id: 'end', type: 'end', message: 'Bye' },
@@ -95,7 +111,7 @@ test('invalid matchAny array item fails with clear path', () => {
   );
 });
 
-test('numeric transition value fails validation but compiles with defensive coercion', () => {
+test('numeric transition value passes validation and compiles', () => {
   const flow = buildFlow({
     entryNode: 'no_menu',
     nodes: [
@@ -110,10 +126,7 @@ test('numeric transition value fails validation but compiles with defensive coer
     ],
   });
 
-  assert.throws(
-    () => flowValidator.validate(flow),
-    /nodes\.no_menu\.transitions\[0\]\.value must be a string, received number/,
-  );
+  assert.doesNotThrow(() => flowValidator.validate(flow));
 
   const compiled = compileFlow(flow);
   assert.equal(compiled.exactMatchByNodeId.get('no_menu').get('1').nextNode, 'end');

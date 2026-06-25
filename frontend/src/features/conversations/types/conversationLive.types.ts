@@ -2,6 +2,8 @@ import type { ConversationMessage, InboxConversationItem } from './conversation.
 
 export type ConversationLiveEventType =
   | 'connected'
+  | 'ping'
+  | 'pong'
   | 'conversation.created'
   | 'conversation.updated'
   | 'conversation.message.created'

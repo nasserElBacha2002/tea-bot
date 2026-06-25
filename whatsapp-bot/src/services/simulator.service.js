@@ -76,6 +76,7 @@ class SimulatorService {
     const result = await flowEngine.resolveIncomingMessage({
       userId,
       text: trimmed,
+      conversationContext: prep?.conversation ?? activeConv ?? null,
     });
 
     const flowVersion = this._flowVersionFromSession(userId);

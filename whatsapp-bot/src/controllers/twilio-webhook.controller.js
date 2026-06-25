@@ -91,6 +91,7 @@ export const receiveTwilioMessage = async (req, res) => {
       flowId: event.flowId,
       flowMode: 'published',
       perfContext,
+      conversationContext: conversationContext?.conversation ?? null,
     });
     perfContext.add('engineMs', roundMs(nowMs() - engineStart));
 

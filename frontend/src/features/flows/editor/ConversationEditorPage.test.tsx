@@ -217,8 +217,8 @@ describe('ConversationEditorPage', () => {
     await screen.findByText('Mi flujo');
     await user.click(screen.getByRole('button', { name: /añadir paso/i }));
     expect(
-      await screen.findByText(/Escribí el mensaje que verá el cliente en este paso/i)
-    ).toBeTruthy();
+      (await screen.findAllByText(/Escribí el mensaje que verá el cliente en este paso/i)).length
+    ).toBeGreaterThan(0);
   });
 
   it('blocks Guardar cambios without calling the API when a message step has no message', async () => {
@@ -251,7 +251,12 @@ describe('ConversationEditorPage', () => {
     renderPage();
     await screen.findByText('Mi flujo');
     await user.click(screen.getByRole('button', { name: /añadir paso/i }));
-    expect(await screen.findByText(/Nuevo paso sin completar.*no tiene mensaje del bot/i)).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId('flow-validation-errors')).toBeTruthy();
+    });
+    expect(
+      screen.getByTestId('flow-validation-errors').textContent
+    ).toMatch(/Escribí el mensaje que verá el cliente en este paso/i);
   });
 
   it('opens simulator modal from Probar on small screens', async () => {

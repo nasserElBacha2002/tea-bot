@@ -9,6 +9,7 @@ function mapRow(row) {
     externalUserId: row.external_user_id,
     phoneNumber: row.phone_number,
     displayName: row.display_name,
+    contactEmail: row.contact_email,
     status: row.status,
     currentFlowId: row.current_flow_id,
     currentFlowVersion: row.current_flow_version,
@@ -65,6 +66,32 @@ class ConversationRepository {
     );
   }
 
+  async syncContactEmailByPhoneAndChannel(phoneNumber, channel, contactEmail) {
+    if (!phoneNumber || !channel || contactEmail == null) return;
+    await query(
+      `UPDATE dbo.conversations
+       SET contact_email = $1, updated_at = SYSUTCDATETIME()
+       WHERE phone_number = $2 AND channel = $3`,
+      [contactEmail, phoneNumber, channel],
+    );
+  }
+
+  async findContactEmailByPhoneAndChannel(phoneNumber, channel) {
+    if (!phoneNumber || !channel) return null;
+    const { rows } = await query(
+      `SELECT TOP (1) contact_email
+       FROM dbo.conversations
+       WHERE phone_number = $1 AND channel = $2
+         AND contact_email IS NOT NULL AND contact_email <> N''
+       ORDER BY updated_at DESC`,
+      [phoneNumber, channel],
+    );
+    const email = rows[0]?.contact_email;
+    if (!email || typeof email !== 'string') return null;
+    const trimmed = email.trim().toLowerCase();
+    return trimmed || null;
+  }
+
   async createConversation(data) {
     const {
       channel,
@@ -109,6 +136,7 @@ class ConversationRepository {
     const columnMap = {
       phoneNumber: 'phone_number',
       displayName: 'display_name',
+      contactEmail: 'contact_email',
       status: 'status',
       currentFlowId: 'current_flow_id',
       currentFlowVersion: 'current_flow_version',

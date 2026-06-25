@@ -3,7 +3,8 @@
  * Verifica la integridad lógica y estructural de los archivos JSON.
  */
 import { FlowFieldValidationError } from './flow-field-validation.js';
-import { validateTransitionValueForPublish } from './flow-transition-value.js';
+import { validateTransitionValueAtPublish } from './flow-transition-value.js';
+import { transitionTypeRequiresValue } from './flow-validation-errors.js';
 
 class FlowValidator {
   constructor() {
@@ -125,8 +126,8 @@ class FlowValidator {
             value: trans.text,
           });
         }
-        if (trans.value !== undefined) {
-          validateTransitionValueForPublish(trans.type, trans.value, {
+        if (transitionTypeRequiresValue(trans.type) || trans.value !== undefined) {
+          validateTransitionValueAtPublish(trans.type, trans.value, {
             flowKey: flowId,
             version: flowVersion,
             nodeId: id,

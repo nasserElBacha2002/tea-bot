@@ -9,7 +9,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControl,
   FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -22,7 +26,7 @@ export interface ImportJsonVersionDialogProps {
   loadingCreate: boolean;
   onClose: () => void;
   onValidate: (flow: Partial<Flow>) => Promise<{ valid: boolean; error?: string }>;
-  onCreate: (flow: Partial<Flow>, publish: boolean) => Promise<void>;
+  onCreate: (flow: Partial<Flow>, options: { publish: boolean; target: 'draft' | 'new_version' }) => Promise<void>;
 }
 
 export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = ({
@@ -34,6 +38,7 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
   onCreate,
 }) => {
   const [rawJson, setRawJson] = useState('');
+  const [importTarget, setImportTarget] = useState<'draft' | 'new_version'>('draft');
   const [publishAfterCreate, setPublishAfterCreate] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -80,7 +85,11 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
       const res = await onValidate(parsed);
       if (res.valid) {
         setIsValid(true);
-        setSuccessMessage('JSON válido. Ya podés crear una nueva versión.');
+        setSuccessMessage(
+          importTarget === 'draft'
+            ? 'JSON válido. Ya podés importarlo al borrador actual.'
+            : 'JSON válido. Ya podés crear una nueva versión.'
+        );
         return;
       }
       setIsValid(false);
@@ -95,8 +104,12 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
     if (!parsedFlow || !isValid) return;
     resetMessages();
     try {
-      await onCreate(parsedFlow, publishAfterCreate);
-      setSuccessMessage('Nueva versión creada correctamente.');
+      await onCreate(parsedFlow, { publish: publishAfterCreate, target: importTarget });
+      setSuccessMessage(
+        importTarget === 'draft'
+          ? 'Borrador actualizado correctamente.'
+          : 'Nueva versión creada correctamente.'
+      );
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : 'No se pudo crear la nueva versión.');
     }
@@ -105,13 +118,35 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
   return (
     <>
       <Dialog open={open} onClose={loadingCreate ? undefined : onClose} maxWidth="md" fullWidth>
-        <DialogTitle>Importar JSON como nueva versión</DialogTitle>
+        <DialogTitle>Importar JSON</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             <Typography variant="body2" color="text.secondary">
-              Importá un archivo JSON para guardarlo como flujo o nueva versión en la base de datos.
-              Se validará antes de persistir; no se guardan archivos en carpetas del servidor.
+              Importá un archivo JSON validado. Podés reemplazar el borrador actual o crear una nueva
+              versión publicada en la base de datos.
             </Typography>
+            <FormControl>
+              <FormLabel>Destino de la importación</FormLabel>
+              <RadioGroup
+                value={importTarget}
+                onChange={e => {
+                  setImportTarget(e.target.value as 'draft' | 'new_version');
+                  setIsValid(false);
+                  resetMessages();
+                }}
+              >
+                <FormControlLabel
+                  value="draft"
+                  control={<Radio />}
+                  label="Reemplazar el borrador actual (no crea versión nueva)"
+                />
+                <FormControlLabel
+                  value="new_version"
+                  control={<Radio />}
+                  label="Crear una nueva versión publicada"
+                />
+              </RadioGroup>
+            </FormControl>
             <TextField
               label="JSON del flujo"
               multiline
@@ -132,13 +167,16 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
                 <Checkbox
                   checked={publishAfterCreate}
                   onChange={e => setPublishAfterCreate(e.target.checked)}
+                  disabled={importTarget === 'draft'}
                 />
               }
               label="Publicar automáticamente esta versión al crearla"
             />
-            <Typography variant="caption" color="text.secondary">
-              Si no marcás esta opción, solo se creará la nueva versión y no se activará en vivo.
-            </Typography>
+            {importTarget === 'new_version' && (
+              <Typography variant="caption" color="text.secondary">
+                Si no marcás esta opción, solo se creará la nueva versión y no se activará en vivo.
+              </Typography>
+            )}
             {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
             {successMessage && <Alert severity="success">{successMessage}</Alert>}
           </Stack>
@@ -162,17 +200,27 @@ export const ImportJsonVersionDialog: React.FC<ImportJsonVersionDialogProps> = (
               disabled={!isValid || loadingCreate}
               onClick={() => setConfirmOpen(true)}
             >
-              {loadingCreate ? <CircularProgress size={20} /> : 'Crear nueva versión'}
+              {loadingCreate ? (
+                <CircularProgress size={20} />
+              ) : importTarget === 'draft' ? (
+                'Importar al borrador'
+              ) : (
+                'Crear nueva versión'
+              )}
             </Button>
           </Box>
         </DialogActions>
       </Dialog>
 
       <Dialog open={confirmOpen} onClose={loadingCreate ? undefined : () => setConfirmOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Confirmar creación de versión</DialogTitle>
+        <DialogTitle>
+          {importTarget === 'draft' ? 'Confirmar importación al borrador' : 'Confirmar creación de versión'}
+        </DialogTitle>
         <DialogContent dividers>
           <Typography variant="body2">
-            Se creará una nueva versión del flujo. No se modificarán versiones anteriores.
+            {importTarget === 'draft'
+              ? 'Se reemplazará el contenido del borrador actual. No se creará una versión nueva.'
+              : 'Se creará una nueva versión del flujo. No se modificarán versiones anteriores.'}
           </Typography>
         </DialogContent>
         <DialogActions>

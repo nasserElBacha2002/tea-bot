@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Flow } from '../../types/flow.types';
 import { validateFlowPayload } from './flowPayloadValidation';
+import { validateFlowTransitionValue } from './flowTransitionValidation';
 
 function minimalFlow(overrides: Partial<Flow> = {}): Flow {
   return {
@@ -28,9 +29,47 @@ function minimalFlow(overrides: Partial<Flow> = {}): Flow {
   };
 }
 
+describe('validateFlowTransitionValue', () => {
+  it('rejects match without value', () => {
+    const issue = validateFlowTransitionValue(
+      'si_cursos_menu',
+      { type: 'match', nextNode: 'x', priority: 3 },
+      3
+    );
+    expect(issue?.code).toBe('PAYLOAD_TRANSITION_VALUE_REQUIRED');
+    expect(issue?.message).toMatch(/si_cursos_menu/);
+    expect(issue?.message).toMatch(/prioridad 3/);
+  });
+
+  it('accepts numeric values after coercion', () => {
+    const issue = validateFlowTransitionValue(
+      'welcome',
+      { type: 'match', value: 1 as unknown as string, nextNode: 'x' },
+      0
+    );
+    expect(issue).toBeNull();
+  });
+});
+
 describe('validateFlowPayload', () => {
   it('accepts a minimal coherent flow', () => {
     expect(validateFlowPayload(minimalFlow())).toHaveLength(0);
+  });
+
+  it('flags match transition without value', () => {
+    const flow = minimalFlow({
+      nodes: [
+        {
+          id: 'a',
+          type: 'message',
+          message: 'Hola',
+          transitions: [{ type: 'match', nextNode: 'b' }],
+        },
+        { id: 'b', type: 'end', message: 'Chau' },
+      ],
+    });
+    const issues = validateFlowPayload(flow);
+    expect(issues.some(i => i.code === 'PAYLOAD_TRANSITION_VALUE_REQUIRED')).toBe(true);
   });
 
   it('flags missing message like the backend', () => {

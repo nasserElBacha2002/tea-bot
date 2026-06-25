@@ -10,6 +10,7 @@ export function mapConversationPublic(row) {
     provider: row.provider,
     phoneNumber: row.phoneNumber ?? null,
     displayName: row.displayName ?? null,
+    contactEmail: row.contactEmail ?? null,
     status: row.status,
     assignedAgentId: row.assignedAgentId ?? null,
     currentFlowId: row.currentFlowId ?? null,

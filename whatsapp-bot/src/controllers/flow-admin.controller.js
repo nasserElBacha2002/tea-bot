@@ -1,7 +1,22 @@
 import flowDocumentService from '../services/flow-document.service.js';
 import flowValidator from '../utils/flow-validator.js';
 import flowLoader from '../utils/flow-loader.js';
-import { sendSuccess, sendError, HTTP_STATUS } from '../utils/http-errors.js';
+import { FlowFieldValidationError } from '../utils/flow-field-validation.js';
+import { toFlowValidationErrorDetail } from '../utils/flow-validation-errors.js';
+import { sendSuccess, sendError, sendApiError, HTTP_STATUS } from '../utils/http-errors.js';
+import { FLOW_ERROR_MESSAGES } from '../utils/flow-management-errors.js';
+
+function handleFlowError(res, error, fallbackStatus = HTTP_STATUS.BAD_REQUEST) {
+  if (error.code && FLOW_ERROR_MESSAGES[error.code]) {
+    return sendApiError(res, {
+      error: error.code,
+      message: error.apiMessage || error.message,
+      status: error.httpStatus || fallbackStatus,
+      details: error.details,
+    });
+  }
+  return sendError(res, error.message, fallbackStatus);
+}
 
 /**
  * Listar todos los flujos draft.
@@ -44,7 +59,7 @@ export const createFlow = async (req, res) => {
     await flowDocumentService.saveDraft(flow);
     return sendSuccess(res, flow, HTTP_STATUS.CREATED);
   } catch (error) {
-    return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
+    return handleFlowError(res, error);
   }
 };
 
@@ -67,7 +82,7 @@ export const updateFlow = async (req, res) => {
     await flowDocumentService.saveDraft(updatedFlow);
     return sendSuccess(res, updatedFlow);
   } catch (error) {
-    return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
+    return handleFlowError(res, error);
   }
 };
 
@@ -97,7 +112,7 @@ export const archiveFlow = async (req, res) => {
     await flowDocumentService.archiveDraft(flowId);
     return sendSuccess(res, { message: 'Flujo archivado correctamente' });
   } catch (error) {
-    return sendError(res, error.message);
+    return handleFlowError(res, error);
   }
 };
 
@@ -123,9 +138,41 @@ export const publishFlow = async (req, res) => {
       publishedAt: published.publishedAt
     });
   } catch (error) {
-    return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
+    return handleFlowError(res, error);
   }
 };
+
+function formatValidateFlowError(error) {
+  if (error instanceof FlowFieldValidationError) {
+    const detail = toFlowValidationErrorDetail(error, {
+      nodeKey: error.nodeId,
+      transitionType: null,
+      priority: null,
+      transitionIndex: null,
+    });
+    return {
+      error: 'FLOW_VALIDATION_FAILED',
+      message: detail.message,
+      details: { valid: false, errors: [detail] },
+    };
+  }
+
+  return {
+    error: 'FLOW_VALIDATION_FAILED',
+    message: error.message,
+    details: {
+      valid: false,
+      errors: [
+        {
+          code: 'FLOW_VALIDATION_ENGINE',
+          message: error.message,
+          nodeKey: null,
+          path: null,
+        },
+      ],
+    },
+  };
+}
 
 /**
  * Validar un objeto de flujo sin persistir.
@@ -134,8 +181,12 @@ export const validateFlow = async (req, res) => {
   const flow = req.body;
   try {
     flowValidator.validate(flow);
-    return sendSuccess(res, { valid: true });
+    return sendSuccess(res, { valid: true, errors: [] });
   } catch (error) {
-    return sendError(res, error.message, HTTP_STATUS.BAD_REQUEST);
+    const payload = formatValidateFlowError(error);
+    return sendApiError(res, {
+      ...payload,
+      status: HTTP_STATUS.BAD_REQUEST,
+    });
   }
 };

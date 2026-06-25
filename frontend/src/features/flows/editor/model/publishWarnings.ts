@@ -33,6 +33,9 @@ export function validationIssueToPublishMessage(vm: ConversationViewModel, issue
       return `Hay una respuesta sin texto definido en el paso «${st}».`;
     case 'RESPONSE_ANYOF_EMPTY':
       return `Hay una respuesta sin opciones válidas en el paso «${st}».`;
+    case 'PAYLOAD_TRANSITION_VALUE_REQUIRED':
+    case 'PAYLOAD_TRANSITION_VALUE_INVALID':
+      return issue.message;
     case 'RESPONSE_DESTINATION_MISSING':
       return `Hay una respuesta sin destino en el paso «${st}».`;
     case 'RESPONSE_DESTINATION_UNKNOWN':

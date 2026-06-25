@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Button,
+  Divider,
   List,
   ListItemButton,
   ListItemText,
@@ -9,18 +10,25 @@ import {
   Typography,
 } from '@mui/material';
 import type { ConversationStep } from '../model/conversationViewModel';
+import {
+  buildStepPathDisplayOrder,
+  getStepPathRowSx,
+  type StepPathDisplayItem,
+} from '../model/stepPathOrdering';
 
 export interface StepsIndexProps {
   steps: ConversationStep[];
+  entryStepId: string;
   activeStepId: string | null;
   onStepSelect: (internalId: string) => void;
 }
 
 /**
- * Índice lateral de pasos (Nivel 1). El scroll al paso lo dispara el padre vía ref o callback.
+ * Índice lateral de pasos ordenado por recorrido del flujo (no por id).
  */
 export const StepsIndex: React.FC<StepsIndexProps> = ({
   steps,
+  entryStepId,
   activeStepId,
   onStepSelect,
 }) => {
@@ -28,16 +36,25 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
   const [query, setQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(60);
   const isFiltering = query.trim().length > 0;
+
+  const displayItems = useMemo(
+    () => buildStepPathDisplayOrder(steps, entryStepId),
+    [steps, entryStepId],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return steps.map((s, i) => ({ s, i }));
-    return steps
-      .map((s, i) => ({ s, i }))
-      .filter(({ s }) => s.title.toLowerCase().includes(q) || s.internalId.toLowerCase().includes(q));
-  }, [query, steps]);
+    if (!q) return displayItems;
+    return displayItems.filter(
+      item =>
+        item.step.title.toLowerCase().includes(q) ||
+        item.step.internalId.toLowerCase().includes(q),
+    );
+  }, [query, displayItems]);
+
   const visibleRows = useMemo(
     () => (isFiltering ? filtered : filtered.slice(0, visibleCount)),
-    [filtered, isFiltering, visibleCount]
+    [filtered, isFiltering, visibleCount],
   );
 
   useEffect(() => {
@@ -46,7 +63,42 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
       const el = rowRefs.current[activeStepId];
       el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     });
-  }, [activeStepId, steps]);
+  }, [activeStepId, displayItems]);
+
+  const renderRow = (item: StepPathDisplayItem) => {
+    const selected = activeStepId === item.step.internalId;
+    return (
+      <ListItemButton
+        key={item.step.internalId}
+        ref={el => {
+          rowRefs.current[item.step.internalId] = el;
+        }}
+        selected={selected}
+        onClick={() => onStepSelect(item.step.internalId)}
+        sx={{
+          borderRadius: 1,
+          mb: 0.25,
+          ...getStepPathRowSx(item, selected),
+        }}
+        data-step-id={item.step.internalId}
+        data-depth={item.depth}
+        data-branch-group={item.branchGroup}
+        data-section={item.section}
+      >
+        <ListItemText
+          primaryTypographyProps={{ variant: 'body2', noWrap: true, fontWeight: 600 }}
+          secondary={`${item.pathOrder}`}
+          primary={item.step.title}
+        />
+      </ListItemButton>
+    );
+  };
+
+  const pathRows = visibleRows.filter(item => item.section === 'path');
+  const orphanRows = visibleRows.filter(item => item.section === 'orphan');
+  const showOrphanHeader =
+    orphanRows.length > 0 &&
+    (pathRows.length > 0 || (pathRows.length === 0 && orphanRows.length > 0));
 
   return (
     <Box
@@ -78,24 +130,20 @@ export const StepsIndex: React.FC<StepsIndexProps> = ({
         </Box>
       )}
       <List dense disablePadding sx={{ px: 0.5, pb: 1 }}>
-        {visibleRows.map(({ s, i }) => (
-          <ListItemButton
-            key={s.internalId}
-            ref={el => {
-              rowRefs.current[s.internalId] = el;
-            }}
-            selected={activeStepId === s.internalId}
-            onClick={() => onStepSelect(s.internalId)}
-            sx={{ borderRadius: 1, mb: 0.25 }}
-            data-step-id={s.internalId}
-          >
-            <ListItemText
-              primaryTypographyProps={{ variant: 'body2', noWrap: true, fontWeight: 600 }}
-              secondary={`${i + 1}`}
-              primary={s.title}
-            />
-          </ListItemButton>
-        ))}
+        {pathRows.map(renderRow)}
+        {showOrphanHeader ? (
+          <>
+            <Divider sx={{ my: 0.75 }} />
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ px: 1, py: 0.5, display: 'block', fontWeight: 700 }}
+            >
+              Pasos desconectados
+            </Typography>
+          </>
+        ) : null}
+        {orphanRows.map(renderRow)}
       </List>
       {!isFiltering && visibleCount < filtered.length && (
         <Box sx={{ px: 1, pb: 1 }}>

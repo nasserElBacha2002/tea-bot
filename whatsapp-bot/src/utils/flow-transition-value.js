@@ -1,4 +1,5 @@
 import { FlowFieldValidationError } from './flow-field-validation.js';
+import { transitionTypeRequiresValue } from './flow-validation-errors.js';
 
 /**
  * Safe coercion for values stored in DB/import paths.
@@ -72,6 +73,13 @@ export function validateTransitionValueForPublish(type, value, ctx) {
         value,
       });
     }
+    if (value.length === 0) {
+      throw new FlowFieldValidationError({
+        ...ctx,
+        expectedType: 'non-empty array of strings',
+        value,
+      });
+    }
     value.forEach((item, index) => {
       if (typeof item !== 'string') {
         throw new FlowFieldValidationError({
@@ -94,4 +102,24 @@ export function validateTransitionValueForPublish(type, value, ctx) {
       });
     }
   }
+}
+
+/**
+ * Coerces legacy DB/import values, then validates publish rules.
+ * Mirrors `buildFlowDocumentFromTables` + `flowValidator` for transition values.
+ *
+ * @param {string | undefined} type
+ * @param {unknown} rawValue
+ * @param {object} ctx
+ */
+export function validateTransitionValueAtPublish(type, rawValue, ctx) {
+  if (!transitionTypeRequiresValue(type)) return;
+
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    validateTransitionValueForPublish(type, rawValue, ctx);
+    return;
+  }
+
+  const coerced = coerceTransitionValueForDocument(rawValue, ctx);
+  validateTransitionValueForPublish(type, coerced, ctx);
 }

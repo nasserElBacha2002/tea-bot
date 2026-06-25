@@ -46,11 +46,11 @@ import { PublishConfirmDialog } from './components/PublishConfirmDialog';
 import { RiskyPublishDialog } from './components/RiskyPublishDialog';
 import { conversationViewModelToFlow, flowToConversationViewModel } from './model/conversationAdapters';
 import {
-  buildConversationValidationSummary,
   firstInvalidStepIdInDisplayOrder,
+  listValidationIssueMessages,
 } from './model/conversationValidation';
 import {
-  extractNodeIdFromNodoError,
+  extractNodeIdFromBackendFlowError,
   mapBackendFlowErrorToUserMessage,
 } from './model/mapBackendFlowError';
 import { useConversationEditor } from './state/useConversationEditor';
@@ -200,17 +200,24 @@ export const ConversationEditorPage: React.FC = () => {
         const userMsg = raw
           ? mapBackendFlowErrorToUserMessage(raw, stepTitles)
           : SAVE_MESSAGES.persistenceFailed;
-        const nodeId = raw ? extractNodeIdFromNodoError(raw) : null;
+        const nodeId = raw ? extractNodeIdFromBackendFlowError(raw) : null;
         if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
           scrollToStep(nodeId, { focusMessage: true });
         }
         setSnackbar({ open: true, message: userMsg, severity: 'error' });
       } else {
-        setSnackbar({
-          open: true,
-          message: raw ?? SAVE_MESSAGES.serverValidationFailed,
-          severity: 'error',
-        });
+        const vm = editor.viewModel;
+        const userMsg = raw
+          ? mapBackendFlowErrorToUserMessage(
+              raw,
+              vm.steps.map(s => ({ internalId: s.internalId, title: s.title }))
+            )
+          : SAVE_MESSAGES.serverValidationFailed;
+        const nodeId = raw ? extractNodeIdFromBackendFlowError(raw) : null;
+        if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
+          scrollToStep(nodeId);
+        }
+        setSnackbar({ open: true, message: userMsg, severity: 'error' });
       }
     } finally {
       setSavePhase('idle');
@@ -221,31 +228,49 @@ export const ConversationEditorPage: React.FC = () => {
     if (!remoteFlow || !editor.viewModel) return;
     setSnackbar(s => ({ ...s, open: false }));
 
+    const vm = editor.viewModel;
     if (editor.validationIssues.length > 0) {
-      const vm = editor.viewModel;
-      const summary =
-        buildConversationValidationSummary(vm, editor.validationIssues) ||
-        'Revisá los avisos antes de validar el borrador.';
+      const lines = listValidationIssueMessages(editor.validationIssues);
       const first = firstInvalidStepIdInDisplayOrder(vm, editor.validationIssues);
       if (first) scrollToStep(first, { focusMessage: true });
-      setSnackbar({ open: true, message: summary, severity: 'error' });
+      setSnackbar({
+        open: true,
+        message: lines.join('\n'),
+        severity: 'error',
+      });
       return;
     }
 
     try {
       const payload = editor.buildSavePayload(remoteFlow);
       const res = await validateFlow.mutateAsync(payload);
+      if (!res.valid) {
+        const serverLines = res.errors?.map(e => e.message).filter(Boolean) ?? [];
+        setSnackbar({
+          open: true,
+          message: serverLines.length
+            ? serverLines.join('\n')
+            : res.error ?? 'Revisá el flujo antes de publicar.',
+          severity: 'error',
+        });
+        return;
+      }
       setSnackbar({
         open: true,
-        message: res.valid
-          ? 'El borrador es válido según el servidor.'
-          : `Validación: ${res.error ?? 'revisá el flujo'}`,
-        severity: res.valid ? 'success' : 'error',
+        message: 'El borrador es válido según el servidor.',
+        severity: 'success',
       });
     } catch (e: unknown) {
-      const ax = e as { response?: { data?: { error?: string } } };
-      const msg = ax.response?.data?.error ?? (e instanceof Error ? e.message : 'Error al validar');
-      setSnackbar({ open: true, message: msg, severity: 'error' });
+      const raw = e instanceof Error ? e.message : 'Error al validar';
+      const userMsg = mapBackendFlowErrorToUserMessage(
+        raw,
+        vm.steps.map(s => ({ internalId: s.internalId, title: s.title }))
+      );
+      const nodeId = extractNodeIdFromBackendFlowError(raw);
+      if (nodeId && vm.steps.some(s => s.internalId === nodeId)) {
+        scrollToStep(nodeId);
+      }
+      setSnackbar({ open: true, message: userMsg, severity: 'error' });
     }
   }, [remoteFlow, editor, validateFlow, scrollToStep]);
 
@@ -271,6 +296,12 @@ export const ConversationEditorPage: React.FC = () => {
   }, []);
 
   const vm = editor.viewModel;
+
+  const validationAlertLines = useMemo(() => {
+    if (!vm || editor.validationIssues.length === 0) return [];
+    return listValidationIssueMessages(editor.validationIssues);
+  }, [vm, editor.validationIssues]);
+
   const publishDraftVm = vm ?? serverViewModel;
   const publish = useConversationPublish({
     flowId: flowId ?? '',
@@ -505,9 +536,25 @@ export const ConversationEditorPage: React.FC = () => {
         </Alert>
       )}
 
+      {validationAlertLines.length > 0 && (
+        <Alert severity="error" data-testid="flow-validation-errors" sx={{ mx: 2, mt: 1, flexShrink: 0 }}>
+          <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 0.5 }}>
+            {validationAlertLines.length === 1
+              ? 'Hay 1 error de validación'
+              : `Hay ${validationAlertLines.length} errores de validación`}
+          </Typography>
+          {validationAlertLines.map((line, idx) => (
+            <Typography key={idx} variant="body2" component="div" sx={{ whiteSpace: 'pre-wrap' }}>
+              {line}
+            </Typography>
+          ))}
+        </Alert>
+      )}
+
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden', minHeight: 0 }}>
         <StepsIndex
           steps={vm.steps}
+          entryStepId={vm.entryStepId}
           activeStepId={activeStepId}
           onStepSelect={scrollToStep}
         />
@@ -530,9 +577,13 @@ export const ConversationEditorPage: React.FC = () => {
             </Button>
           </Box>
 
-          {editor.validationIssues.length > 0 && (
-            <Alert severity="info" sx={{ mb: 2 }}>
-              {buildConversationValidationSummary(vm, editor.validationIssues)}
+          {validationAlertLines.length > 0 && (
+            <Alert severity="error" sx={{ mb: 2, display: { xs: 'flex', md: 'none' } }}>
+              {validationAlertLines.map((line, idx) => (
+                <Typography key={idx} variant="body2" component="div">
+                  {line}
+                </Typography>
+              ))}
             </Alert>
           )}
 
@@ -661,14 +712,23 @@ export const ConversationEditorPage: React.FC = () => {
         loadingCreate={importJsonMutation.isPending}
         onClose={() => setImportJsonOpen(false)}
         onValidate={flow => validateImportFlow.mutateAsync(flow)}
-        onCreate={async (flow, publish) => {
-          const created = await importJsonMutation.mutateAsync({ flowId: flowId!, flow, publish });
+        onCreate={async (flow, { publish, target }) => {
+          const created = await importJsonMutation.mutateAsync({
+            flowId: flowId!,
+            flow,
+            publish,
+            target,
+          });
           setImportJsonOpen(false);
           setSnackbar({
             open: true,
-            message: `Nueva versión creada: ${created.version}.`,
+            message:
+              target === 'draft'
+                ? `Borrador actualizado (${created.version}).`
+                : `Nueva versión creada: ${created.version}.`,
             severity: 'success',
           });
+          await queryClient.invalidateQueries({ queryKey: flowKeys.detail(flowId!) });
           if (created.activated) {
             await queryClient.invalidateQueries({ queryKey: flowKeys.detail(flowId!) });
           }

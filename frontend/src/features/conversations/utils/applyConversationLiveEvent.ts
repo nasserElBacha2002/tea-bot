@@ -37,6 +37,7 @@ function mergeInboxListItem(
     ...conv,
     id: conv.id,
     displayName: conv.displayName ?? existing?.displayName ?? null,
+    contactEmail: conv.contactEmail ?? existing?.contactEmail ?? null,
     lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
     humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
   };

@@ -8,6 +8,14 @@ import { config } from '../config.js';
 import { detectGlobalCommand } from '../utils/global-commands.js';
 import { compileFlow } from '../utils/compile-flow.js';
 import { logPerf, nowMs, roundMs } from '../utils/perf-timer.js';
+import { WELCOME_NODE_ID, COLLECT_EMAIL_NODE_ID, DEFAULT_INVALID_EMAIL_REPLY } from '../constants/contact-email-flow.js';
+import { resolveContactEmail } from './contact-email.service.js';
+import {
+  isEmailCollectionNode,
+  resolveInitialNodeId,
+  shouldBlockGlobalMenuDuringEmailCapture,
+  tryHandleEmailCollectionInput,
+} from './email-collection-runtime.js';
 
 function normalizeMessage(text) {
   return (text || '').trim().toLowerCase();
@@ -33,9 +41,14 @@ export class FlowEngine {
     flowId: explicitFlowId,
     flowSnapshot,
     perfContext = null,
+    conversationContext = null,
   }) {
     const resolveStart = nowMs();
     const input = normalizeMessage(text);
+    const rawText = (text || '').trim();
+    const hasStoredEmail = conversationContext
+      ? Boolean(await resolveContactEmail(conversationContext))
+      : false;
     let session = sessionService.getSession(userId, perfContext);
 
     // 1. Manejo de Inicio Automático (Si no hay sesión)
@@ -56,12 +69,12 @@ export class FlowEngine {
         : await this.getFlow(targetFlowId, flowMode, null, perfContext);
       const flow = flowBundle.flow;
       const compiled = flowBundle.compiled;
+      const startNodeId = resolveInitialNodeId(flow, hasStoredEmail);
 
-      // Creamos la sesión en el nodo inicial (opcional: borrador en memoria para simulador del editor)
       session = await sessionService.createSession(
         userId,
         targetFlowId,
-        flow.entryNode,
+        startNodeId,
         {
           ...(useSnapshot ? { simulatorFlowOverride: flowSnapshot } : {}),
         },
@@ -75,14 +88,14 @@ export class FlowEngine {
       );
 
       const entryLookupStart = nowMs();
-      const entryNode = this._getNode(compiled, flow, flow.entryNode);
+      const entryNode = this._getNode(compiled, flow, startNodeId);
       perfContext?.add?.('entryNodeLookupMs', roundMs(nowMs() - entryLookupStart));
       if (!entryNode) {
         console.warn(
-          `[FlowEngine] entryNode "${flow.entryNode}" no existe en flujo "${targetFlowId}".`,
+          `[FlowEngine] entryNode "${startNodeId}" no existe en flujo "${targetFlowId}".`,
         );
         throw new Error(
-          `[FlowEngine] entryNode "${flow.entryNode}" no existe en el flujo "${targetFlowId}".`,
+          `[FlowEngine] entryNode "${startNodeId}" no existe en el flujo "${targetFlowId}".`,
         );
       }
 
@@ -151,7 +164,33 @@ export class FlowEngine {
         flowId: explicitFlowId,
         flowSnapshot,
         perfContext,
+        conversationContext,
       });
+    }
+
+    if (!hasStoredEmail && isEmailCollectionNode(currentNode.id)) {
+      const emailResult = await tryHandleEmailCollectionInput({
+        rawText,
+        conversation: conversationContext,
+        collectEmailNode: currentNode,
+        welcomeNode: this._getNode(compiled, flow, WELCOME_NODE_ID),
+      });
+      if (emailResult) {
+        await sessionService.updateSession(userId, {
+          currentNode: emailResult.currentNodeId,
+          variables: { ...(session.variables || {}), ...emailResult.variables },
+        }, perfContext);
+        session = sessionService.getSession(userId, perfContext) || session;
+        const result = {
+          reply: emailResult.reply,
+          flowId: flow.id,
+          currentNodeId: emailResult.currentNodeId,
+          variables: { ...(session.variables || {}), ...emailResult.variables },
+          emailSaved: emailResult.emailSaved,
+        };
+        perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+        return result;
+      }
     }
 
     if (CANCEL_INPUTS.has(input)) {
@@ -185,6 +224,7 @@ export class FlowEngine {
         session,
         flowMode,
         perfContext,
+        hasStoredEmail,
       });
       if (globalResult) {
         perfContext?.add?.('globalCommand', globalCommand.type);
@@ -592,9 +632,20 @@ export class FlowEngine {
     session,
     flowMode,
     perfContext,
+    hasStoredEmail = false,
   }) {
     if (globalCommand === 'menu') {
-      const menuNode = this._getNode(compiled, flow, flow.entryNode);
+      if (shouldBlockGlobalMenuDuringEmailCapture(session?.currentNode, hasStoredEmail)) {
+        const collectNode = this._getNode(compiled, flow, COLLECT_EMAIL_NODE_ID);
+        return {
+          reply: collectNode?.message || DEFAULT_INVALID_EMAIL_REPLY,
+          flowId: flow.id,
+          currentNodeId: COLLECT_EMAIL_NODE_ID,
+          variables: session?.variables || {},
+        };
+      }
+      const menuNodeId = hasStoredEmail ? WELCOME_NODE_ID : flow.entryNode;
+      const menuNode = this._getNode(compiled, flow, menuNodeId);
       if (!menuNode) return null;
       const baseVariables = session?.variables || {};
       return this.processNode(

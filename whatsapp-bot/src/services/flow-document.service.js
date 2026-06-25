@@ -4,8 +4,10 @@ import flowDbRepository from '../repositories/flow-db.repository.js';
 import flowImportService from './flow-import.service.js';
 import flowDraftManagementService from './flow-draft-management.service.js';
 import flowPublishDbService from './flow-publish-db.service.js';
+import flowValidationManagementService from './flow-validation-management.service.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
 import { buildFlowDocumentFromTables } from '../utils/flow-snapshot-builder.js';
+import { flowAppError } from '../utils/flow-management-errors.js';
 
 function normalizeVersionParam(raw) {
   if (raw == null || String(raw).trim() === '') return null;
@@ -122,7 +124,14 @@ class FlowDocumentService {
     });
 
     const graph = await flowCatalogRepository.getVersionGraph(draft.id);
-    return graphToFlowDocument(graph);
+    const saved = graphToFlowDocument(graph);
+
+    const validation = await flowValidationManagementService.validateVersion(draft.id);
+    if (!validation.valid) {
+      throw flowAppError('FLOW_PUBLISH_VALIDATION_FAILED', undefined, 400, validation);
+    }
+
+    return saved;
   }
 
   async listDrafts() {
@@ -307,9 +316,6 @@ class FlowDocumentService {
       err.code = 'CONFLICT';
       throw err;
     }
-    if (existing && overwriteDraft) {
-      await flowDraftManagementService.discardDraft(existing.id);
-    }
 
     const version = await flowCatalogRepository.listVersions(flowRow.id);
     const source = version.find((v) => v.versionLabel === normalizedVersion);
@@ -317,8 +323,31 @@ class FlowDocumentService {
       throw new Error(`Versión "${normalizedVersion}" no encontrada.`);
     }
 
+    if (existing && overwriteDraft) {
+      await flowDraftManagementService.replaceDraftFromVersion(flowRow.id, source.id);
+      return this.getDraft(flowKey);
+    }
+
     await flowDraftManagementService.createDraftFromVersion(flowRow.id, source.id);
     return this.getDraft(flowKey);
+  }
+
+  async importJsonToDraft(flowKey, flow) {
+    await this.ensureReady();
+    const flowRow = await this._getFlowRow(flowKey);
+    if (!flowRow) {
+      throw new Error(`Flujo "${flowKey}" no encontrado.`);
+    }
+
+    const draft = await flowCatalogRepository.getLatestDraftVersion(flowRow.id);
+    const normalizedFlow = withDefaultSchemaVersion({
+      ...flow,
+      id: flowKey,
+      status: 'draft',
+      version: draft?.versionLabel ?? flow.version,
+    });
+    flowValidator.validate(normalizedFlow);
+    return this.saveDraft(normalizedFlow);
   }
 
   async importPublishedVersionFromJson(flowKey, flow, { publish = false } = {}) {

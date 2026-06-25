@@ -32,6 +32,7 @@ export interface InboxConversationItem {
   provider: ConversationProvider;
   phoneNumber: string | null;
   displayName: string | null;
+  contactEmail?: string | null;
   status: ConversationStatus;
   assignedAgentId: string | null;
   currentFlowId: string | null;

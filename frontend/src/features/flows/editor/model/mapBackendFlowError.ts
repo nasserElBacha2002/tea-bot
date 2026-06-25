@@ -9,6 +9,17 @@ export function extractNodeIdFromNodoError(raw: string): string | null {
   return m?.[1] ?? null;
 }
 
+export function extractNodeIdFromFlowFieldPath(raw: string): string | null {
+  const fromPath = /nodes\.([^.[\]]+)\./.exec(raw);
+  if (fromPath) return fromPath[1];
+  const fromParen = /\(node ([^)]+)\)/.exec(raw);
+  return fromParen?.[1] ?? null;
+}
+
+export function extractNodeIdFromBackendFlowError(raw: string): string | null {
+  return extractNodeIdFromNodoError(raw) || extractNodeIdFromFlowFieldPath(raw);
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -44,5 +55,14 @@ export function mapBackendFlowErrorToUserMessage(raw: string, steps: StepTitleLo
   }
 
   const softened = replaceKnownNodeIdsInMessage(raw, steps);
+
+  const invalidField = /Invalid flow [^:]+: field nodes\.([^.[\]]+)\.transitions\[(\d+)\]\.value/.exec(raw);
+  if (invalidField) {
+    const [, nodeId, index] = invalidField;
+    const step = steps.find(s => s.internalId === nodeId);
+    const name = step?.title?.trim() || nodeId;
+    return `El paso «${name}» tiene una respuesta avanzada (transición ${Number(index) + 1}) sin texto definido. Revisalo en el mapa o la vista clásica.`;
+  }
+
   return softened;
 }

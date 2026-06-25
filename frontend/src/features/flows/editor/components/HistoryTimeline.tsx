@@ -171,10 +171,14 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         loadingCreate={isImporting}
         onClose={() => setImportOpen(false)}
         onValidate={flow => validateImportedFlow(flow)}
-        onCreate={async (flow, publish) => {
+        onCreate={async (flow, { publish, target }) => {
           try {
-            const created = await importJsonAsNewVersion(flow, publish);
-            setImportMessage(`Nueva versión creada: ${created.version}.`);
+            const created = await importJsonAsNewVersion(flow, { publish, target });
+            setImportMessage(
+              target === 'draft'
+                ? `Borrador actualizado (${created.version}).`
+                : `Nueva versión creada: ${created.version}.`
+            );
             setImportOpen(false);
             await versionsQuery.refetch();
           } catch (e) {

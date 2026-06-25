@@ -95,6 +95,33 @@ describe('flowToConversationViewModel', () => {
     expect(res.some(r => r.kind === 'fallback')).toBe(true);
   });
 
+  it('maps match with numeric value as exact response', () => {
+    const flow = {
+      id: 'f1',
+      name: 'Num',
+      version: 'draft',
+      status: 'draft',
+      entryNode: 'a',
+      fallbackNode: 'b',
+      nodes: [
+        {
+          id: 'a',
+          type: 'message',
+          message: 'Elegí',
+          transitions: [
+            { type: 'match', value: 1, nextNode: 'b' },
+            { type: 'default', nextNode: 'b' },
+          ],
+          ui: { position: { x: 0, y: 0 } },
+        },
+        { id: 'b', type: 'end', message: 'Fin', ui: { position: { x: 1, y: 1 } } },
+      ],
+    } as Flow;
+    const vm = flowToConversationViewModel(flow);
+    expect(vm.steps[0].responses.some(r => r.kind === 'exact' && r.values[0] === '1')).toBe(true);
+    expect(vm.steps[0].metadata.preservedTransitions ?? []).toHaveLength(0);
+  });
+
   it('preserves matchIncludes in step metadata without UI warnings', () => {
     const flow: Flow = {
       id: 'f1',

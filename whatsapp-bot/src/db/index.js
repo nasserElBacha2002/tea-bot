@@ -84,9 +84,11 @@ export async function pingDatabase() {
 export function parseJsonColumn(value, fallback) {
   if (value == null || value === '') return fallback;
   if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return fallback;
   try {
     return JSON.parse(value);
   } catch {
-    return fallback;
+    // Legacy rows may store plain scalars (e.g. transition match values) without JSON quotes.
+    return value;
   }
 }

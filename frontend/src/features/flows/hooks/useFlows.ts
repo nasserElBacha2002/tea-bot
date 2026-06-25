@@ -130,11 +130,13 @@ export const useImportJsonAsNewVersion = () => {
       flowId,
       flow,
       publish,
+      target,
     }: {
       flowId: string;
       flow: Partial<Flow>;
       publish?: boolean;
-    }) => flowsApi.importJsonAsNewVersion(flowId, flow, publish),
+      target?: 'draft' | 'new_version';
+    }) => flowsApi.importJsonAsNewVersion(flowId, flow, { publish, target }),
     onSuccess: (_d, { flowId }) => {
       qc.invalidateQueries({ queryKey: flowVersionKeys.list(flowId) });
       qc.invalidateQueries({ queryKey: flowKeys.detail(flowId) });

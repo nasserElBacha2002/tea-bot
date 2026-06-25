@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import React from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import axios from 'axios';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { Flow } from '../../types/flow.types';
@@ -118,6 +119,48 @@ describe('useConversationPublish', () => {
     await waitFor(() => expect(result.current.step).toBe('closed'));
   });
 
+  it('surfaces detailed validation errors from the publish API', async () => {
+    const axiosError = new axios.AxiosError('bad request');
+    axiosError.response = {
+      status: 400,
+      data: {
+        ok: false,
+        error: 'FLOW_PUBLISH_VALIDATION_FAILED',
+        message: 'No se puede publicar el borrador porque tiene errores de validación.',
+        details: {
+          valid: false,
+          errors: [
+            {
+              code: 'FLOW_TRANSITION_VALUE_INVALID',
+              message: 'Node `si_cursos_menu`, transition priority 3: `value` is required for transition type `match` (expected string, received undefined).',
+            },
+          ],
+        },
+      },
+      statusText: 'Bad Request',
+      headers: {},
+      config: {} as never,
+    };
+    publishMutate.mockRejectedValueOnce(axiosError);
+    const saveDraft = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(
+      () =>
+        useConversationPublish({
+          flowId: 'f1',
+          draftVm,
+          baseFlow,
+          editorDirty: false,
+          saveDraft,
+        }),
+      { wrapper: createWrapper() }
+    );
+    await act(async () => {
+      const ok = await result.current.confirmPublish();
+      expect(ok).toBe(false);
+    });
+    expect(result.current.publishError).toMatch(/si_cursos_menu/);
+  });
+
   it('sets friendly error and keeps flow open on failure', async () => {
     publishMutate.mockRejectedValueOnce(new Error('network'));
     const saveDraft = vi.fn().mockResolvedValue(undefined);
@@ -136,6 +179,6 @@ describe('useConversationPublish', () => {
       const ok = await result.current.confirmPublish();
       expect(ok).toBe(false);
     });
-    expect(result.current.publishError).toBe('No se pudo poner en vivo la conversación. Intenta nuevamente.');
+    expect(result.current.publishError).toBe('network');
   });
 });

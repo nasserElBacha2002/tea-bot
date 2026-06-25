@@ -1,4 +1,5 @@
 import type { ConversationStep, ConversationViewModel } from './conversationViewModel';
+import { validateFlowTransitionValue } from './flowTransitionValidation';
 
 /** Código estable para reglas de validación del editor de conversación. */
 export type ConversationValidationCode =
@@ -22,6 +23,8 @@ export type ConversationValidationCode =
   | 'PAYLOAD_TRANSITION_NEXT_MISSING'
   | 'PAYLOAD_TRANSITION_NEXT_UNKNOWN'
   | 'PAYLOAD_TRANSITION_TYPE_INVALID'
+  | 'PAYLOAD_TRANSITION_VALUE_REQUIRED'
+  | 'PAYLOAD_TRANSITION_VALUE_INVALID'
   | 'PAYLOAD_NEXT_NODE_UNKNOWN';
 
 export interface ConversationValidationIssue {
@@ -98,6 +101,16 @@ export function validateConversationViewModel(vm: ConversationViewModel): Conver
       });
     }
 
+    const preserved = step.metadata.preservedTransitions ?? [];
+    for (const [idx, trans] of preserved.entries()) {
+      const issue = validateFlowTransitionValue(
+        step.internalId,
+        trans,
+        idx + step.responses.length
+      );
+      if (issue) issues.push(issue);
+    }
+
     for (const r of step.responses) {
       if (!r.destinationStepId?.trim()) {
         issues.push({
@@ -153,6 +166,34 @@ export function issuesForResponse(
   issues: ConversationValidationIssue[]
 ): ConversationValidationIssue[] {
   return issues.filter(i => i.stepInternalId === stepInternalId && i.responseUiId === responseUiId);
+}
+
+/** Issues de transiciones preservadas (vista clásica) en un paso. */
+export function issuesForPreservedTransitions(
+  stepInternalId: string,
+  issues: ConversationValidationIssue[]
+): ConversationValidationIssue[] {
+  return issues.filter(
+    i =>
+      i.stepInternalId === stepInternalId &&
+      (i.code === 'PAYLOAD_TRANSITION_VALUE_REQUIRED' ||
+        i.code === 'PAYLOAD_TRANSITION_VALUE_INVALID')
+  );
+}
+
+/**
+ * Lista todos los mensajes de validación para mostrar en alertas persistentes.
+ */
+export function listValidationIssueMessages(issues: ConversationValidationIssue[]): string[] {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const issue of issues) {
+    const key = `${issue.code}:${issue.stepInternalId}:${issue.responseUiId ?? ''}:${issue.message}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    lines.push(issue.message);
+  }
+  return lines;
 }
 
 function stepIssueLabel(step: ConversationStep | undefined): string {

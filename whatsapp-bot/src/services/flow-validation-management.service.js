@@ -1,6 +1,7 @@
 import flowValidator from '../utils/flow-validator.js';
 import { compileFlow } from '../utils/compile-flow.js';
-import { validateTransitionValueForPublish } from '../utils/flow-transition-value.js';
+import { validateTransitionValueAtPublish } from '../utils/flow-transition-value.js';
+import { toFlowValidationErrorDetail } from '../utils/flow-validation-errors.js';
 import { buildFlowDocumentFromTables } from '../utils/flow-snapshot-builder.js';
 import flowCatalogRepository from '../repositories/flow-catalog.repository.js';
 
@@ -128,6 +129,40 @@ class FlowValidationManagementService {
       }
     }
 
+    const transitionsBySource = buildTransitionsMap(nodes, transitions);
+    for (const [sourceNodeKey, nodeTransitions] of transitionsBySource.entries()) {
+      const sorted = [...nodeTransitions].sort((a, b) => {
+        const pa = a.priority ?? Number.MAX_SAFE_INTEGER;
+        const pb = b.priority ?? Number.MAX_SAFE_INTEGER;
+        return pa !== pb ? pa - pb : 0;
+      });
+
+      sorted.forEach((trans, transitionIndex) => {
+        if (!nodeKeys.has(trans.nextNodeKey)) {
+          return;
+        }
+        if (trans.type === 'implicit_next') return;
+
+        try {
+          validateTransitionValueAtPublish(trans.type, trans.value, {
+            flowKey: flow.flowKey,
+            version: version.versionLabel,
+            nodeId: trans.sourceNodeKey,
+            path: `nodes.${trans.sourceNodeKey}.transitions[${transitionIndex}].value`,
+          });
+        } catch (err) {
+          errors.push(
+            toFlowValidationErrorDetail(err, {
+              nodeKey: trans.sourceNodeKey,
+              transitionType: trans.type,
+              priority: trans.priority ?? null,
+              transitionIndex,
+            }),
+          );
+        }
+      });
+    }
+
     for (const trans of transitions) {
       if (!nodeKeys.has(trans.nextNodeKey)) {
         errors.push({
@@ -143,22 +178,6 @@ class FlowValidationManagementService {
           message: `Tipo de transición no soportado: ${trans.type}`,
           nodeKey: trans.sourceNodeKey,
         });
-      }
-      if (trans.value !== undefined && trans.value !== null) {
-        try {
-          validateTransitionValueForPublish(trans.type, trans.value, {
-            flowKey: flow.flowKey,
-            version: version.versionLabel,
-            nodeId: trans.sourceNodeKey,
-            path: `nodes.${trans.sourceNodeKey}.transitions[].value`,
-          });
-        } catch (err) {
-          errors.push({
-            code: 'FLOW_TRANSITION_VALUE_INVALID',
-            message: err.message,
-            nodeKey: trans.sourceNodeKey,
-          });
-        }
       }
     }
 
@@ -206,10 +225,11 @@ class FlowValidationManagementService {
         flowValidator.validate(doc);
         compileFlow(doc);
       } catch (err) {
-        errors.push({
-          code: 'FLOW_VALIDATION_ENGINE',
-          message: err.message,
-        });
+        errors.push(
+          toFlowValidationErrorDetail(err, {
+            nodeKey: err.nodeId || null,
+          }),
+        );
       }
     }
 

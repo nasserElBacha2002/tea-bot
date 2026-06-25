@@ -1,6 +1,7 @@
 import { withTransaction } from '../db/index.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
 import flowCatalogRepository from '../repositories/flow-catalog.repository.js';
+import flowDbRepository from '../repositories/flow-db.repository.js';
 import flowPublishDbService from './flow-publish-db.service.js';
 import auditLogService from './audit-log.service.js';
 import { flowAppError } from '../utils/flow-management-errors.js';
@@ -57,6 +58,50 @@ class FlowDraftManagementService {
       entityType: 'flow_version',
       entityId: draft.id,
       action: 'CREATE_DRAFT',
+      afterJson: { flowId, baseVersionId, draftVersionId: draft.id },
+    });
+
+    return draft;
+  }
+
+  /**
+   * Reemplaza el contenido del borrador actual con una versión publicada (o cualquier base),
+   * sin crear una nueva fila de versión ni incrementar el número.
+   */
+  async replaceDraftFromVersion(flowId, baseVersionId, { actorUserId = null } = {}) {
+    await this.ensureDb();
+    const flow = await flowCatalogRepository.getFlowById(flowId);
+    if (!flow) throw flowAppError('FLOW_NOT_FOUND', undefined, 404);
+
+    const base = await flowCatalogRepository.getVersionById(baseVersionId);
+    if (!base || base.flowId !== flowId) {
+      throw flowAppError('FLOW_VERSION_NOT_FOUND', undefined, 404);
+    }
+
+    const draft = await flowCatalogRepository.getLatestDraftVersion(flowId);
+    if (!draft) {
+      return this.createDraftFromVersion(flowId, baseVersionId, { actorUserId });
+    }
+
+    await withTransaction(async (transaction) => {
+      await flowCatalogRepository.updateVersion(
+        draft.id,
+        {
+          entryNodeKey: base.entryNodeKey,
+          fallbackNodeKey: base.fallbackNodeKey,
+          metadataJson: base.metadataJson,
+        },
+        { transaction },
+      );
+      await flowDbRepository.deleteVersionChildren(draft.id, { transaction });
+      await flowCatalogRepository.copyVersionContent(baseVersionId, draft.id, { transaction });
+    });
+
+    await auditLogService.record({
+      actorUserId,
+      entityType: 'flow_version',
+      entityId: draft.id,
+      action: 'REPLACE_DRAFT_FROM_VERSION',
       afterJson: { flowId, baseVersionId, draftVersionId: draft.id },
     });
 

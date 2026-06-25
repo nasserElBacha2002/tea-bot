@@ -2,7 +2,7 @@ import { query, parseJsonColumn, isConversationDbEnabled } from '../db/index.js'
 
 function serializeJson(value) {
   if (value == null) return null;
-  return typeof value === 'string' ? value : JSON.stringify(value);
+  return JSON.stringify(value);
 }
 
 function mapFlow(row) {
@@ -83,17 +83,21 @@ class FlowDbRepository {
     return rows[0]?.checksum || null;
   }
 
-  async deleteVersionChildren(flowVersionId) {
+  async deleteVersionChildren(flowVersionId, { transaction } = {}) {
     await query(
       `DELETE t FROM dbo.flow_transitions t
        INNER JOIN dbo.flow_nodes n ON n.id = t.flow_node_id
        WHERE n.flow_version_id = $1`,
       [flowVersionId],
+      { transaction },
     );
-    await query('DELETE FROM dbo.flow_nodes WHERE flow_version_id = $1', [flowVersionId]);
+    await query('DELETE FROM dbo.flow_nodes WHERE flow_version_id = $1', [flowVersionId], {
+      transaction,
+    });
     await query(
       'DELETE FROM dbo.flow_version_snapshots WHERE flow_version_id = $1',
       [flowVersionId],
+      { transaction },
     );
   }
 

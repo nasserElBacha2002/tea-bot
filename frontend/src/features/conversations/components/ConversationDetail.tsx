@@ -179,6 +179,12 @@ export const ConversationDetail: React.FC<Props> = ({
           </Typography>
         )}
 
+        {conversation.contactEmail?.trim() && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+            Email: {conversation.contactEmail.trim()}
+          </Typography>
+        )}
+
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
           {subtitle}
         </Typography>
