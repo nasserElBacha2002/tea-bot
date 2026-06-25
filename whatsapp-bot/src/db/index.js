@@ -23,6 +23,19 @@ export async function getPool() {
 }
 
 /**
+ * Replaces $1…$N placeholders with @p0…@p(N-1).
+ * Highest indices first so $1 does not corrupt $10, $11, etc.
+ */
+export function applyQueryPlaceholders(text, paramCount) {
+  let sqlText = text;
+  for (let index = paramCount - 1; index >= 0; index -= 1) {
+    const key = `p${index}`;
+    sqlText = sqlText.split(`$${index + 1}`).join(`@${key}`);
+  }
+  return sqlText;
+}
+
+/**
  * Ejecuta SQL con placeholders $1, $2… (se mapean a @p0, @p1 para mssql).
  * @returns {Promise<{ rows: object[] }>}
  */
@@ -32,15 +45,13 @@ export async function query(text, params = [], { transaction } = {}) {
     throw new Error('Database pool is not available');
   }
 
-  let sqlText = text;
   const request = transaction ? new sql.Request(transaction) : p.request();
 
   params.forEach((value, index) => {
-    const key = `p${index}`;
-    request.input(key, value);
-    sqlText = sqlText.split(`$${index + 1}`).join(`@${key}`);
+    request.input(`p${index}`, value);
   });
 
+  const sqlText = applyQueryPlaceholders(text, params.length);
   const result = await request.query(sqlText);
   return { rows: result.recordset ?? [] };
 }
