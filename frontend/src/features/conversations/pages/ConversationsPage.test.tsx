@@ -8,6 +8,15 @@ import { MemoryRouter } from 'react-router-dom';
 import { ConversationsPage } from './ConversationsPage';
 
 const refreshMock = vi.fn();
+const useMediaQueryMock = vi.hoisted(() => vi.fn(() => false));
+
+vi.mock('@mui/material', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@mui/material')>();
+  return {
+    ...mod,
+    useMediaQuery: (...args: unknown[]) => useMediaQueryMock(...args),
+  };
+});
 
 vi.mock('../../auth/api/authApi', () => ({
   authApi: {
@@ -171,6 +180,7 @@ function renderPage() {
 describe('ConversationsPage', () => {
   beforeEach(() => {
     refreshMock.mockClear();
+    useMediaQueryMock.mockReturnValue(false);
   });
 
   it('renderiza titulo y lista con etiquetas en español', async () => {
@@ -182,24 +192,15 @@ describe('ConversationsPage', () => {
     expect(screen.getByText(/Quiero una persona/)).toBeInTheDocument();
   });
 
-  it('no muestra datos técnicos por defecto al abrir detalle', async () => {
+  it('no muestra datos técnicos al abrir detalle', async () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByText('Simulación - Esperando humano'));
     expect(screen.queryByText('Flujo actual:')).toBeNull();
     expect(screen.queryByText(/7319B35A/i)).toBeNull();
-    expect(screen.getByText('Detalles técnicos')).toBeInTheDocument();
+    expect(screen.queryByText('Detalles técnicos')).not.toBeInTheDocument();
     expect(screen.getByText(/El usuario pidió hablar con una persona/)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThanOrEqual(1);
-  });
-
-  it('muestra datos técnicos al expandir acordeón', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(screen.getByText('Simulación - Esperando humano'));
-    await user.click(screen.getByRole('button', { name: /detalles técnicos/i }));
-    expect(await screen.findByText(/ID conversación:/)).toBeInTheDocument();
-    expect(screen.getAllByText(/main-menu/).length).toBeGreaterThanOrEqual(1);
   });
 
   it('muestra empty state de detalle sin seleccion', () => {
@@ -213,7 +214,7 @@ describe('ConversationsPage', () => {
     const user = userEvent.setup();
     renderPage();
     await user.click(screen.getByText('Simulación - Esperando humano'));
-    expect(screen.queryByRole('button', { name: /devolver al bot/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^devolver al bot$/i })).not.toBeInTheDocument();
   });
 
   it('boton Actualizar dispara refresh', async () => {
@@ -221,5 +222,28 @@ describe('ConversationsPage', () => {
     renderPage();
     await user.click(screen.getByRole('button', { name: /actualizar/i }));
     expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it('en mobile oculta la lista al abrir detalle y permite volver', async () => {
+    useMediaQueryMock.mockReturnValue(true);
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(screen.getByTestId('conversation-list-panel')).toBeVisible();
+    expect(screen.getByTestId('conversation-detail-panel')).not.toBeVisible();
+
+    await user.click(screen.getByText('Simulación - Esperando humano'));
+
+    expect(screen.getByTestId('conversation-list-panel')).not.toBeVisible();
+    expect(screen.getByTestId('conversation-detail-panel')).toBeVisible();
+    expect(screen.getByRole('button', { name: /volver a la lista/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^cerrar$/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Motivo:/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Detalles técnicos')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /volver a la lista/i }));
+
+    expect(screen.getByTestId('conversation-list-panel')).toBeVisible();
+    expect(screen.getByTestId('conversation-detail-panel')).not.toBeVisible();
   });
 });

@@ -19,6 +19,7 @@ interface Props {
   conversationId?: string | null;
   readAt?: string | null;
   onCaughtUp?: (readThroughAt: string) => void;
+  scrollFooter?: React.ReactNode;
 }
 
 function formatTime(iso: string): string {
@@ -43,6 +44,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   conversationId,
   readAt = null,
   onCaughtUp,
+  scrollFooter,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -182,7 +184,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
           overflowY: 'auto',
           overflowX: 'hidden',
           overscrollBehavior: 'contain',
-          p: 2,
+          p: { xs: 1.5, md: 2 },
         }}
         onScroll={handleScroll}
       >
@@ -246,6 +248,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
                 </Box>
               );
             })}
+            {scrollFooter}
             <div ref={bottomRef} />
           </Stack>
         )}

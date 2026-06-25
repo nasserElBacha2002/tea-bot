@@ -20,10 +20,14 @@ describe('ConversationComposer', () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(
       <ThemeProvider theme={createTheme()}>
-        <ConversationComposer status="assigned" onSend={onSend} />
+        <ConversationComposer
+          status="assigned"
+          assignedToCurrentAgent
+          onSend={onSend}
+        />
       </ThemeProvider>,
     );
-    const input = screen.getByLabelText(/escribí una respuesta/i);
+    const input = screen.getByPlaceholderText(/escribí una respuesta/i);
     await user.type(input, 'Hola desde el equipo');
     await user.click(screen.getByRole('button', { name: /^enviar$/i }));
     expect(onSend).toHaveBeenCalledWith('Hola desde el equipo');

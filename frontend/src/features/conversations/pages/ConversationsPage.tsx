@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, Paper, Stack, Typography, Alert, Chip, Button } from '@mui/material';
+import { Box, Paper, Stack, Typography, Alert, Chip, Button, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
 import { ConversationList } from '../components/ConversationList';
@@ -27,6 +28,8 @@ import { isConversationDerivedUnread } from '../utils/conversationUnread';
 import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
 
 export const ConversationsPage: React.FC = () => {
+  const theme = useTheme();
+  const isMobileInbox = useMediaQuery(theme.breakpoints.down('md'));
   const [filters, setFilters] = useState<ConversationListFilters>({
     limit: 50,
     offset: 0,
@@ -189,6 +192,12 @@ export const ConversationsPage: React.FC = () => {
     setSuccessMessage(null);
   };
 
+  const handleBackToList = () => {
+    setSelectedId(null);
+    setActionError(null);
+    setSuccessMessage(null);
+  };
+
   const selectedReadAt = selectedId ? getReadAt(selectedId) : null;
 
   const derivedUnreadIds = useMemo(() => {
@@ -276,41 +285,43 @@ export const ConversationsPage: React.FC = () => {
         height: APP_SHELL_CONTENT_HEIGHT,
         maxHeight: APP_SHELL_CONTENT_HEIGHT,
         overflow: 'hidden',
-        p: 2,
+        p: { xs: isMobileInbox && selectedId ? 0 : 1, md: 2 },
         boxSizing: 'border-box',
         bgcolor: 'background.default',
       }}
     >
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1}
-        sx={{ mb: 1, flexShrink: 0 }}
-        flexWrap="wrap"
-      >
-        <Typography variant="h5" fontWeight={800}>
-          Conversaciones
-        </Typography>
-        <ConversationLiveIndicator status={liveStatus} />
-        {globalUnread.unread > 0 && (
-          <Chip
-            size="small"
-            color="primary"
-            label={`${globalUnread.unread} sin leer`}
-            aria-label={`${globalUnread.unread} conversaciones sin leer`}
-          />
-        )}
-        {globalUnread.waiting > 0 && (
-          <Chip
-            size="small"
-            color="error"
-            variant="outlined"
-            label={`${globalUnread.waiting} esperando atención`}
-          />
-        )}
-      </Stack>
+      {!(isMobileInbox && selectedId) && (
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{ mb: 1, flexShrink: 0 }}
+          flexWrap="wrap"
+        >
+          <Typography variant="h5" fontWeight={800}>
+            Conversaciones
+          </Typography>
+          <ConversationLiveIndicator status={liveStatus} />
+          {globalUnread.unread > 0 && (
+            <Chip
+              size="small"
+              color="primary"
+              label={`${globalUnread.unread} sin leer`}
+              aria-label={`${globalUnread.unread} conversaciones sin leer`}
+            />
+          )}
+          {globalUnread.waiting > 0 && (
+            <Chip
+              size="small"
+              color="error"
+              variant="outlined"
+              label={`${globalUnread.waiting} esperando atención`}
+            />
+          )}
+        </Stack>
+      )}
 
-      {hiddenByFilterCount > 0 && hasActiveFilters && (
+      {!(isMobileInbox && selectedId) && hiddenByFilterCount > 0 && hasActiveFilters && (
         <Alert
           severity="info"
           sx={{ mb: 1, flexShrink: 0 }}
@@ -349,8 +360,9 @@ export const ConversationsPage: React.FC = () => {
           minHeight: 0,
           display: 'flex',
           flexDirection: 'row',
-          border: '1px solid',
+          border: isMobileInbox && selectedId ? 'none' : '1px solid',
           borderColor: 'divider',
+          borderRadius: isMobileInbox && selectedId ? 0 : undefined,
           overflow: 'hidden',
         }}
       >
@@ -359,7 +371,11 @@ export const ConversationsPage: React.FC = () => {
             width: { xs: '100%', md: 380 },
             maxWidth: '100%',
             flexShrink: 0,
-            display: 'flex',
+            display: isMobileInbox
+              ? selectedId
+                ? 'none'
+                : 'flex'
+              : 'flex',
             flexDirection: 'column',
             borderRight: { md: '1px solid' },
             borderColor: 'divider',
@@ -367,6 +383,7 @@ export const ConversationsPage: React.FC = () => {
             minWidth: 0,
             overflow: 'hidden',
           }}
+          data-testid="conversation-list-panel"
         >
           <ConversationFilters
             filters={stableFilters}
@@ -401,10 +418,16 @@ export const ConversationsPage: React.FC = () => {
             flex: 1,
             minHeight: 0,
             minWidth: 0,
-            display: { xs: selectedId ? 'flex' : 'none', md: 'flex' },
+            width: { xs: '100%', md: 'auto' },
+            display: isMobileInbox
+              ? selectedId
+                ? 'flex'
+                : 'none'
+              : 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
           }}
+          data-testid="conversation-detail-panel"
         >
           <ConversationDetail
             detail={detailQuery.data}
@@ -413,6 +436,7 @@ export const ConversationsPage: React.FC = () => {
             readAt={selectedReadAt}
             onCaughtUp={handleConversationCaughtUp}
             currentAgentId={currentAgentId}
+            onBack={isMobileInbox && selectedId ? handleBackToList : undefined}
             loadingDetail={detailQuery.isLoading && Boolean(selectedId)}
             loadingMessages={messagesQuery.isLoading && Boolean(selectedId)}
             detailError={detailError}
