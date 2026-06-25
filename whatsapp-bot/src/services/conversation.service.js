@@ -270,9 +270,14 @@ class ConversationService {
   }
 
   async closeConversation(conversationId, _reason) {
+    return this.returnConversationToBot(conversationId);
+  }
+
+  async returnConversationToBot(conversationId) {
     return conversationRepository.updateConversation(conversationId, {
-      status: 'closed',
-      closedAt: new Date(),
+      status: 'bot',
+      assignedAgentId: null,
+      closedAt: null,
     });
   }
 

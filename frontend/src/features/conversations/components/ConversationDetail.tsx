@@ -221,7 +221,7 @@ export const ConversationDetail: React.FC<Props> = ({
               onClick={() => void handleClose()}
               disabled={closing}
             >
-              {closeConfirm ? 'Confirmar cierre' : 'Cerrar conversación'}
+              {closeConfirm ? 'Confirmar cierre' : 'Cerrar y devolver al bot'}
             </Button>
           )}
           {closeConfirm && (

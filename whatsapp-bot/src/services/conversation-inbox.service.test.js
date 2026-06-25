@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ConversationInboxService, parseListFilters } from './conversation-inbox.service.js';
 import conversationRepository from '../repositories/conversation.repository.js';
+import conversationService from './conversation.service.js';
 
 const sampleConversation = {
   id: 'conv-1',
@@ -147,6 +148,58 @@ function createService(overrides = {}) {
         order: query?.order || 'asc',
       };
     }
+
+    async _returnConversationToBot(conversationId, opts = {}) {
+      const conversation = await conversationRepo.getConversationById(conversationId);
+      if (!conversation) {
+        const err = new Error('Conversación no encontrada');
+        err.code = 'NOT_FOUND';
+        err.httpStatus = 404;
+        throw err;
+      }
+
+      if (sessionRepo.endAllActiveForConversation) {
+        await sessionRepo.endAllActiveForConversation(conversationId);
+      }
+
+      if (overrides.resetSession) {
+        await overrides.resetSession(conversation.externalUserId);
+      }
+
+      const handoff =
+        (handoffRepo.findPendingByConversationId
+          ? await handoffRepo.findPendingByConversationId(conversationId)
+          : null)
+        || (handoffRepo.findLatestByConversationId
+          ? await handoffRepo.findLatestByConversationId(conversationId)
+          : null);
+      if (handoff && ['pending', 'assigned'].includes(handoff.status) && handoffRepo.updateHandoff) {
+        await handoffRepo.updateHandoff(handoff.id, {
+          status: 'resolved',
+          resolvedAt: new Date(),
+          resolutionNote: opts.resolutionNote || null,
+        });
+      }
+
+      const updated = await conversationService.returnConversationToBot(conversationId);
+
+      if (messageRepo.createMessage) {
+        await messageRepo.createMessage({
+          conversationId,
+          direction: 'outbound',
+          senderType: 'system',
+          body: opts.systemMessage || 'Conversación devuelta al bot.',
+          provider: conversation.provider,
+          metadataJson: {
+            event: 'conversation_returned_to_bot',
+            generatedBy: opts.generatedBy || 'test',
+          },
+        });
+      }
+
+      const { mapConversationPublic } = await import('../utils/conversation-inbox.mapper.js');
+      return { conversation: mapConversationPublic(updated) };
+    }
   }
 
   return new TestInboxService();
@@ -257,17 +310,105 @@ test('updateConversationContact persiste displayName y sincroniza por teléfono'
   }
 });
 
-test('returnConversationToBot está desactivado', async () => {
-  const service = createService();
-  const prevGet = conversationRepository.getConversationById;
-  conversationRepository.getConversationById = async () => sampleConversation;
+test('closeConversation devuelve la conversación al bot', async () => {
+  const endedSessions = [];
+  const resetUsers = [];
+  const handoffUpdates = [];
+  const createdMessages = [];
+  let returnPatch = null;
+
+  const service = createService({
+    sessionRepo: {
+      endAllActiveForConversation: async (id) => {
+        endedSessions.push(id);
+      },
+    },
+    handoffRepo: {
+      findPendingByConversationId: async () => sampleHandoff,
+      findLatestByConversationId: async () => sampleHandoff,
+      updateHandoff: async (id, patch) => {
+        handoffUpdates.push({ id, patch });
+        return { ...sampleHandoff, ...patch };
+      },
+      listLatestByConversationIds: async () => new Map(),
+    },
+    messageRepo: {
+      getLastMessageByConversationIds: async () => new Map(),
+      listByConversationId: async () => [],
+      countByConversationId: async () => 0,
+      createMessage: async (data) => {
+        createdMessages.push(data);
+        return { id: 'sys-1', ...data, createdAt: new Date() };
+      },
+    },
+    conversationRepo: {
+      getConversationById: async () => ({
+        ...sampleConversation,
+        externalUserId: 'twilio:whatsapp:+5491111111111',
+      }),
+    },
+    resetSession: async (userId) => {
+      resetUsers.push(userId);
+    },
+  });
+
+  const prevReturn = conversationService.returnConversationToBot;
+  conversationService.returnConversationToBot = async (id) => {
+    returnPatch = id;
+    return { ...sampleConversation, status: 'bot', assignedAgentId: null, closedAt: null };
+  };
 
   try {
-    await assert.rejects(
-      () => service.returnConversationToBot('conv-1'),
-      (err) => err.code === 'RETURN_TO_BOT_DISABLED' && err.httpStatus === 410,
-    );
+    const result = await service.closeConversation('conv-1', 'Caso resuelto');
+    assert.equal(returnPatch, 'conv-1');
+    assert.equal(result.conversation.status, 'bot');
+    assert.equal(endedSessions[0], 'conv-1');
+    assert.equal(resetUsers[0], 'twilio:whatsapp:+5491111111111');
+    assert.equal(handoffUpdates[0].patch.status, 'resolved');
+    assert.equal(createdMessages[0].metadataJson.event, 'conversation_returned_to_bot');
   } finally {
-    conversationRepository.getConversationById = prevGet;
+    conversationService.returnConversationToBot = prevReturn;
+  }
+});
+
+test('returnConversationToBot reactiva el bot y resetea sesión', async () => {
+  const service = createService({
+    sessionRepo: {
+      endAllActiveForConversation: async () => {},
+    },
+    handoffRepo: {
+      findPendingByConversationId: async () => null,
+      findLatestByConversationId: async () => null,
+      listLatestByConversationIds: async () => new Map(),
+    },
+    messageRepo: {
+      getLastMessageByConversationIds: async () => new Map(),
+      listByConversationId: async () => [],
+      countByConversationId: async () => 0,
+      createMessage: async (data) => ({ id: 'sys-2', ...data, createdAt: new Date() }),
+    },
+    conversationRepo: {
+      getConversationById: async () => ({
+        ...sampleConversation,
+        status: 'assigned',
+        assignedAgentId: 'agent-1',
+        externalUserId: 'twilio:whatsapp:+5491111111111',
+      }),
+    },
+  });
+
+  const prevReturn = conversationService.returnConversationToBot;
+  conversationService.returnConversationToBot = async () => ({
+    ...sampleConversation,
+    status: 'bot',
+    assignedAgentId: null,
+    closedAt: null,
+  });
+
+  try {
+    const result = await service.returnConversationToBot('conv-1');
+    assert.equal(result.conversation.status, 'bot');
+  } finally {
+    conversationService.returnConversationToBot = prevReturn;
   }
 });

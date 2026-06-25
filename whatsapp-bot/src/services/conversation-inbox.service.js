@@ -3,6 +3,7 @@ import conversationMessageRepository from '../repositories/conversation-message.
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationService from './conversation.service.js';
+import sessionService from './session.service.js';
 import twilioWhatsAppService from './twilio-whatsapp.service.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
 import {
@@ -14,8 +15,8 @@ import {
 } from '../utils/conversation-inbox.mapper.js';
 import {
   notifyConversationAssigned,
-  notifyConversationClosed,
   notifyConversationMessageCreated,
+  notifyConversationReturnedToBot,
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
 import { validateContactName } from '../utils/contact-name.js';
@@ -303,23 +304,20 @@ export class ConversationInboxService {
     return result;
   }
 
-  async closeConversation(conversationId, resolutionNote = null) {
-    await this.ensureReady();
+  async _returnConversationToBot(conversationId, {
+    resolutionNote = null,
+    systemMessage = 'Conversación cerrada por el equipo. El bot retomará la atención.',
+    generatedBy = 'agent_inbox',
+  } = {}) {
     const conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
-    if (conversation.status === 'closed') {
-      return { conversation: mapConversationPublic(conversation) };
-    }
 
-    const updated = await conversationService.closeConversation(conversationId, resolutionNote);
+    await conversationSessionRepository.endAllActiveForConversation(conversationId);
 
-    const openSession = await conversationSessionRepository.findLatestOpenByConversationId(
-      conversationId,
-    );
-    if (openSession) {
-      await conversationSessionRepository.endSession(openSession.id);
+    if (conversation.externalUserId) {
+      await sessionService.resetSession(conversation.externalUserId);
     }
 
     const handoff =
@@ -333,18 +331,28 @@ export class ConversationInboxService {
       });
     }
 
+    const updated = await conversationService.returnConversationToBot(conversationId);
+
     await conversationMessageRepository.createMessage({
       conversationId,
       direction: 'outbound',
       senderType: 'system',
-      body: 'Conversación cerrada por el equipo.',
+      body: systemMessage,
       provider: conversation.provider,
-      metadataJson: { event: 'conversation_closed', generatedBy: 'agent_inbox' },
+      metadataJson: { event: 'conversation_returned_to_bot', generatedBy },
     });
 
     const result = { conversation: mapConversationPublic(updated) };
-    notifyConversationClosed(updated);
+    notifyConversationReturnedToBot(updated);
     return result;
+  }
+
+  async closeConversation(conversationId, resolutionNote = null) {
+    await this.ensureReady();
+    return this._returnConversationToBot(conversationId, {
+      resolutionNote,
+      generatedBy: 'agent_inbox_close',
+    });
   }
 
   async _isSeedConversation(conversationId) {
@@ -393,15 +401,10 @@ export class ConversationInboxService {
 
   async returnConversationToBot(conversationId) {
     await this.ensureReady();
-    const conversation = await conversationRepository.getConversationById(conversationId);
-    if (!conversation) {
-      throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
-    }
-    throw appError(
-      'RETURN_TO_BOT_DISABLED',
-      'La función de devolver una conversación al bot está desactivada.',
-      410,
-    );
+    return this._returnConversationToBot(conversationId, {
+      systemMessage: 'Conversación devuelta al bot.',
+      generatedBy: 'agent_inbox_return_to_bot',
+    });
   }
 }
 
