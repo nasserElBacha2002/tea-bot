@@ -1,6 +1,26 @@
 import crypto from 'crypto';
 
 /**
+ * @param {string | null | undefined} agentId
+ * @returns {string | null}
+ */
+export function normalizeAgentId(agentId) {
+  if (agentId == null) return null;
+  const trimmed = String(agentId).trim();
+  return trimmed ? trimmed.toLowerCase() : null;
+}
+
+/**
+ * @param {string | null | undefined} left
+ * @param {string | null | undefined} right
+ */
+export function agentsMatch(left, right) {
+  const a = normalizeAgentId(left);
+  const b = normalizeAgentId(right);
+  return Boolean(a && b && a === b);
+}
+
+/**
  * ID estable para assigned_agent_id sin tabla de usuarios.
  * @param {string} [username]
  */

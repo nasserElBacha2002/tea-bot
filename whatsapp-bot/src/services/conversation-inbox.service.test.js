@@ -412,3 +412,24 @@ test('returnConversationToBot reactiva el bot y resetea sesión', async () => {
     conversationService.returnConversationToBot = prevReturn;
   }
 });
+
+test('claimConversation devuelve éxito en inbox compartido aunque la tomó otro operador', async () => {
+  const service = createService();
+  const prevGet = conversationRepository.getConversationById;
+  conversationRepository.getConversationById = async () => ({
+    ...sampleConversation,
+    status: 'assigned',
+    assignedAgentId: '7319B35A-ABC5-4B76-A9C7-55418721F56C',
+  });
+
+  try {
+    const result = await service.claimConversation(
+      'conv-1',
+      '00000000-0000-4000-8000-000000000002',
+    );
+    assert.equal(result.conversation.status, 'assigned');
+    assert.equal(result.conversation.assignedAgentId, '7319B35A-ABC5-4B76-A9C7-55418721F56C');
+  } finally {
+    conversationRepository.getConversationById = prevGet;
+  }
+});

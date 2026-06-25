@@ -7,10 +7,10 @@ import {
   TextField,
 } from '@mui/material';
 import type { ConversationStatus } from '../types/conversation.types';
+import { canOperatorReply } from '../utils/agentAssignment';
 
 interface Props {
   status: ConversationStatus;
-  assignedToCurrentAgent?: boolean;
   sending?: boolean;
   actionError?: string | null;
   successMessage?: string | null;
@@ -22,7 +22,6 @@ interface Props {
 
 export const ConversationComposer: React.FC<Props> = ({
   status,
-  assignedToCurrentAgent = false,
   sending,
   actionError,
   successMessage,
@@ -50,19 +49,8 @@ export const ConversationComposer: React.FC<Props> = ({
     );
   }
 
-  if (status === 'waiting_human') {
-    return (
-      <Box sx={{ p: compact ? 1 : 2 }}>
-        <Button variant="contained" fullWidth size={compact ? 'medium' : 'large'} onClick={() => onClaim?.()} disabled={claiming}>
-          {claiming ? 'Tomando…' : 'Tomar conversación'}
-        </Button>
-        {actionError && (
-          <Alert severity="error" sx={{ mt: 1 }}>
-            {actionError}
-          </Alert>
-        )}
-      </Box>
-    );
+  if (!canOperatorReply(status)) {
+    return null;
   }
 
   const handleSend = async () => {
@@ -72,22 +60,20 @@ export const ConversationComposer: React.FC<Props> = ({
     setText('');
   };
 
-  const canReply = status === 'assigned' || status === 'paused';
-
-  if (!canReply) {
-    return null;
-  }
-
-  if (status === 'assigned' && !assignedToCurrentAgent) {
-    return (
-      <Alert severity="info" sx={{ m: compact ? 1 : 2, py: compact ? 0.5 : 1 }}>
-        Asignada a otro agente.
-      </Alert>
-    );
-  }
-
   return (
     <Box sx={{ p: compact ? 1 : 2, flexShrink: 0 }}>
+      {status === 'waiting_human' && (
+        <Button
+          variant="outlined"
+          fullWidth
+          size={compact ? 'small' : 'medium'}
+          onClick={() => onClaim?.()}
+          disabled={claiming}
+          sx={{ mb: compact ? 0.75 : 1 }}
+        >
+          {claiming ? 'Tomando…' : 'Tomar conversación'}
+        </Button>
+      )}
       {successMessage && (
         <Alert severity="success" sx={{ mb: compact ? 0.5 : 1, py: compact ? 0.25 : 1 }}>
           {successMessage}
@@ -104,7 +90,7 @@ export const ConversationComposer: React.FC<Props> = ({
           multiline
           minRows={compact ? 1 : 2}
           maxRows={compact ? 4 : 6}
-          label={assignedToCurrentAgent ? 'Responder' : undefined}
+          label="Responder"
           placeholder="Escribí una respuesta…"
           size={compact ? 'small' : 'medium'}
           value={text}

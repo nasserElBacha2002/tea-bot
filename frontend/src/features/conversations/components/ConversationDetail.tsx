@@ -23,7 +23,6 @@ import {
 } from '../utils/conversationUiLabels';
 import {
   channelLabel,
-  formatAssignmentLabel,
   formatDetailSubtitle,
   handoffReasonHumanText,
 } from '../utils/conversationDisplay';
@@ -32,7 +31,6 @@ interface Props {
   detail: ConversationDetailResponse | undefined;
   messages: ConversationMessage[];
   conversationId?: string | null;
-  currentAgentId?: string | null;
   loadingDetail?: boolean;
   loadingMessages?: boolean;
   detailError?: string | null;
@@ -57,7 +55,6 @@ export const ConversationDetail: React.FC<Props> = ({
   detail,
   messages,
   conversationId,
-  currentAgentId,
   loadingDetail,
   loadingMessages,
   detailError,
@@ -126,7 +123,6 @@ export const ConversationDetail: React.FC<Props> = ({
     conversation.status,
     conversation.lastMessageAt,
   );
-  const assignment = formatAssignmentLabel(conversation.assignedAgentId, currentAgentId);
   const motivo =
     handoffReasonHumanText(humanHandoff?.reason)
     ?? (conversation.status === 'waiting_human'
@@ -134,6 +130,7 @@ export const ConversationDetail: React.FC<Props> = ({
       : null);
 
   const canClose = conversation.status !== 'closed';
+  const showClaimInHeader = conversation.status === 'waiting_human';
 
   const handleClose = async () => {
     if (!closeConfirm) {
@@ -239,12 +236,6 @@ export const ConversationDetail: React.FC<Props> = ({
         {subtitle}
       </Typography>
 
-      {assignment && (
-        <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 600 }}>
-          {assignment}
-        </Typography>
-      )}
-
       {motivo && (
         <Typography variant="body2" sx={{ mt: 0.75 }}>
           <strong>Motivo:</strong> {motivo}
@@ -252,7 +243,7 @@ export const ConversationDetail: React.FC<Props> = ({
       )}
 
       <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap">
-        {conversation.status === 'waiting_human' && !conversation.assignedAgentId && (
+        {showClaimInHeader && (
           <Button
             size="small"
             variant="contained"
@@ -331,13 +322,6 @@ export const ConversationDetail: React.FC<Props> = ({
       >
         <ConversationComposer
           status={conversation.status}
-          assignedToCurrentAgent={
-            Boolean(
-              currentAgentId
-              && conversation.assignedAgentId
-              && conversation.assignedAgentId === currentAgentId,
-            )
-          }
           sending={sending}
           claiming={claiming}
           actionError={actionError}

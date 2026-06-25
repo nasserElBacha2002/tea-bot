@@ -39,15 +39,6 @@ export function formatShortDateTime(iso: string | null): string {
   }
 }
 
-export function formatAssignmentLabel(
-  assignedAgentId: string | null,
-  currentAgentId: string | null | undefined,
-): string | null {
-  if (!assignedAgentId) return null;
-  if (currentAgentId && assignedAgentId === currentAgentId) return 'Asignada a vos';
-  return 'Asignada a otro agente';
-}
-
 export function handoffReasonHumanText(reason: string | null | undefined): string | null {
   if (!reason?.trim()) return null;
   switch (reason) {

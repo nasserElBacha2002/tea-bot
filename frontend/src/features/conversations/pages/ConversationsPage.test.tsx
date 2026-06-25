@@ -27,6 +27,14 @@ vi.mock('../../auth/api/authApi', () => ({
   },
 }));
 
+vi.mock('../../auth/context/AuthContext', () => ({
+  useAuthUser: () => ({
+    username: 'admin',
+    agentId: 'agent-test-id',
+    role: 'admin',
+  }),
+}));
+
 vi.mock('../context/conversationLiveContext', () => ({
   useConversationLive: () => ({
     status: 'live' as const,

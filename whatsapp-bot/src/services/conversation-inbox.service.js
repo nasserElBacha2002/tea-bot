@@ -168,15 +168,8 @@ export class ConversationInboxService {
         409,
       );
     }
-    if (conversation.status === 'assigned') {
-      if (conversation.assignedAgentId === agentId) {
-        return { conversation: mapConversationPublic(conversation) };
-      }
-      throw appError(
-        'CONVERSATION_ALREADY_ASSIGNED',
-        'La conversación ya está asignada a otro agente',
-        409,
-      );
+    if (conversation.status === 'assigned' || conversation.status === 'paused') {
+      return { conversation: mapConversationPublic(conversation) };
     }
     if (conversation.status !== 'waiting_human') {
       throw appError(
@@ -186,19 +179,32 @@ export class ConversationInboxService {
       );
     }
 
+    const updated = await this._assignConversationToAgent(conversationId, agentId);
+    return { conversation: mapConversationPublic(updated) };
+  }
+
+  async _assignConversationToAgent(conversationId, agentId) {
     const updated = await conversationService.markAssigned(conversationId, agentId);
-    const pending = await humanHandoffRepository.findPendingByConversationId(conversationId);
-    if (pending) {
-      await humanHandoffRepository.updateHandoff(pending.id, {
+    let handoff = await humanHandoffRepository.findPendingByConversationId(conversationId);
+    if (handoff) {
+      await humanHandoffRepository.updateHandoff(handoff.id, {
         status: 'assigned',
         assignedAgentId: agentId,
         assignedAt: new Date(),
       });
+    } else {
+      handoff = await humanHandoffRepository.findLatestByConversationId(conversationId);
+      if (handoff && ['pending', 'assigned'].includes(handoff.status)) {
+        await humanHandoffRepository.updateHandoff(handoff.id, {
+          status: 'assigned',
+          assignedAgentId: agentId,
+          assignedAt: new Date(),
+        });
+      }
     }
 
-    const result = { conversation: mapConversationPublic(updated) };
-    notifyConversationAssigned(updated, pending);
-    return result;
+    notifyConversationAssigned(updated, handoff);
+    return updated;
   }
 
   async sendAgentMessage(conversationId, body, agentId) {

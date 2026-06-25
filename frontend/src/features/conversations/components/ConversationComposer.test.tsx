@@ -6,13 +6,14 @@ import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { ConversationComposer } from './ConversationComposer';
 
 describe('ConversationComposer', () => {
-  it('waiting_human muestra Tomar conversación', () => {
+  it('waiting_human muestra Tomar conversación y composer', () => {
     render(
       <ThemeProvider theme={createTheme()}>
         <ConversationComposer status="waiting_human" onSend={vi.fn()} onClaim={vi.fn()} />
       </ThemeProvider>,
     );
     expect(screen.getByRole('button', { name: /tomar conversación/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 
   it('assigned muestra composer y envía mensaje', async () => {
@@ -20,17 +21,27 @@ describe('ConversationComposer', () => {
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(
       <ThemeProvider theme={createTheme()}>
-        <ConversationComposer
-          status="assigned"
-          assignedToCurrentAgent
-          onSend={onSend}
-        />
+        <ConversationComposer status="assigned" onSend={onSend} />
       </ThemeProvider>,
     );
     const input = screen.getByPlaceholderText(/escribí una respuesta/i);
     await user.type(input, 'Hola desde el equipo');
     await user.click(screen.getByRole('button', { name: /^enviar$/i }));
     expect(onSend).toHaveBeenCalledWith('Hola desde el equipo');
+  });
+
+  it('assigned permite responder aunque la tomó otro operador', async () => {
+    const user = userEvent.setup();
+    const onSend = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer status="assigned" onSend={onSend} />
+      </ThemeProvider>,
+    );
+    const input = screen.getByPlaceholderText(/escribí una respuesta/i);
+    await user.type(input, 'Continúo la atención');
+    await user.click(screen.getByRole('button', { name: /^enviar$/i }));
+    expect(onSend).toHaveBeenCalledWith('Continúo la atención');
   });
 
   it('closed muestra mensaje de no responder', () => {

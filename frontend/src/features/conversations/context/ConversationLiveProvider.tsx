@@ -27,10 +27,10 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
 
   const userContext = useMemo(
     () => ({
-      currentAgentId: meQuery.data?.user?.agentId ?? null,
-      operatorUsername: meQuery.data?.user?.username ?? user?.username ?? null,
+      currentAgentId: user?.agentId ?? meQuery.data?.user?.agentId ?? null,
+      operatorUsername: user?.username ?? meQuery.data?.user?.username ?? null,
     }),
-    [meQuery.data?.user?.agentId, meQuery.data?.user?.username, user?.username],
+    [user?.agentId, user?.username, meQuery.data?.user?.agentId, meQuery.data?.user?.username],
   );
 
   const alerts = useConversationAlerts({

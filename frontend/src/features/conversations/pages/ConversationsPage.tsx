@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useQuery } from '@tanstack/react-query';
 import { ConversationFilters } from '../components/ConversationFilters';
 import { ConversationList } from '../components/ConversationList';
 import { ConversationDetail } from '../components/ConversationDetail';
@@ -23,7 +22,7 @@ import { useConversationLiveHandlers } from '../hooks/useConversationLiveHandler
 import { useConversationReadState } from '../hooks/useConversationReadState';
 import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
-import { authApi } from '../../auth/api/authApi';
+import { useCurrentAgent } from '../hooks/useCurrentAgent';
 import { isConversationDerivedUnread } from '../utils/conversationUnread';
 import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
 
@@ -44,12 +43,7 @@ export const ConversationsPage: React.FC = () => {
   const [newConversationIds, setNewConversationIds] = useState<Set<string>>(() => new Set());
   const [hiddenByFilterCount, setHiddenByFilterCount] = useState(0);
 
-  const meQuery = useQuery({
-    queryKey: ['auth', 'me'],
-    queryFn: () => authApi.me(),
-    staleTime: 5 * 60_000,
-  });
-  const currentAgentId = meQuery.data?.user?.agentId ?? null;
+  const { agentId: currentAgentId } = useCurrentAgent();
   const { markRead, getReadAt, readMap } = useConversationReadState(currentAgentId);
 
   const listQuery = useConversations(filters);
@@ -435,7 +429,6 @@ export const ConversationsPage: React.FC = () => {
             conversationId={selectedId}
             readAt={selectedReadAt}
             onCaughtUp={handleConversationCaughtUp}
-            currentAgentId={currentAgentId}
             onBack={isMobileInbox && selectedId ? handleBackToList : undefined}
             loadingDetail={detailQuery.isLoading && Boolean(selectedId)}
             loadingMessages={messagesQuery.isLoading && Boolean(selectedId)}
