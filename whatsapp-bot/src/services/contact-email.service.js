@@ -1,5 +1,6 @@
 import conversationRepository from '../repositories/conversation.repository.js';
 import { validateContactEmail } from '../utils/contact-email.js';
+import conversationSheetSyncService from './conversationSheetSync.service.js';
 
 /**
  * Returns stored email for a conversation row (already loaded).
@@ -53,6 +54,16 @@ export async function saveContactEmailForConversation(conversation, rawEmail) {
   const email = validation.normalized;
   const existing = await resolveContactEmail(conversation);
   if (existing === email) {
+    try {
+      await conversationSheetSyncService.syncEmailForConversation({
+        ...conversation,
+        contactEmail: email,
+      });
+    } catch (error) {
+      console.warn(
+        `[ContactEmail] sheet_sync_failed conversationId=${conversation.id} reason=${error.message}`,
+      );
+    }
     return { email, updated: false };
   }
 
@@ -72,6 +83,21 @@ export async function saveContactEmailForConversation(conversation, rawEmail) {
     }
   } else {
     await conversationRepository.updateConversation(conversation.id, { contactEmail: email });
+  }
+
+  try {
+    const updatedConversation = {
+      ...conversation,
+      contactEmail: email,
+      phoneNumber: conversation.phoneNumber,
+      startedAt: conversation.startedAt,
+      closedAt: conversation.closedAt ?? null,
+    };
+    await conversationSheetSyncService.syncEmailForConversation(updatedConversation);
+  } catch (error) {
+    console.warn(
+      `[ContactEmail] sheet_sync_failed conversationId=${conversation.id} reason=${error.message}`,
+    );
   }
 
   return { email, updated: true };

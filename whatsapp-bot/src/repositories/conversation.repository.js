@@ -265,6 +265,27 @@ class ConversationRepository {
   async getConversationById(id) {
     return this.findById(id);
   }
+
+  async countConversationsWithContactEmail() {
+    const { rows } = await query(
+      `SELECT COUNT(*) AS total FROM dbo.conversations
+       WHERE contact_email IS NOT NULL AND LTRIM(RTRIM(contact_email)) <> N''`,
+    );
+    return Number(rows[0]?.total ?? 0);
+  }
+
+  async listConversationsWithContactEmail({ limit = 100, offset = 0 } = {}) {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const safeOffset = Math.max(Number(offset) || 0, 0);
+    const { rows } = await query(
+      `SELECT * FROM dbo.conversations
+       WHERE contact_email IS NOT NULL AND LTRIM(RTRIM(contact_email)) <> N''
+       ORDER BY started_at DESC
+       OFFSET $1 ROWS FETCH NEXT $2 ROWS ONLY`,
+      [safeOffset, safeLimit],
+    );
+    return rows.map(mapRow);
+  }
 }
 
 const conversationRepository = new ConversationRepository();

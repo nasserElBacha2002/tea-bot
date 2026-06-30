@@ -1,6 +1,8 @@
 import sessionService from './session.service.js';
 import googleSheetsService from './googleSheets.service.js';
 import conversationSheetFormatterService from './conversationSheetFormatter.service.js';
+import conversationRepository from '../repositories/conversation.repository.js';
+import { resolveContactEmail } from './contact-email.service.js';
 import flowLoader from '../utils/flow-loader.js';
 import { config } from '../config.js';
 
@@ -17,6 +19,26 @@ class ConversationExportService {
     }
   }
 
+  async _resolveContactEmailForSession(userId, session) {
+    if (!conversationRepository.isEnabled()) return null;
+    try {
+      const channel = String(userId || '').startsWith('twilio:') ? 'whatsapp' : 'whatsapp';
+      let conversation = await conversationRepository.findByChannelAndExternalUserId(channel, userId);
+      if (!conversation && session?.phone) {
+        const rawPhone = String(session.phone)
+          .replace(/^twilio:/i, '')
+          .replace(/^whatsapp:/i, '')
+          .trim();
+        conversation = await conversationRepository.findByPhoneNumber(rawPhone);
+      }
+      if (!conversation) return null;
+      return resolveContactEmail(conversation);
+    } catch (error) {
+      console.warn(`[ConversationExport] contact_email_lookup_failed user=${userId} reason=${error.message}`);
+      return null;
+    }
+  }
+
   async exportFinalizedConversation(userId, finalStatus, context = {}, perfContext = null) {
     const session = sessionService.getSession(userId, perfContext);
     if (!session) return { exported: false, reason: 'no_session' };
@@ -28,12 +50,14 @@ class ConversationExportService {
 
     const nowIso = new Date().toISOString();
     const flow = await this._resolveFlowForLabels(session, context);
+    const contactEmail = await this._resolveContactEmailForSession(userId, session);
     const formatted = conversationSheetFormatterService.formatHumanRecord({
       session,
       finalStatus,
       context,
       nowIso,
       flow,
+      contactEmail,
     });
 
     try {

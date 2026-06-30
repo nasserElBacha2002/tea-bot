@@ -40,7 +40,9 @@ const KNOWN_NODE_LABELS = {
   fallback_global: 'No entendido',
 };
 
-/** Orden fijo de columnas en la pestaña principal de Google Sheets (13 valores por fila). */
+/** Orden fijo de columnas en la pestaña principal de Google Sheets (14 valores por fila). */
+export const EMAIL_COLUMN_HEADER = 'Email';
+
 const HUMAN_COLUMNS = [
   'Fecha de inicio',
   'Fecha de cierre',
@@ -55,6 +57,7 @@ const HUMAN_COLUMNS = [
   'Recorrido resumido',
   'Último mensaje del usuario',
   'Observaciones',
+  EMAIL_COLUMN_HEADER,
 ];
 
 function toDate(isoLike) {
@@ -173,12 +176,53 @@ function resolveNodeLabel(nodeId, flow, transitionTrailByTarget) {
   return humanizeId(nodeId);
 }
 
+export function formatContactEmailForSheet(contactEmail) {
+  const email = String(contactEmail || '').trim().toLowerCase();
+  return email || '—';
+}
+
+/**
+ * Busca la fila del sheet que corresponde a una conversación (1-based, incluye header).
+ * @returns {number | null}
+ */
+export function findSheetRowMatch(headers, dataRows, { phoneNumber, startedAt, closedAt = null }) {
+  const phoneIdx = headers.indexOf('Teléfono');
+  const startIdx = headers.indexOf('Fecha de inicio');
+  const endIdx = headers.indexOf('Fecha de cierre');
+  const emailIdx = headers.indexOf(EMAIL_COLUMN_HEADER);
+  if (phoneIdx < 0 || startIdx < 0) return null;
+
+  const targetPhone = normalizePhone(phoneNumber);
+  const targetStart = formatDateTime(startedAt);
+  const targetEnd = closedAt ? formatDateTime(closedAt) : null;
+  const candidates = [];
+
+  for (let i = 0; i < dataRows.length; i += 1) {
+    const row = dataRows[i] || [];
+    if (normalizePhone(row[phoneIdx]) !== targetPhone) continue;
+    if (String(row[startIdx] || '').trim() !== targetStart) continue;
+    if (targetEnd && endIdx >= 0 && String(row[endIdx] || '').trim() !== targetEnd) continue;
+    candidates.push({ dataIndex: i, sheetRow: i + 2 });
+  }
+
+  if (candidates.length === 0) return null;
+
+  const withEmptyEmail = candidates.filter(({ dataIndex }) => {
+    if (emailIdx < 0) return true;
+    const current = String(dataRows[dataIndex]?.[emailIdx] || '').trim();
+    return !current || current === '—';
+  });
+
+  const pickFrom = withEmptyEmail.length > 0 ? withEmptyEmail : candidates;
+  return pickFrom[pickFrom.length - 1].sheetRow;
+}
+
 class ConversationSheetFormatterService {
   humanHeaders() {
     return [...HUMAN_COLUMNS];
   }
 
-  formatHumanRecord({ session, finalStatus, context = {}, nowIso, flow = null }) {
+  formatHumanRecord({ session, finalStatus, context = {}, nowIso, flow = null, contactEmail = null }) {
     const answers = session?.answers && typeof session.answers === 'object' ? session.answers : {};
     const visitedNodes = Array.isArray(session?.visitedNodes) ? session.visitedNodes : [];
     const transitionTrail = Array.isArray(session?.transitionTrail) ? session.transitionTrail : [];
@@ -226,6 +270,7 @@ class ConversationSheetFormatterService {
         routeHuman,
         session?.lastUserMessage || '—',
         observation(finalStatus, requiresHuman),
+        formatContactEmailForSheet(contactEmail),
       ],
       technicalData,
     };

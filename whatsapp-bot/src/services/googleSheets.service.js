@@ -1,6 +1,17 @@
 import { google } from 'googleapis';
 import { config } from '../config.js';
 
+export function columnToLetter(index) {
+  let n = index + 1;
+  let label = '';
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    label = String.fromCharCode(65 + rem) + label;
+    n = Math.floor((n - 1) / 26);
+  }
+  return label;
+}
+
 class GoogleSheetsService {
   constructor() {
     this.sheetsClient = null;
@@ -47,28 +58,87 @@ class GoogleSheetsService {
     return this.sheetsClient;
   }
 
-  async ensureHeaders(tabName, headers) {
-    if (!Array.isArray(headers) || headers.length === 0) return;
-    const tabKey = String(tabName || '').trim().toLowerCase();
-    if (!tabKey || this.headersCheckedTabs.has(tabKey)) return;
+  _tabKey(tabName) {
+    return String(tabName || '').trim().toLowerCase();
+  }
+
+  async readTabValues(tabName) {
+    if (!this.hasRequiredConfig()) return [];
+    const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
+    if (!targetTab) return [];
     const sheets = await this._getClient();
-    const range = `${tabName}!A1:${String.fromCharCode(64 + Math.min(26, headers.length))}1`;
     const current = await sheets.spreadsheets.values.get({
       spreadsheetId: config.googleSheetsSpreadsheetId,
-      range,
+      range: `${targetTab}!A:Z`,
     });
-    const existing = Array.isArray(current.data?.values?.[0]) ? current.data.values[0] : [];
+    return Array.isArray(current.data?.values) ? current.data.values : [];
+  }
+
+  /**
+   * Garantiza headers presentes. Agrega columnas faltantes al final sin duplicar.
+   * @returns {Promise<{ headers: string[], emailColumnIndex: number }>}
+   */
+  async ensureHeaderColumns(tabName, expectedHeaders = []) {
+    const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
+    if (!targetTab || !Array.isArray(expectedHeaders) || expectedHeaders.length === 0) {
+      return { headers: expectedHeaders, emailColumnIndex: -1 };
+    }
+
+    const sheets = await this._getClient();
+    const values = await this.readTabValues(targetTab);
+    const existing = Array.isArray(values[0]) ? [...values[0]] : [];
+    let merged = existing.length > 0 ? [...existing] : [...expectedHeaders];
+
     if (existing.length === 0) {
       await sheets.spreadsheets.values.update({
         spreadsheetId: config.googleSheetsSpreadsheetId,
-        range: `${tabName}!A1`,
+        range: `${targetTab}!A1`,
         valueInputOption: 'RAW',
-        requestBody: {
-          values: [headers],
-        },
+        requestBody: { values: [merged] },
       });
+    } else {
+      let added = false;
+      for (const header of expectedHeaders) {
+        if (!merged.includes(header)) {
+          merged.push(header);
+          added = true;
+        }
+      }
+      if (added) {
+        const endCol = columnToLetter(merged.length - 1);
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: config.googleSheetsSpreadsheetId,
+          range: `${targetTab}!A1:${endCol}1`,
+          valueInputOption: 'RAW',
+          requestBody: { values: [merged] },
+        });
+      }
     }
-    this.headersCheckedTabs.add(tabKey);
+
+    this.headersCheckedTabs.add(this._tabKey(targetTab));
+    const emailColumnIndex = merged.indexOf('Email');
+    return { headers: merged, emailColumnIndex };
+  }
+
+  async ensureHeaders(tabName, headers) {
+    if (!this.isEnabled() || !this.hasRequiredConfig()) return;
+    await this.ensureHeaderColumns(tabName, headers);
+  }
+
+  async updateCell(tabName, a1Range, value) {
+    if (!this.hasRequiredConfig()) {
+      return { skipped: true, reason: 'missing_config', missingKeys: this.missingConfigKeys() };
+    }
+    const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
+    if (!targetTab) return { skipped: true, reason: 'missing_tab_name' };
+    const sheets = await this._getClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.googleSheetsSpreadsheetId,
+      range: `${targetTab}!${a1Range}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [[value]] },
+    });
+    return { skipped: false, updated: true };
   }
 
   async appendRow({ rowValues, tabName, headers = [] }) {
@@ -79,7 +149,7 @@ class GoogleSheetsService {
     const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
     if (!targetTab) return { skipped: true, reason: 'missing_tab_name' };
     const sheets = await this._getClient();
-    await this.ensureHeaders(targetTab, headers);
+    await this.ensureHeaderColumns(targetTab, headers);
     await sheets.spreadsheets.values.append({
       spreadsheetId: config.googleSheetsSpreadsheetId,
       range: `${targetTab}!A:Z`,

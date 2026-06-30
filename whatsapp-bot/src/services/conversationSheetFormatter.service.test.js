@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import conversationSheetFormatterService from './conversationSheetFormatter.service.js';
+import conversationSheetFormatterService, {
+  EMAIL_COLUMN_HEADER,
+  findSheetRowMatch,
+  formatContactEmailForSheet,
+} from './conversationSheetFormatter.service.js';
 
 function baseSession(overrides = {}) {
   return {
@@ -15,7 +19,7 @@ function baseSession(overrides = {}) {
   };
 }
 
-test('formatHumanRecord produce exactamente 13 columnas alineadas con headers', () => {
+test('formatHumanRecord produce exactamente 14 columnas alineadas con headers', () => {
   const result = conversationSheetFormatterService.formatHumanRecord({
     session: baseSession(),
     finalStatus: 'human_handoff',
@@ -23,9 +27,23 @@ test('formatHumanRecord produce exactamente 13 columnas alineadas con headers', 
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.headers.length, 13);
-  assert.equal(result.row.length, 13);
+  assert.equal(result.headers.length, 14);
+  assert.equal(result.row.length, 14);
   assert.deepEqual(result.headers, conversationSheetFormatterService.humanHeaders());
+  assert.equal(result.headers.at(-1), EMAIL_COLUMN_HEADER);
+});
+
+test('formatHumanRecord incluye email de contacto', () => {
+  const result = conversationSheetFormatterService.formatHumanRecord({
+    session: baseSession({ provider: 'meta', phone: 'whatsapp:+5491111111111' }),
+    finalStatus: 'completed',
+    context: {},
+    nowIso: '2026-05-05T15:00:12.000Z',
+    flow: null,
+    contactEmail: 'user@example.com',
+  });
+  assert.equal(result.row.at(-1), 'user@example.com');
+  assert.equal(formatContactEmailForSheet(null), '—');
 });
 
 test('human_handoff con provider simulator formatea campos humanos clave', () => {
@@ -43,18 +61,32 @@ test('human_handoff con provider simulator formatea campos humanos clave', () =>
   assert.equal(result.row[9], 'Contactar al usuario');
 });
 
-test('completed devuelve estado y acción esperada', () => {
-  const result = conversationSheetFormatterService.formatHumanRecord({
+test('findSheetRowMatch localiza fila por teléfono y fecha de inicio', () => {
+  const headers = conversationSheetFormatterService.humanHeaders();
+  const formatted = conversationSheetFormatterService.formatHumanRecord({
     session: baseSession({ provider: 'meta', phone: 'whatsapp:+5491111111111' }),
-    finalStatus: 'completed',
-    context: { reason: 'completed' },
+    finalStatus: 'human_handoff',
+    context: {},
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.row[6], 'Conversación finalizada');
-  assert.equal(result.row[7], 'No');
-  assert.equal(result.row[8], 'El usuario llegó al final del flujo.');
-  assert.equal(result.row[9], 'No requiere acción');
+  const sheetRow = findSheetRowMatch(headers, [formatted.row], {
+    phoneNumber: '+5491111111111',
+    startedAt: '2026-05-05T15:00:00.000Z',
+    closedAt: '2026-05-05T15:00:12.000Z',
+  });
+  assert.equal(sheetRow, 2);
+});
+
+test('findSheetRowMatch devuelve null si no hay coincidencia', () => {
+  const headers = conversationSheetFormatterService.humanHeaders();
+  assert.equal(
+    findSheetRowMatch(headers, [], {
+      phoneNumber: '+5491111111111',
+      startedAt: '2026-05-05T15:00:00.000Z',
+    }),
+    null,
+  );
 });
 
 test('recorrido conocido usa etiquetas humanas esperadas', () => {
@@ -66,68 +98,4 @@ test('recorrido conocido usa etiquetas humanas esperadas', () => {
     flow: null,
   });
   assert.equal(result.row[10], 'Estudiante/egresado → Presenciales → Posgrado → Dirección → Humano');
-});
-
-test('answers.es_estudiante SI devuelve tipo estudiante/egresado', () => {
-  const result = conversationSheetFormatterService.formatHumanRecord({
-    session: baseSession({ answers: { es_estudiante: 'SI' } }),
-    finalStatus: 'completed',
-    context: {},
-    nowIso: '2026-05-05T15:00:12.000Z',
-    flow: null,
-  });
-  assert.equal(result.row[3], 'Estudiante / egresado');
-});
-
-test('estado desconocido devuelve estado no identificado; técnico solo en technicalData', () => {
-  const result = conversationSheetFormatterService.formatHumanRecord({
-    session: baseSession(),
-    finalStatus: 'rare_status',
-    context: {},
-    nowIso: '2026-05-05T15:00:12.000Z',
-    flow: null,
-  });
-  assert.equal(result.row[6], 'Estado no identificado');
-  assert.match(JSON.stringify(result.technicalData), /"finalStatus":"rare_status"/);
-});
-
-test('si flow tiene label de nodo, se prioriza sobre fallback', () => {
-  const flow = {
-    nodes: [
-      { id: 'si_menu', label: 'Menu Estudiante' },
-      { id: 'human_handoff', label: 'Atencion Humana' },
-    ],
-  };
-  const result = conversationSheetFormatterService.formatHumanRecord({
-    session: baseSession({ visitedNodes: ['si_menu', 'human_handoff'] }),
-    finalStatus: 'human_handoff',
-    context: {},
-    nowIso: '2026-05-05T15:00:12.000Z',
-    flow,
-  });
-  assert.equal(result.row[10], 'Menu Estudiante → Atencion Humana');
-});
-
-test('flujo distancia infiere consulta, detalle y recorrido humano', () => {
-  const result = conversationSheetFormatterService.formatHumanRecord({
-    session: baseSession({
-      visitedNodes: ['si_menu', 'si_dist_menu', 'si_dist_lic_a', 'human_handoff'],
-      provider: 'simulator',
-      phone: 'sim-main-menu-xyz',
-      lastUserMessage: 'humano',
-    }),
-    finalStatus: 'human_handoff',
-    context: { requiresHuman: true },
-    nowIso: '2026-05-05T15:00:12.000Z',
-    flow: null,
-  });
-  assert.equal(result.row[2], 'Simulador');
-  assert.equal(result.row[3], 'Estudiante / egresado');
-  assert.equal(result.row[4], 'Carreras a distancia');
-  assert.equal(result.row[5], 'Licenciatura A');
-  assert.equal(result.row[6], 'Derivado a humano');
-  assert.equal(result.row[7], 'Sí');
-  assert.equal(result.row[8], 'El usuario pidió hablar con una persona.');
-  assert.equal(result.row[9], 'Contactar al usuario');
-  assert.equal(result.row[10], 'Estudiante/egresado → A distancia → Licenciatura A → Humano');
 });

@@ -12,7 +12,7 @@ No se registra abandono por timeout en esta versión.
 
 ## Datos que se guardan
 
-En la pestaña principal del Sheet, **una fila por conversación finalizada** con **13 columnas** fijas (orden): Fecha de inicio, Fecha de cierre, Teléfono, Tipo de usuario, Consulta principal, Detalle de consulta, Estado de la conversación, Requiere atención humana, Motivo de cierre, Acción sugerida, Recorrido resumido, Último mensaje del usuario, Observaciones.
+En la pestaña principal del Sheet, **una fila por conversación finalizada** con **14 columnas** fijas (orden): Fecha de inicio, Fecha de cierre, Teléfono, Tipo de usuario, Consulta principal, Detalle de consulta, Estado de la conversación, Requiere atención humana, Motivo de cierre, Acción sugerida, Recorrido resumido, Último mensaje del usuario, Observaciones, Email.
 
 Opcionalmente, si está configurada la pestaña raw (`GOOGLE_SHEETS_RAW_TAB_NAME`), allí puede guardarse un JSON con datos técnicos adicionales para auditoría.
 
@@ -56,6 +56,17 @@ GOOGLE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\
 
 Si `GOOGLE_SHEETS_ENABLED=false`, el export se omite.
 Si está habilitado y faltan variables, el sistema avisa al iniciar.
+
+## Email de contacto
+
+- La columna **Email** se completa al exportar la conversación finalizada (desde `conversations.contact_email`).
+- Si el email se guarda después del export, se actualiza la fila existente (sin crear duplicados).
+- Backfill histórico:
+
+```bash
+npm run sheets:backfill-conversation-emails
+npm run sheets:backfill-conversation-emails -- --dry-run
+```
 
 ## Comportamiento ante errores
 

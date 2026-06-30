@@ -112,7 +112,7 @@ Notas:
 
 ### Formato de hoja administrativa (principal)
 
-La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta **exactamente 13 columnas** por fila, en este orden:
+La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta **exactamente 14 columnas** por fila, en este orden:
 
 1. Fecha de inicio  
 2. Fecha de cierre  
@@ -127,10 +127,13 @@ La pestaña principal (`GOOGLE_SHEETS_TAB_NAME`) exporta **exactamente 13 column
 11. Recorrido resumido  
 12. Último mensaje del usuario  
 13. Observaciones  
+14. Email  
 
 Notas:
 
-- El sistema intenta escribir la fila de encabezados solo si la pestaña está vacía (no duplica en cada registro).
+- El sistema escribe la fila de encabezados si la pestaña está vacía, o agrega columnas faltantes (por ejemplo **Email**) al final sin duplicarlas.
+- Si el email se guarda después del export, se actualiza la fila existente (teléfono + fecha de inicio).
+- Backfill histórico: `npm run sheets:backfill-conversation-emails` (simulación: `-- --dry-run`).
 - Los datos técnicos completos **no** van en la pestaña principal. Si configurás `GOOGLE_SHEETS_RAW_TAB_NAME`, el JSON técnico puede registrarse en esa pestaña adicional.
 
 ### Labels humanos en el JSON de flujo (opcional)
