@@ -23,6 +23,7 @@
     "db:seed-local": "node scripts/seed-local-conversations.js",
     "conversations:simulate-message": "node scripts/conversations-simulate-message.js",
     "sheets:backfill-conversation-emails": "node scripts/backfill-conversation-emails-to-sheet.js",
+    "flows:fix-collect-email-link": "node scripts/fix-collect-email-editor-link.js",
     "db:verify": "node scripts/verify-platform-dod.js",
     "db:setup-local": "npm run db:migrate && npm run db:import-flows && ALLOW_DEV_SEED=true npm run db:seed-conversations",
     "bench:flows": "node scripts/benchmark-flow-runtime.js"

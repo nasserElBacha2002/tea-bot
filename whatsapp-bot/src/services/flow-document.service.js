@@ -302,12 +302,16 @@ class FlowDocumentService {
   }
 
   async duplicatePublishedVersionToDraft(flowKey, versionParam, { overwriteDraft = false } = {}) {
-    const { flow, normalizedVersion } = await this.getPublishedVersionDocument(
-      flowKey,
-      versionParam,
-    );
+    await this.ensureReady();
+    const normalizedVersion = normalizeVersionParam(versionParam);
+    if (!normalizedVersion) {
+      throw new Error(`Versión inválida: "${versionParam}"`);
+    }
 
     const flowRow = await this._getFlowRow(flowKey);
+    if (!flowRow) {
+      throw new Error(`No hay versiones publicadas para "${flowKey}"`);
+    }
     const existing = await flowCatalogRepository.getLatestDraftVersion(flowRow.id);
     if (existing && !overwriteDraft) {
       const err = new Error(

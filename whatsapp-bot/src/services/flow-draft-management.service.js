@@ -83,6 +83,9 @@ class FlowDraftManagementService {
       return this.createDraftFromVersion(flowId, baseVersionId, { actorUserId });
     }
 
+    const sourceNodes = await flowCatalogRepository.listNodes(baseVersionId);
+    const sourceTransitions = await flowCatalogRepository.listTransitionsByVersion(baseVersionId);
+
     await withTransaction(async (transaction) => {
       await flowCatalogRepository.updateVersion(
         draft.id,
@@ -94,7 +97,11 @@ class FlowDraftManagementService {
         { transaction },
       );
       await flowDbRepository.deleteVersionChildren(draft.id, { transaction });
-      await flowCatalogRepository.copyVersionContent(baseVersionId, draft.id, { transaction });
+      await flowCatalogRepository.copyVersionContent(baseVersionId, draft.id, {
+        transaction,
+        nodes: sourceNodes,
+        transitions: sourceTransitions,
+      });
     });
 
     await auditLogService.record({

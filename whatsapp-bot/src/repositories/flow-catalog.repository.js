@@ -504,10 +504,16 @@ class FlowCatalogRepository {
     );
   }
 
-  async copyVersionContent(baseVersionId, targetVersionId, { transaction } = {}) {
-    const nodes = await this.listNodes(baseVersionId);
-    const transitions = await this.listTransitionsByVersion(baseVersionId);
+  async copyVersionContent(
+    baseVersionId,
+    targetVersionId,
+    { transaction, nodes: preloadedNodes, transitions: preloadedTransitions } = {},
+  ) {
+    const nodes = preloadedNodes ?? (await this.listNodes(baseVersionId));
+    const transitions =
+      preloadedTransitions ?? (await this.listTransitionsByVersion(baseVersionId));
     const nodeIdMap = new Map();
+    const nodeByKey = new Map(nodes.map((node) => [node.nodeKey, node]));
 
     for (const node of nodes) {
       const created = await this.createNode(
@@ -527,7 +533,7 @@ class FlowCatalogRepository {
     }
 
     for (const trans of transitions) {
-      const sourceNode = nodes.find((n) => n.nodeKey === trans.sourceNodeKey);
+      const sourceNode = nodeByKey.get(trans.sourceNodeKey);
       if (!sourceNode) continue;
       const newNodeId = nodeIdMap.get(sourceNode.id);
       if (!newNodeId) continue;
