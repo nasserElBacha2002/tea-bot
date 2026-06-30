@@ -4,6 +4,8 @@ import conversationSheetFormatterService, {
   EMAIL_COLUMN_HEADER,
   findSheetRowMatch,
   formatContactEmailForSheet,
+  phonesMatch,
+  sheetDatesMatch,
 } from './conversationSheetFormatter.service.js';
 
 function baseSession(overrides = {}) {
@@ -87,6 +89,34 @@ test('findSheetRowMatch devuelve null si no hay coincidencia', () => {
     }),
     null,
   );
+});
+
+test('phonesMatch ignora prefijo + y formato del sheet', () => {
+  assert.equal(phonesMatch('5491136072452', '+5491136072452'), true);
+  assert.equal(phonesMatch('5491136072452', 'whatsapp:+5491136072452'), true);
+});
+
+test('sheetDatesMatch compara fecha del sheet con timestamp de DB', () => {
+  assert.equal(
+    sheetDatesMatch('2026-06-25T17:41:20.424Z', '25/6/26, 5:41 p. m.'),
+    true,
+  );
+});
+
+test('findSheetRowMatch localiza fila con teléfono sin + y fecha local del sheet', () => {
+  const headers = conversationSheetFormatterService.humanHeaders();
+  const row = new Array(headers.length).fill('—');
+  row[headers.indexOf('Teléfono')] = '5491136072452';
+  row[headers.indexOf('Fecha de inicio')] = '25/6/26, 5:41 p. m.';
+  row[headers.indexOf('Fecha de cierre')] = '25/6/26, 6:00 p. m.';
+  row[headers.indexOf(EMAIL_COLUMN_HEADER)] = '—';
+
+  const sheetRow = findSheetRowMatch(headers, [row], {
+    phoneNumber: '+5491136072452',
+    startedAt: '2026-06-25T17:41:20.424Z',
+    lastMessageAt: '2026-06-26T15:52:26.163Z',
+  });
+  assert.equal(sheetRow, 2);
 });
 
 test('recorrido conocido usa etiquetas humanas esperadas', () => {

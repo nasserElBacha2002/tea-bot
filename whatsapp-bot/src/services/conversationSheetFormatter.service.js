@@ -78,15 +78,90 @@ function normalizeBooleanToHuman(value) {
   return value ? 'Sí' : 'No';
 }
 
-function normalizePhone(phone) {
-  const raw = String(phone || '').trim();
-  if (!raw) return '—';
-  if (raw.startsWith('sim-main-menu-')) return 'Simulador';
-  return raw
+function stripPhonePrefixes(phone) {
+  return String(phone || '')
+    .trim()
     .replace(/^twilio:/i, '')
     .replace(/^meta:/i, '')
     .replace(/^whatsapp:/i, '')
-    .trim() || '—';
+    .trim();
+}
+
+export function normalizePhoneDigits(phone) {
+  return stripPhonePrefixes(phone).replace(/\D/g, '');
+}
+
+export function phonesMatch(sheetPhone, dbPhone) {
+  const left = normalizePhoneDigits(sheetPhone);
+  const right = normalizePhoneDigits(dbPhone);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return left.endsWith(right) || right.endsWith(left);
+}
+
+function parseSheetDateTimeEsAr(value) {
+  const text = String(value || '').trim();
+  if (!text || text === '—') return null;
+
+  const match = text.match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4}),\s*(\d{1,2}):(\d{2})\s*([ap])\.\s*m\.$/i,
+  );
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  let year = Number(match[3]);
+  if (year < 100) year += 2000;
+  let hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const isPm = match[6].toLowerCase() === 'p';
+  if (isPm && hour < 12) hour += 12;
+  if (!isPm && hour === 12) hour = 0;
+
+  return { year, month, day, hour, minute };
+}
+
+function parseDbDateForSheetMatch(dateLike) {
+  const date = toDate(dateLike);
+  if (!date) return null;
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    hour: date.getUTCHours(),
+    minute: date.getUTCMinutes(),
+  };
+}
+
+function datePartsMatch(left, right, minuteTolerance = 2) {
+  if (!left || !right) return false;
+  if (left.year !== right.year || left.month !== right.month || left.day !== right.day) {
+    return false;
+  }
+  const leftMinutes = left.hour * 60 + left.minute;
+  const rightMinutes = right.hour * 60 + right.minute;
+  return Math.abs(leftMinutes - rightMinutes) <= minuteTolerance;
+}
+
+export function sheetDatesMatch(dbDateLike, sheetFormatted, minuteTolerance = 2) {
+  const sheetParts = parseSheetDateTimeEsAr(sheetFormatted);
+  if (!sheetParts) return false;
+
+  const dbParts = parseDbDateForSheetMatch(dbDateLike);
+  if (dbParts && datePartsMatch(dbParts, sheetParts, minuteTolerance)) {
+    return true;
+  }
+
+  return formatDateTime(dbDateLike) === String(sheetFormatted).trim();
+}
+
+function normalizePhone(phone) {
+  const raw = stripPhonePrefixes(phone);
+  if (!raw) return '—';
+  if (raw.startsWith('sim-main-menu-')) return 'Simulador';
+  const digits = normalizePhoneDigits(raw);
+  if (digits.length >= 8) return digits;
+  return raw || '—';
 }
 
 function humanizeId(id) {
@@ -185,36 +260,67 @@ export function formatContactEmailForSheet(contactEmail) {
  * Busca la fila del sheet que corresponde a una conversación (1-based, incluye header).
  * @returns {number | null}
  */
-export function findSheetRowMatch(headers, dataRows, { phoneNumber, startedAt, closedAt = null }) {
+export function findSheetRowMatch(
+  headers,
+  dataRows,
+  { phoneNumber, startedAt, closedAt = null, lastMessageAt = null },
+) {
   const phoneIdx = headers.indexOf('Teléfono');
   const startIdx = headers.indexOf('Fecha de inicio');
   const endIdx = headers.indexOf('Fecha de cierre');
   const emailIdx = headers.indexOf(EMAIL_COLUMN_HEADER);
-  if (phoneIdx < 0 || startIdx < 0) return null;
+  if (phoneIdx < 0) return null;
 
-  const targetPhone = normalizePhone(phoneNumber);
-  const targetStart = formatDateTime(startedAt);
-  const targetEnd = closedAt ? formatDateTime(closedAt) : null;
+  const endReference = closedAt || lastMessageAt;
   const candidates = [];
 
   for (let i = 0; i < dataRows.length; i += 1) {
     const row = dataRows[i] || [];
-    if (normalizePhone(row[phoneIdx]) !== targetPhone) continue;
-    if (String(row[startIdx] || '').trim() !== targetStart) continue;
-    if (targetEnd && endIdx >= 0 && String(row[endIdx] || '').trim() !== targetEnd) continue;
-    candidates.push({ dataIndex: i, sheetRow: i + 2 });
+    if (!phonesMatch(row[phoneIdx], phoneNumber)) continue;
+
+    const startMatches = Boolean(
+      startedAt && startIdx >= 0 && sheetDatesMatch(startedAt, row[startIdx]),
+    );
+    const endMatches = Boolean(
+      endReference && endIdx >= 0 && sheetDatesMatch(endReference, row[endIdx]),
+    );
+    const emailVal = emailIdx >= 0 ? String(row[emailIdx] || '').trim() : '';
+    const emailEmpty = !emailVal || emailVal === '—';
+
+    candidates.push({
+      dataIndex: i,
+      sheetRow: i + 2,
+      startMatches,
+      endMatches,
+      emailEmpty,
+      score: (startMatches ? 100 : 0) + (endMatches ? 50 : 0) + (emailEmpty ? 10 : 0),
+    });
   }
 
   if (candidates.length === 0) return null;
+  if (candidates.length === 1) return candidates[0].sheetRow;
 
-  const withEmptyEmail = candidates.filter(({ dataIndex }) => {
-    if (emailIdx < 0) return true;
-    const current = String(dataRows[dataIndex]?.[emailIdx] || '').trim();
-    return !current || current === '—';
+  candidates.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    if (b.startMatches !== a.startMatches) return Number(b.startMatches) - Number(a.startMatches);
+    return b.dataIndex - a.dataIndex;
   });
 
-  const pickFrom = withEmptyEmail.length > 0 ? withEmptyEmail : candidates;
-  return pickFrom[pickFrom.length - 1].sheetRow;
+  const withStartMatch = candidates.filter((item) => item.startMatches);
+  if (withStartMatch.length === 1) return withStartMatch[0].sheetRow;
+  if (withStartMatch.length > 1) {
+    const emptyEmail = withStartMatch.filter((item) => item.emailEmpty);
+    const pickFrom = emptyEmail.length > 0 ? emptyEmail : withStartMatch;
+    return pickFrom[pickFrom.length - 1].sheetRow;
+  }
+
+  const withEndMatch = candidates.filter((item) => item.endMatches && item.emailEmpty);
+  if (withEndMatch.length === 1) return withEndMatch[0].sheetRow;
+
+  const emptyEmailOnly = candidates.filter((item) => item.emailEmpty);
+  if (emptyEmailOnly.length === 1) return emptyEmailOnly[0].sheetRow;
+
+  return null;
 }
 
 class ConversationSheetFormatterService {

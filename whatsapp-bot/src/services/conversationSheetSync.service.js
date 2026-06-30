@@ -67,6 +67,7 @@ class ConversationSheetSyncService {
       phoneNumber: conversation.phoneNumber,
       startedAt: conversation.startedAt,
       closedAt: conversation.closedAt,
+      lastMessageAt: conversation.lastMessageAt,
     });
 
     if (!sheetRow) {
