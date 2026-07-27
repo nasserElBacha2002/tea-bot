@@ -54,6 +54,21 @@ describe('ConversationMessageTimeline', () => {
     expect(screen.getByText(/Bot/)).toBeInTheDocument();
   });
 
+  it('agrupa mensajes consecutivos del mismo emisor', () => {
+    const grouped: ConversationMessage[] = [
+      { ...messages[0], id: '1', body: 'Hola' },
+      { ...messages[0], id: '2', body: 'Quiero info' },
+      { ...messages[1], id: '3', body: 'Bienvenido' },
+    ];
+    render(
+      <ThemeProvider theme={theme}>
+        <ConversationMessageTimeline messages={grouped} />
+      </ThemeProvider>,
+    );
+    expect(screen.getAllByText(/Usuario/)).toHaveLength(1);
+    expect(screen.getAllByText(/Bot/)).toHaveLength(1);
+  });
+
   it('renderiza inputs cortos del usuario (1, humano, menú)', () => {
     const inputs: ConversationMessage[] = [
       { ...messages[0], id: 'u1', body: '1' },

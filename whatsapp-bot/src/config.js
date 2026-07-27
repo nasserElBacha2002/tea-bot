@@ -48,6 +48,25 @@ export const config = {
   conversationDbEnabled: ['1', 'true', 'yes', 'on'].includes(
     String(process.env.CONVERSATION_DB_ENABLED || '').trim().toLowerCase(),
   ),
+  conversationClassificationMode: (() => {
+    const raw = String(process.env.CONVERSATION_CLASSIFICATION_MODE || 'legacy').trim().toLowerCase();
+    return ['legacy', 'shadow', 'enabled'].includes(raw) ? raw : 'legacy';
+  })(),
+  conversationClassificationLoggingEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_CLASSIFICATION_LOGGING_ENABLED || 'true').trim().toLowerCase(),
+  ),
+  conversationClassificationMetricsEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_CLASSIFICATION_METRICS_ENABLED || 'true').trim().toLowerCase(),
+  ),
+  conversationClassificationTextRulesEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_CLASSIFICATION_TEXT_RULES_ENABLED || 'false').trim().toLowerCase(),
+  ),
+  conversationClassificationSheetUpdateEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_CLASSIFICATION_SHEET_UPDATE_ENABLED || 'false').trim().toLowerCase(),
+  ),
+  conversationClassificationReconciliationEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_CLASSIFICATION_RECONCILIATION_ENABLED || 'false').trim().toLowerCase(),
+  ),
   dbServer: (process.env.DB_SERVER || '').trim(),
   dbPort: Number(process.env.DB_PORT || 1433),
   dbName: (process.env.DB_NAME || 'tea_bot').trim(),

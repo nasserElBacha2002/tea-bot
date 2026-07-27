@@ -5,9 +5,13 @@ import {
   Button,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material';
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import type { ConversationStatus } from '../types/conversation.types';
 import { canOperatorReply } from '../utils/agentAssignment';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   status: ConversationStatus;
@@ -18,6 +22,44 @@ interface Props {
   onSend: (body: string) => Promise<void>;
   onClaim?: () => Promise<void>;
   claiming?: boolean;
+}
+
+function CompactNotice({
+  tone,
+  children,
+}: {
+  tone: 'info' | 'warning';
+  children: React.ReactNode;
+}) {
+  const Icon = tone === 'warning' ? WarningAmberOutlinedIcon : InfoOutlinedIcon;
+  return (
+    <Box
+      role="status"
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 0.75,
+        minHeight: conversationUiDensity.composerNoticeHeight,
+        maxHeight: conversationUiDensity.composerNoticeHeight,
+        px: 1.25,
+        py: 0.75,
+        bgcolor: tone === 'warning' ? 'warning.light' : 'info.light',
+        color: 'text.primary',
+        borderTop: '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      <Icon fontSize="small" color={tone === 'warning' ? 'warning' : 'info'} sx={{ flexShrink: 0 }} />
+      <Typography
+        variant="caption"
+        noWrap
+        title={typeof children === 'string' ? children : undefined}
+        sx={{ fontSize: '0.8125rem', lineHeight: 1.3, minWidth: 0 }}
+      >
+        {children}
+      </Typography>
+    </Box>
+  );
 }
 
 export const ConversationComposer: React.FC<Props> = ({
@@ -34,18 +76,17 @@ export const ConversationComposer: React.FC<Props> = ({
 
   if (status === 'closed') {
     return (
-      <Alert severity="info" sx={{ m: compact ? 1 : 2, py: compact ? 0.5 : 1 }}>
+      <CompactNotice tone="info">
         No se puede responder una conversación cerrada.
-      </Alert>
+      </CompactNotice>
     );
   }
 
   if (status === 'bot') {
     return (
-      <Alert severity="warning" sx={{ m: compact ? 1 : 2, py: compact ? 0.5 : 1 }}>
-        El bot está activo. La respuesta manual estará disponible cuando el usuario sea derivado al
-        equipo humano.
-      </Alert>
+      <CompactNotice tone="warning">
+        Bot activo · La respuesta manual se habilitará al derivar a humano.
+      </CompactNotice>
     );
   }
 
@@ -61,26 +102,26 @@ export const ConversationComposer: React.FC<Props> = ({
   };
 
   return (
-    <Box sx={{ p: compact ? 1 : 2, flexShrink: 0 }}>
+    <Box sx={{ p: compact ? 1 : 1.25, flexShrink: 0 }}>
       {status === 'waiting_human' && (
         <Button
           variant="outlined"
           fullWidth
-          size={compact ? 'small' : 'medium'}
+          size="small"
           onClick={() => onClaim?.()}
           disabled={claiming}
-          sx={{ mb: compact ? 0.75 : 1 }}
+          sx={{ mb: 0.75, minHeight: conversationUiDensity.controlHeight }}
         >
           {claiming ? 'Tomando…' : 'Tomar conversación'}
         </Button>
       )}
       {successMessage && (
-        <Alert severity="success" sx={{ mb: compact ? 0.5 : 1, py: compact ? 0.25 : 1 }}>
+        <Alert severity="success" sx={{ mb: 0.75, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8125rem' } }}>
           {successMessage}
         </Alert>
       )}
       {actionError && (
-        <Alert severity="error" sx={{ mb: compact ? 0.5 : 1, py: compact ? 0.25 : 1 }}>
+        <Alert severity="error" sx={{ mb: 0.75, py: 0.25, '& .MuiAlert-message': { fontSize: '0.8125rem' } }}>
           {actionError}
         </Alert>
       )}
@@ -88,14 +129,17 @@ export const ConversationComposer: React.FC<Props> = ({
         <TextField
           fullWidth
           multiline
-          minRows={compact ? 1 : 2}
-          maxRows={compact ? 4 : 6}
+          minRows={1}
+          maxRows={compact ? 4 : 5}
           label="Responder"
           placeholder="Escribí una respuesta…"
-          size={compact ? 'small' : 'medium'}
+          size="small"
           value={text}
           onChange={(e) => setText(e.target.value)}
           disabled={sending}
+          sx={{
+            '& .MuiInputBase-root': { minHeight: conversationUiDensity.controlHeight },
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -105,10 +149,10 @@ export const ConversationComposer: React.FC<Props> = ({
         />
         <Button
           variant="contained"
-          size={compact ? 'small' : 'medium'}
+          size="small"
           onClick={() => void handleSend()}
           disabled={sending || !text.trim()}
-          sx={{ flexShrink: 0 }}
+          sx={{ flexShrink: 0, minHeight: conversationUiDensity.controlHeight }}
         >
           {sending ? '…' : 'Enviar'}
         </Button>

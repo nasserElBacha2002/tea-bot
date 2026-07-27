@@ -10,6 +10,7 @@ function mapRow(row) {
     currentNodeKey: row.current_node_key,
     variablesJson: parseJsonColumn(row.variables_json, {}),
     historyJson: parseJsonColumn(row.history_json, []),
+    trackingJson: parseJsonColumn(row.tracking_json, {}),
     status: row.status,
     startedAt: row.started_at,
     endedAt: row.ended_at,
@@ -22,6 +23,16 @@ function serializeJson(value) {
 }
 
 class ConversationSessionRepository {
+  async findLatestByConversationId(conversationId) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversation_sessions
+       WHERE conversation_id = $1
+       ORDER BY started_at DESC`,
+      [conversationId],
+    );
+    return mapRow(rows[0]);
+  }
+
   async findActiveByConversationId(conversationId) {
     const { rows } = await query(
       `SELECT TOP (1) * FROM dbo.conversation_sessions
@@ -51,16 +62,17 @@ class ConversationSessionRepository {
       currentNodeKey = null,
       variablesJson = {},
       historyJson = [],
+      trackingJson = {},
       status = 'active',
     } = data;
 
     const { rows } = await query(
       `INSERT INTO dbo.conversation_sessions (
         conversation_id, flow_id, flow_version, current_node_key,
-        variables_json, history_json, status
+        variables_json, history_json, tracking_json, status
       )
       OUTPUT INSERTED.*
-      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         conversationId,
         flowId,
@@ -68,6 +80,7 @@ class ConversationSessionRepository {
         currentNodeKey,
         serializeJson(variablesJson),
         serializeJson(historyJson),
+        serializeJson(trackingJson),
         status,
       ],
     );
@@ -98,6 +111,10 @@ class ConversationSessionRepository {
     if (patch.historyJson !== undefined) {
       fields.push(`history_json = $${i++}`);
       values.push(serializeJson(patch.historyJson));
+    }
+    if (patch.trackingJson !== undefined) {
+      fields.push(`tracking_json = $${i++}`);
+      values.push(serializeJson(patch.trackingJson));
     }
     if (patch.status !== undefined) {
       fields.push(`status = $${i++}`);

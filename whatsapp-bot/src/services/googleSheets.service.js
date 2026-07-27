@@ -150,7 +150,7 @@ class GoogleSheetsService {
     if (!targetTab) return { skipped: true, reason: 'missing_tab_name' };
     const sheets = await this._getClient();
     await this.ensureHeaderColumns(targetTab, headers);
-    await sheets.spreadsheets.values.append({
+    const response = await sheets.spreadsheets.values.append({
       spreadsheetId: config.googleSheetsSpreadsheetId,
       range: `${targetTab}!A:Z`,
       valueInputOption: 'USER_ENTERED',
@@ -158,15 +158,32 @@ class GoogleSheetsService {
         values: [rowValues],
       },
     });
-    return { skipped: false };
+    return { skipped: false, updatedRange: response.data?.updates?.updatedRange || `${targetTab}!A:Z` };
   }
 
   async appendConversationRow(rowValues, options = {}) {
-    return this.appendRow({
+    const result = await this.appendRow({
       rowValues,
       tabName: options.tabName || config.googleSheetsTabName,
       headers: options.headers || [],
     });
+    return result;
+  }
+
+  async updateRowRange(tabName, a1Range, rowValues) {
+    if (!this.hasRequiredConfig()) {
+      return { skipped: true, reason: 'missing_config', missingKeys: this.missingConfigKeys() };
+    }
+    const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
+    if (!targetTab) return { skipped: true, reason: 'missing_tab_name' };
+    const sheets = await this._getClient();
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: config.googleSheetsSpreadsheetId,
+      range: `${targetTab}!${a1Range}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values: [rowValues] },
+    });
+    return { skipped: false, updated: true };
   }
 }
 

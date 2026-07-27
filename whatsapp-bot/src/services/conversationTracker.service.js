@@ -51,14 +51,27 @@ class ConversationTrackerService {
 
   buildTrackingPatch(session, transition) {
     const track = transition?.track;
-    if (!track || !track.key) return {};
-    const key = String(track.key).trim();
-    if (!key) return {};
+    if (!track) return {};
+
     const answers = {
       ...(session?.answers && typeof session.answers === 'object' ? session.answers : {}),
-      [key]: track.value ?? null,
     };
-    console.log(`[ConversationTracker] tracked_answer key=${key}`);
+
+    const entries = Array.isArray(track) ? track : [track];
+    const trackedKeys = [];
+    for (const item of entries) {
+      if (!item?.key) continue;
+      const key = String(item.key).trim();
+      if (!key) continue;
+      const normalizedKey =
+        key === 'modalidad_consulta' ? 'modalidad'
+          : key;
+      answers[normalizedKey] = item.value ?? null;
+      trackedKeys.push(normalizedKey);
+    }
+
+    if (trackedKeys.length === 0) return {};
+    console.log(`[ConversationTracker] tracked_answer keys=${trackedKeys.join(',')}`);
     return { answers };
   }
 

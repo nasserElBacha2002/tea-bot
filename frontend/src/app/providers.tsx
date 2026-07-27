@@ -23,8 +23,8 @@ export const Providers: React.FC<ProvidersProps> = ({ children }) => {
         <CssBaseline />
         <Box
           sx={{
-            height: '100%',
-            maxHeight: '100%',
+            height: '100dvh',
+            maxHeight: '100dvh',
             display: 'flex',
             flexDirection: 'column',
             minHeight: 0,

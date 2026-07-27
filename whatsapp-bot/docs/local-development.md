@@ -30,6 +30,31 @@ npm run db:setup-local
 npm run db:verify
 ```
 
+### 2.1 Clasificación `Consulta principal` (Etapa A — shadow)
+
+Tras `006_conversation_classification.sql`, activar en `whatsapp-bot/.env`:
+
+```env
+CONVERSATION_CLASSIFICATION_MODE=shadow
+CONVERSATION_CLASSIFICATION_LOGGING_ENABLED=true
+CONVERSATION_CLASSIFICATION_METRICS_ENABLED=true
+CONVERSATION_CLASSIFICATION_TEXT_RULES_ENABLED=false
+CONVERSATION_CLASSIFICATION_SHEET_UPDATE_ENABLED=false
+CONVERSATION_CLASSIFICATION_RECONCILIATION_ENABLED=true
+```
+
+- **shadow:** el Sheet sigue exportando la heurística legacy; v2 se persiste en DB y loguea diffs.
+- Reiniciar el backend tras cambiar `.env` (`npm run dev`).
+
+Muestra local sobre conversaciones en DB:
+
+```bash
+npm run classifications:shadow-sample
+npm run classifications:reconcile          # dry-run histórico
+```
+
+**Deploy dev (Docker Compose):** `docker-compose.yml` ya expone las mismas variables con default `shadow`. Copiá `whatsapp-bot/.env` al servidor o definí overrides en el entorno del host.
+
 ## 3. Importar flujos JSON → base de datos
 
 ```bash

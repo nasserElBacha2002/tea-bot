@@ -59,6 +59,6 @@ describe('ConversationComposer', () => {
         <ConversationComposer status="bot" onSend={vi.fn()} />
       </ThemeProvider>,
     );
-    expect(screen.getByText(/bot está activo/i)).toBeInTheDocument();
+    expect(screen.getByText(/bot activo/i)).toBeInTheDocument();
   });
 });

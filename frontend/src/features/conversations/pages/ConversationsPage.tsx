@@ -24,7 +24,7 @@ import type { ConversationListFilters } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
 import { useCurrentAgent } from '../hooks/useCurrentAgent';
 import { isConversationDerivedUnread } from '../utils/conversationUnread';
-import { APP_SHELL_CONTENT_HEIGHT } from '../../../components/layout/appShellLayout';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 export const ConversationsPage: React.FC = () => {
   const theme = useTheme();
@@ -271,114 +271,131 @@ export const ConversationsPage: React.FC = () => {
     || filters.search?.trim(),
   );
 
+  const showSidebar = !(isMobileInbox && selectedId);
+
   return (
     <Box
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        height: APP_SHELL_CONTENT_HEIGHT,
-        maxHeight: APP_SHELL_CONTENT_HEIGHT,
+        flex: 1,
+        height: '100%',
+        minHeight: 0,
         overflow: 'hidden',
-        p: { xs: isMobileInbox && selectedId ? 0 : 1, md: 2 },
         boxSizing: 'border-box',
         bgcolor: 'background.default',
       }}
     >
-      {!(isMobileInbox && selectedId) && (
-        <Stack
-          direction="row"
-          alignItems="center"
-          spacing={1}
-          sx={{ mb: 1, flexShrink: 0 }}
-          flexWrap="wrap"
-        >
-          <Typography variant="h5" fontWeight={800}>
-            Conversaciones
-          </Typography>
-          <ConversationLiveIndicator status={liveStatus} />
-          {globalUnread.unread > 0 && (
-            <Chip
-              size="small"
-              color="primary"
-              label={`${globalUnread.unread} sin leer`}
-              aria-label={`${globalUnread.unread} conversaciones sin leer`}
-            />
-          )}
-          {globalUnread.waiting > 0 && (
-            <Chip
-              size="small"
-              color="error"
-              variant="outlined"
-              label={`${globalUnread.waiting} esperando atención`}
-            />
-          )}
-        </Stack>
-      )}
-
-      {!(isMobileInbox && selectedId) && hiddenByFilterCount > 0 && hasActiveFilters && (
-        <Alert
-          severity="info"
-          sx={{ mb: 1, flexShrink: 0 }}
-          action={
-            <Button
-              color="inherit"
-              size="small"
-              onClick={() =>
-                handleFilterChange({
-                  status: undefined,
-                  channel: DEFAULT_CONVERSATION_CHANNEL,
-                  search: '',
-                })
-              }
-            >
-              Limpiar filtros
-            </Button>
-          }
-        >
-          Hay actividad nueva en conversaciones fuera de los filtros actuales.
-        </Alert>
-      )}
-
-      {persistenceFailure && (
-        <ConversationPersistenceAlert
-          error={listQuery.error}
-          onRetry={() => void handleRefresh()}
-          retrying={listQuery.isFetching}
-        />
-      )}
-
       <Paper
         elevation={0}
         sx={{
           flex: 1,
           minHeight: 0,
+          height: '100%',
           display: 'flex',
           flexDirection: 'row',
-          border: isMobileInbox && selectedId ? 'none' : '1px solid',
-          borderColor: 'divider',
-          borderRadius: isMobileInbox && selectedId ? 0 : undefined,
+          borderRadius: 0,
+          border: 'none',
           overflow: 'hidden',
         }}
       >
         <Box
           sx={{
-            width: { xs: '100%', md: 380 },
+            width: { xs: '100%', md: 390 },
             maxWidth: '100%',
             flexShrink: 0,
-            display: isMobileInbox
-              ? selectedId
-                ? 'none'
-                : 'flex'
-              : 'flex',
+            height: '100%',
+            minHeight: 0,
+            display: showSidebar ? 'flex' : 'none',
             flexDirection: 'column',
             borderRight: { md: '1px solid' },
             borderColor: 'divider',
-            minHeight: 0,
             minWidth: 0,
             overflow: 'hidden',
+            bgcolor: 'background.paper',
           }}
           data-testid="conversation-list-panel"
         >
+          <Stack
+            direction="row"
+            alignItems="center"
+            spacing={0.75}
+            flexWrap="nowrap"
+            data-testid="conversation-sidebar-header"
+            sx={{
+              flexShrink: 0,
+              height: conversationUiDensity.sidebarHeaderHeight,
+              minHeight: conversationUiDensity.sidebarHeaderHeight,
+              maxHeight: conversationUiDensity.sidebarHeaderHeight,
+              px: 1.25,
+              borderBottom: '1px solid',
+              borderColor: 'divider',
+            }}
+          >
+            <Typography
+              variant="subtitle2"
+              fontWeight={800}
+              noWrap
+              sx={{ fontSize: '0.9375rem', lineHeight: 1.2 }}
+            >
+              Conversaciones
+            </Typography>
+            <ConversationLiveIndicator status={liveStatus} />
+            {globalUnread.unread > 0 && (
+              <Chip
+                size="small"
+                color="primary"
+                label={`${globalUnread.unread}`}
+                aria-label={`${globalUnread.unread} conversaciones sin leer`}
+                sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+              />
+            )}
+            {globalUnread.waiting > 0 && (
+              <Chip
+                size="small"
+                color="error"
+                variant="outlined"
+                label={`${globalUnread.waiting}`}
+                aria-label={`${globalUnread.waiting} esperando atención`}
+                sx={{ height: 22, '& .MuiChip-label': { px: 0.75, fontSize: 11 } }}
+              />
+            )}
+          </Stack>
+
+          {persistenceFailure && (
+            <Box sx={{ flexShrink: 0, px: 1, pt: 0.75 }}>
+              <ConversationPersistenceAlert
+                error={listQuery.error}
+                onRetry={() => void handleRefresh()}
+                retrying={listQuery.isFetching}
+              />
+            </Box>
+          )}
+
+          {hiddenByFilterCount > 0 && hasActiveFilters && (
+            <Alert
+              severity="info"
+              sx={{ mx: 1, mt: 0.75, py: 0, flexShrink: 0, '& .MuiAlert-message': { py: 0.5 } }}
+              action={
+                <Button
+                  color="inherit"
+                  size="small"
+                  onClick={() =>
+                    handleFilterChange({
+                      status: undefined,
+                      channel: DEFAULT_CONVERSATION_CHANNEL,
+                      search: '',
+                    })
+                  }
+                >
+                  Limpiar
+                </Button>
+              }
+            >
+              Actividad fuera de filtros
+            </Alert>
+          )}
+
           <ConversationFilters
             filters={stableFilters}
             onChange={handleFilterChange}
@@ -412,6 +429,7 @@ export const ConversationsPage: React.FC = () => {
             flex: 1,
             minHeight: 0,
             minWidth: 0,
+            height: '100%',
             width: { xs: '100%', md: 'auto' },
             display: isMobileInbox
               ? selectedId

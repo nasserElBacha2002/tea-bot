@@ -21,7 +21,7 @@ function baseSession(overrides = {}) {
   };
 }
 
-test('formatHumanRecord produce exactamente 14 columnas alineadas con headers', () => {
+test('formatHumanRecord produce columnas alineadas con headers extendidos', () => {
   const result = conversationSheetFormatterService.formatHumanRecord({
     session: baseSession(),
     finalStatus: 'human_handoff',
@@ -29,10 +29,11 @@ test('formatHumanRecord produce exactamente 14 columnas alineadas con headers', 
     nowIso: '2026-05-05T15:00:12.000Z',
     flow: null,
   });
-  assert.equal(result.headers.length, 14);
-  assert.equal(result.row.length, 14);
+  assert.equal(result.headers.length, 23);
+  assert.equal(result.row.length, 23);
   assert.deepEqual(result.headers, conversationSheetFormatterService.humanHeaders());
-  assert.equal(result.headers.at(-1), EMAIL_COLUMN_HEADER);
+  assert.equal(result.headers.indexOf(EMAIL_COLUMN_HEADER), 13);
+  assert.equal(result.headers.at(-1), 'Fecha de clasificación');
 });
 
 test('formatHumanRecord incluye email de contacto', () => {
@@ -44,7 +45,7 @@ test('formatHumanRecord incluye email de contacto', () => {
     flow: null,
     contactEmail: 'user@example.com',
   });
-  assert.equal(result.row.at(-1), 'user@example.com');
+  assert.equal(result.row[13], 'user@example.com');
   assert.equal(formatContactEmailForSheet(null), '—');
 });
 

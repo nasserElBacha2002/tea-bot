@@ -25,6 +25,16 @@ export function formatDetailSubtitle(
   return `${channelLabel(channel)} · ${providerLabel(provider)} · ${conversationStatusLabel(status)}${time ? ` · ${time}` : ''}`;
 }
 
+/** Metadata secundaria del header (sin repetir el badge de estado). */
+export function formatConversationHeaderMeta(
+  channel: ConversationChannel,
+  provider: ConversationProvider,
+  lastMessageAt: string | null,
+): string {
+  const time = formatShortDateTime(lastMessageAt);
+  return `${channelLabel(channel)} · ${providerLabel(provider)}${time ? ` · ${time}` : ''}`;
+}
+
 export function formatShortDateTime(iso: string | null): string {
   if (!iso) return '';
   try {

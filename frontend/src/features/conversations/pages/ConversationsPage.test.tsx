@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -193,8 +193,9 @@ describe('ConversationsPage', () => {
 
   it('renderiza titulo y lista con etiquetas en español', async () => {
     renderPage();
-    expect(screen.getByText('Conversaciones')).toBeInTheDocument();
-    expect(await screen.findByText('En vivo')).toBeInTheDocument();
+    const sidebar = screen.getByTestId('conversation-list-panel');
+    expect(within(sidebar).getByText('Conversaciones')).toBeInTheDocument();
+    expect(await within(sidebar).findByText('En vivo')).toBeInTheDocument();
     expect(screen.getByText('Esperando humano')).toBeInTheDocument();
     expect(screen.getByText('Simulación - Esperando humano')).toBeInTheDocument();
     expect(screen.getByText(/Quiero una persona/)).toBeInTheDocument();
@@ -207,8 +208,19 @@ describe('ConversationsPage', () => {
     expect(screen.queryByText('Flujo actual:')).toBeNull();
     expect(screen.queryByText(/7319B35A/i)).toBeNull();
     expect(screen.queryByText('Detalles técnicos')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /más acciones de la conversación/i }));
     expect(screen.getByText(/El usuario pidió hablar con una persona/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByRole('menuitem', { name: /tomar conversación/i })).toBeInTheDocument();
+  });
+
+  it('titulo vive en el sidebar, no como fila global', () => {
+    renderPage();
+    expect(screen.getByTestId('conversation-sidebar-header')).toBeInTheDocument();
+    expect(
+      screen.getByTestId('conversation-sidebar-header').contains(
+        screen.getByText('Conversaciones'),
+      ),
+    ).toBe(true);
   });
 
   it('muestra empty state de detalle sin seleccion', () => {
@@ -228,7 +240,7 @@ describe('ConversationsPage', () => {
   it('boton Actualizar dispara refresh', async () => {
     const user = userEvent.setup();
     renderPage();
-    await user.click(screen.getByRole('button', { name: /actualizar/i }));
+    await user.click(screen.getByRole('button', { name: /actualizar conversaciones/i }));
     expect(refreshMock).toHaveBeenCalled();
   });
 

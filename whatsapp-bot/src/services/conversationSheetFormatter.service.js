@@ -1,3 +1,5 @@
+import { formatDetalleForExport } from './conversationClassification/classificationResolver.service.js';
+
 const HUMAN_STATE_MAP = {
   completed: 'Conversación finalizada',
   info_provided: 'Información brindada',
@@ -40,10 +42,11 @@ const KNOWN_NODE_LABELS = {
   fallback_global: 'No entendido',
 };
 
-/** Orden fijo de columnas en la pestaña principal de Google Sheets (14 valores por fila). */
+/** Orden fijo de columnas en la pestaña principal de Google Sheets. */
 export const EMAIL_COLUMN_HEADER = 'Email';
+export const CONVERSATION_ID_COLUMN_HEADER = 'Conversation ID';
 
-const HUMAN_COLUMNS = [
+const BASE_HUMAN_COLUMNS = [
   'Fecha de inicio',
   'Fecha de cierre',
   'Teléfono',
@@ -59,6 +62,20 @@ const HUMAN_COLUMNS = [
   'Observaciones',
   EMAIL_COLUMN_HEADER,
 ];
+
+const EXTENDED_CLASSIFICATION_COLUMNS = [
+  CONVERSATION_ID_COLUMN_HEADER,
+  'Modalidad',
+  'Programa',
+  'Motivo específico',
+  'Área responsable',
+  'Fuente de clasificación',
+  'Confianza',
+  'Versión del clasificador',
+  'Fecha de clasificación',
+];
+
+const HUMAN_COLUMNS = [...BASE_HUMAN_COLUMNS, ...EXTENDED_CLASSIFICATION_COLUMNS];
 
 function toDate(isoLike) {
   const date = new Date(isoLike || '');
@@ -200,6 +217,23 @@ function inferConsultaPrincipal(answers, visitedNodes) {
   return 'No informado';
 }
 
+export function buildClassificationColumns(classification, conversationId) {
+  if (!classification) {
+    return EXTENDED_CLASSIFICATION_COLUMNS.map(() => '—');
+  }
+  return [
+    conversationId || '—',
+    classification.modality || '—',
+    classification.programName || classification.programType || '—',
+    classification.specificReason || '—',
+    classification.responsibleArea || '—',
+    classification.source || '—',
+    classification.confidence != null ? String(classification.confidence) : '—',
+    classification.classifierVersion || '—',
+    classification.classifiedAt ? formatDateTime(classification.classifiedAt) : '—',
+  ];
+}
+
 function inferDetalleConsulta(answers, visitedNodes, flow, transitionTrailByTarget) {
   if (answers?.detalle_consulta) return String(answers.detalle_consulta);
   const distLicNode = (visitedNodes || []).find((nodeId) => /lic|carrera/i.test(String(nodeId)));
@@ -256,6 +290,37 @@ export function formatContactEmailForSheet(contactEmail) {
   return email || '—';
 }
 
+export function findSheetRowByConversationId(headers, dataRows, conversationId) {
+  if (!conversationId) return null;
+  const idx = headers.indexOf(CONVERSATION_ID_COLUMN_HEADER);
+  if (idx < 0) return null;
+  const target = String(conversationId).trim().toLowerCase();
+  for (let i = dataRows.length - 1; i >= 0; i -= 1) {
+    const value = String(dataRows[i]?.[idx] || '').trim().toLowerCase();
+    if (value && value === target) return i + 2;
+  }
+  return null;
+}
+
+/** Columnas que la sincronización automática puede actualizar (no incluye observaciones manuales). */
+export const MANAGED_SHEET_COLUMN_HEADERS = [
+  'Consulta principal',
+  'Detalle de consulta',
+  'Estado de la conversación',
+  'Requiere atención humana',
+  'Motivo de cierre',
+  'Acción sugerida',
+  'Modalidad',
+  'Programa',
+  'Motivo específico',
+  'Área responsable',
+  'Fuente de clasificación',
+  'Confianza',
+  'Versión del clasificador',
+  'Fecha de clasificación',
+  EMAIL_COLUMN_HEADER,
+];
+
 /**
  * Busca la fila del sheet que corresponde a una conversación (1-based, incluye header).
  * @returns {number | null}
@@ -263,8 +328,13 @@ export function formatContactEmailForSheet(contactEmail) {
 export function findSheetRowMatch(
   headers,
   dataRows,
-  { phoneNumber, startedAt, closedAt = null, lastMessageAt = null },
+  { phoneNumber, startedAt, closedAt = null, lastMessageAt = null, conversationId = null },
 ) {
+  if (conversationId) {
+    const byId = findSheetRowByConversationId(headers, dataRows, conversationId);
+    if (byId) return byId;
+  }
+
   const phoneIdx = headers.indexOf('Teléfono');
   const startIdx = headers.indexOf('Fecha de inicio');
   const endIdx = headers.indexOf('Fecha de cierre');
@@ -328,7 +398,17 @@ class ConversationSheetFormatterService {
     return [...HUMAN_COLUMNS];
   }
 
-  formatHumanRecord({ session, finalStatus, context = {}, nowIso, flow = null, contactEmail = null }) {
+  formatHumanRecord({
+    session,
+    finalStatus,
+    context = {},
+    nowIso,
+    flow = null,
+    contactEmail = null,
+    conversationId = null,
+    exportClassification = null,
+    detalleConsulta = null,
+  }) {
     const answers = session?.answers && typeof session.answers === 'object' ? session.answers : {};
     const visitedNodes = Array.isArray(session?.visitedNodes) ? session.visitedNodes : [];
     const transitionTrail = Array.isArray(session?.transitionTrail) ? session.transitionTrail : [];
@@ -360,24 +440,34 @@ class ConversationSheetFormatterService {
       },
     };
 
+    const consultaPrincipal = exportClassification?.primaryQuery != null
+      ? (exportClassification.primaryQuery || 'No informado')
+      : inferConsultaPrincipal(answers, visitedNodes);
+    const detalle = detalleConsulta
+      ?? (exportClassification
+        ? formatDetalleForExport(exportClassification)
+        : inferDetalleConsulta(answers, visitedNodes, flow, transitionTrailByTarget));
+
+    const baseRow = [
+      formatDateTime(startIso),
+      formatDateTime(nowIso),
+      phoneHuman,
+      isStudent(answers, visitedNodes),
+      consultaPrincipal,
+      detalle,
+      humanState(finalStatus),
+      normalizeBooleanToHuman(requiresHuman),
+      humanReason(finalStatus, context.reason),
+      suggestedAction(finalStatus, requiresHuman),
+      routeHuman,
+      session?.lastUserMessage || '—',
+      observation(finalStatus, requiresHuman),
+      formatContactEmailForSheet(contactEmail),
+    ];
+
     return {
       headers: this.humanHeaders(),
-      row: [
-        formatDateTime(startIso),
-        formatDateTime(nowIso),
-        phoneHuman,
-        isStudent(answers, visitedNodes),
-        inferConsultaPrincipal(answers, visitedNodes),
-        inferDetalleConsulta(answers, visitedNodes, flow, transitionTrailByTarget),
-        humanState(finalStatus),
-        normalizeBooleanToHuman(requiresHuman),
-        humanReason(finalStatus, context.reason),
-        suggestedAction(finalStatus, requiresHuman),
-        routeHuman,
-        session?.lastUserMessage || '—',
-        observation(finalStatus, requiresHuman),
-        formatContactEmailForSheet(contactEmail),
-      ],
+      row: [...baseRow, ...buildClassificationColumns(exportClassification, conversationId)],
       technicalData,
     };
   }

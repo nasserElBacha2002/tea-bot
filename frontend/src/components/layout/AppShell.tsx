@@ -7,6 +7,7 @@ import { useAuthUser } from '../../features/auth/context/AuthContext';
 import { canAccessFlows, canAccessConversations, defaultHomePath } from '../../features/auth/utils/authPermissions';
 import { ConversationLiveProvider } from '../../features/conversations/context/ConversationLiveProvider';
 import { useConversationLive } from '../../features/conversations/context/conversationLiveContext';
+import { APP_SHELL_TOOLBAR_HEIGHT } from './appShellLayout';
 
 const AppShellToolbar: React.FC = () => {
   const navigate = useNavigate();
@@ -41,13 +42,32 @@ const AppShellToolbar: React.FC = () => {
         bgcolor: 'background.default',
       }}
     >
-      <AppBar position="static" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', color: 'text.primary' }}>
-        <Toolbar sx={{ gap: 1 }}>
-          <BubbleChart color="primary" />
+      <AppBar
+        position="static"
+        elevation={0}
+        sx={{
+          borderBottom: '1px solid',
+          borderColor: 'divider',
+          bgcolor: 'background.paper',
+          color: 'text.primary',
+        }}
+      >
+        <Toolbar
+          variant="dense"
+          disableGutters
+          sx={{
+            gap: 0.75,
+            minHeight: APP_SHELL_TOOLBAR_HEIGHT,
+            height: APP_SHELL_TOOLBAR_HEIGHT,
+            px: { xs: 1.5, sm: 2 },
+          }}
+        >
+          <BubbleChart color="primary" sx={{ fontSize: 22 }} />
           <Typography
-            variant="h6"
+            variant="subtitle1"
             fontWeight={800}
-            sx={{ flex: 1, cursor: 'pointer' }}
+            noWrap
+            sx={{ flex: 1, cursor: 'pointer', fontSize: { xs: '0.95rem', sm: '1rem' } }}
             onClick={() => navigate(homePath)}
           >
             {showFlows ? 'Administración Tea Bot' : 'Conversaciones Tea Bot'}
@@ -55,8 +75,9 @@ const AppShellToolbar: React.FC = () => {
           <Button
             variant={location.pathname.startsWith('/conversations') ? 'contained' : 'text'}
             size="small"
-            startIcon={<Forum />}
+            startIcon={<Forum fontSize="small" />}
             onClick={() => navigate('/conversations')}
+            sx={{ minHeight: 36, px: { xs: 1, sm: 1.5 } }}
           >
             Conversaciones
           </Button>
@@ -91,11 +112,18 @@ const AppShellToolbar: React.FC = () => {
               variant={location.pathname.startsWith('/flows') ? 'contained' : 'text'}
               size="small"
               onClick={() => navigate('/flows')}
+              sx={{ minHeight: 36, px: { xs: 1, sm: 1.5 } }}
             >
               Flujos
             </Button>
           ) : null}
-          <Button variant="outlined" size="small" onClick={handleLogout} disabled={loggingOut}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            sx={{ minHeight: 36, px: { xs: 1, sm: 1.5 } }}
+          >
             Cerrar sesión
           </Button>
         </Toolbar>

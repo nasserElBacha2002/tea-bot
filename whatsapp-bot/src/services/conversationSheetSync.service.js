@@ -1,10 +1,17 @@
 import { config } from '../config.js';
 import googleSheetsService, { columnToLetter } from './googleSheets.service.js';
 import conversationSheetFormatterService, {
+  CONVERSATION_ID_COLUMN_HEADER,
   EMAIL_COLUMN_HEADER,
+  MANAGED_SHEET_COLUMN_HEADERS,
+  buildClassificationColumns,
   findSheetRowMatch,
   formatContactEmailForSheet,
 } from './conversationSheetFormatter.service.js';
+import conversationSheetExportRepository from '../repositories/conversation-sheet-export.repository.js';
+import classificationReconciliationService from './conversationClassification/classificationReconciliation.service.js';
+import { formatDetalleForExport } from './conversationClassification/classificationResolver.service.js';
+import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 
 function resolveEmail(conversation) {
   const email = conversation?.contactEmail;
@@ -68,6 +75,7 @@ class ConversationSheetSyncService {
       startedAt: conversation.startedAt,
       closedAt: conversation.closedAt,
       lastMessageAt: conversation.lastMessageAt,
+      conversationId: conversation.id,
     });
 
     if (!sheetRow) {
@@ -114,6 +122,102 @@ class ConversationSheetSyncService {
       sheetRow,
       cell,
       email,
+    };
+  }
+
+  async syncClassificationForConversation(conversation, options = {}) {
+    if (!config.conversationClassificationSheetUpdateEnabled) {
+      return { skipped: true, reason: 'sheet_update_disabled' };
+    }
+    if (!googleSheetsService.isEnabled() || !googleSheetsService.hasRequiredConfig()) {
+      return { skipped: true, reason: 'disabled_or_missing_config' };
+    }
+
+    const dbSession = await conversationSessionRepository.findLatestByConversationId(conversation.id);
+    const session = classificationReconciliationService.buildSessionFromDbSession(conversation, dbSession);
+    const resolution = await classificationReconciliationService.classifySessionForExport(
+      session,
+      conversation.id,
+      { persist: true },
+    );
+    const exportClassification = resolution.exportClassification;
+    if (!exportClassification?.primaryQuery) {
+      return { skipped: true, reason: 'no_classification' };
+    }
+    if (exportClassification.source === 'manual') {
+      return { skipped: true, reason: 'manual_override' };
+    }
+
+    const tabName = config.googleSheetsTabName;
+    const expectedHeaders = conversationSheetFormatterService.humanHeaders();
+    const ensured = await googleSheetsService.ensureHeaderColumns(tabName, expectedHeaders);
+    const values = await googleSheetsService.readTabValues(tabName);
+    const headers = ensured.headers.length > 0 ? ensured.headers : (values[0] || expectedHeaders);
+    const dataRows = values.slice(1);
+
+    let sheetRow = null;
+    const exportRecord = conversationSheetExportRepository.isEnabled()
+      ? await conversationSheetExportRepository.findLatestByConversationAndTab(conversation.id, tabName)
+      : null;
+    if (exportRecord?.sheetRowNumber) {
+      sheetRow = exportRecord.sheetRowNumber;
+    }
+    if (!sheetRow) {
+      sheetRow = findSheetRowMatch(headers, dataRows, {
+        phoneNumber: conversation.phoneNumber,
+        startedAt: conversation.startedAt,
+        closedAt: conversation.closedAt,
+        lastMessageAt: conversation.lastMessageAt,
+        conversationId: conversation.id,
+      });
+    }
+    if (!sheetRow) {
+      return { skipped: true, reason: 'row_not_found', conversationId: conversation.id };
+    }
+
+    const detalle = formatDetalleForExport(exportClassification);
+    const extendedValues = buildClassificationColumns(exportClassification, conversation.id);
+    const extendedHeaders = conversationSheetFormatterService.humanHeaders().slice(-extendedValues.length);
+    const updates = {
+      'Consulta principal': exportClassification.primaryQuery || 'No informado',
+      'Detalle de consulta': detalle,
+    };
+    extendedHeaders.forEach((header, index) => {
+      updates[header] = extendedValues[index];
+    });
+
+    const cells = [];
+    for (const header of MANAGED_SHEET_COLUMN_HEADERS) {
+      if (!(header in updates)) continue;
+      const idx = headers.indexOf(header);
+      if (idx < 0) continue;
+      cells.push({
+        cell: `${columnToLetter(idx)}${sheetRow}`,
+        value: updates[header],
+      });
+    }
+
+    if (options.dryRun) {
+      return {
+        skipped: false,
+        dryRun: true,
+        updated: true,
+        conversationId: conversation.id,
+        sheetRow,
+        cells,
+      };
+    }
+
+    for (const item of cells) {
+      await googleSheetsService.updateCell(tabName, item.cell, item.value);
+    }
+
+    return {
+      skipped: false,
+      updated: true,
+      conversationId: conversation.id,
+      sheetRow,
+      primaryQuery: exportClassification.primaryQuery,
     };
   }
 

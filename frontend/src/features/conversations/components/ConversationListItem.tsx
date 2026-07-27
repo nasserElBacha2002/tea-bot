@@ -5,16 +5,18 @@ import {
   Typography,
   Stack,
   Chip,
+  Box,
 } from '@mui/material';
 import type { InboxConversationItem } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
-import { formatListItemPrimary, formatListItemSecondary } from '../utils/conversationUiLabels';
+import { formatListItemPrimary } from '../utils/conversationUiLabels';
 import {
   channelLabel,
   formatShortDateTime,
   lastMessagePreviewPrefix,
 } from '../utils/conversationDisplay';
 import { listPriorityAccent } from '../utils/conversationUnread';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   conversation: InboxConversationItem;
@@ -49,11 +51,7 @@ export const ConversationListItem: React.FC<Props> = ({
   onSelect,
 }) => {
   const title = formatListItemPrimary(conversation.phoneNumber, conversation.displayName);
-  const listCaption = formatListItemSecondary(
-    conversation.phoneNumber,
-    conversation.displayName,
-    channelLabel(conversation.channel),
-  );
+  const channel = channelLabel(conversation.channel);
   const preview =
     conversation.lastMessage?.body?.trim() || 'Sin mensajes';
   const prefix = lastMessagePreviewPrefix(
@@ -74,6 +72,8 @@ export const ConversationListItem: React.FC<Props> = ({
     .filter(Boolean)
     .join(', ');
 
+  const metaRight = [time, channel].filter(Boolean).join(' · ');
+
   return (
     <ListItemButton
       selected={selected}
@@ -81,6 +81,9 @@ export const ConversationListItem: React.FC<Props> = ({
       alignItems="flex-start"
       aria-label={ariaLabel}
       sx={{
+        py: 0.75,
+        px: 1.25,
+        minHeight: conversationUiDensity.listItemMinHeight,
         borderBottom: '1px solid',
         borderColor: 'divider',
         bgcolor: highlight
@@ -100,13 +103,14 @@ export const ConversationListItem: React.FC<Props> = ({
       <ListItemText
         primaryTypographyProps={{ component: 'div' }}
         secondaryTypographyProps={{ component: 'div' }}
+        sx={{ my: 0 }}
         primary={
-          <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+          <Stack direction="row" spacing={0.75} alignItems="center" justifyContent="space-between">
             <Typography
-              variant="subtitle2"
-              fontWeight={highlight ? 800 : 600}
+              variant="body2"
+              fontWeight={highlight ? 700 : 600}
               noWrap
-              sx={{ flex: 1 }}
+              sx={{ flex: 1, minWidth: 0, fontSize: '0.875rem' }}
             >
               {title}
             </Typography>
@@ -116,7 +120,7 @@ export const ConversationListItem: React.FC<Props> = ({
                   size="small"
                   label={badge.label}
                   color={badge.color}
-                  sx={{ height: 22, fontWeight: 700 }}
+                  sx={{ height: 20, fontSize: '0.6875rem', fontWeight: 700, '& .MuiChip-label': { px: 0.75 } }}
                 />
               )}
               <ConversationStatusBadge status={conversation.status} />
@@ -124,25 +128,36 @@ export const ConversationListItem: React.FC<Props> = ({
           </Stack>
         }
         secondary={
-          <Stack spacing={0.35} sx={{ mt: 0.5 }}>
+          <Box
+            sx={{
+              mt: 0.25,
+              display: 'flex',
+              alignItems: 'baseline',
+              gap: 1,
+              minWidth: 0,
+            }}
+          >
             <Typography
-              variant="body2"
+              variant="caption"
               color={highlight ? 'text.primary' : 'text.secondary'}
               noWrap
-              fontWeight={highlight ? 700 : 400}
+              fontWeight={highlight ? 600 : 400}
+              sx={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', lineHeight: 1.35 }}
             >
               {prefix}
               {preview}
             </Typography>
-            <Typography
-              variant="caption"
-              color={highlight ? 'text.secondary' : 'text.disabled'}
-              fontWeight={highlight ? 600 : 400}
-            >
-              {time ? `${time} · ` : ''}
-              {listCaption}
-            </Typography>
-          </Stack>
+            {metaRight && (
+              <Typography
+                variant="caption"
+                color="text.disabled"
+                noWrap
+                sx={{ flexShrink: 0, fontSize: '0.75rem', lineHeight: 1.35 }}
+              >
+                {metaRight}
+              </Typography>
+            )}
+          </Box>
         }
       />
     </ListItemButton>

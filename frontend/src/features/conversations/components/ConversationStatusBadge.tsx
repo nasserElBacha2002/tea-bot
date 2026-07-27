@@ -27,6 +27,11 @@ export const ConversationStatusBadge: React.FC<Props> = ({ status, size = 'small
       color={color}
       size={size}
       variant="outlined"
+      sx={{
+        height: size === 'small' ? 22 : 28,
+        fontSize: size === 'small' ? '0.6875rem' : '0.75rem',
+        '& .MuiChip-label': { px: size === 'small' ? 0.75 : 1 },
+      }}
     />
   );
 };

@@ -7,6 +7,9 @@ import {
   MenuItem,
   Button,
   Stack,
+  IconButton,
+  Tooltip,
+  Box,
 } from '@mui/material';
 import { Refresh } from '@mui/icons-material';
 import type {
@@ -21,6 +24,7 @@ import {
   resolveChannelFilterValue,
 } from '../constants/conversationChannels';
 import { CONVERSATION_STATUS_LABELS } from '../utils/conversationUiLabels';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   filters: ConversationListFilters;
@@ -38,6 +42,14 @@ const STATUS_OPTIONS: Array<{ value: ConversationStatus | ''; label: string }> =
   { value: 'paused', label: CONVERSATION_STATUS_LABELS.paused },
 ];
 
+const compactControlSx = {
+  '& .MuiInputBase-root': {
+    minHeight: conversationUiDensity.controlHeight,
+    fontSize: '0.8125rem',
+  },
+  '& .MuiInputLabel-root': { fontSize: '0.8125rem' },
+};
+
 export const ConversationFilters: React.FC<Props> = ({
   filters,
   onChange,
@@ -47,73 +59,117 @@ export const ConversationFilters: React.FC<Props> = ({
   const channelValue = resolveChannelFilterValue(filters.channel);
 
   return (
-    <Stack
-      spacing={1.5}
+    <Box
       sx={{
         flexShrink: 0,
-        p: 2,
+        px: conversationUiDensity.filterPadding,
+        py: 0.5,
+        minHeight: conversationUiDensity.filterBlockMinHeight,
         borderBottom: '1px solid',
         borderColor: 'divider',
+        display: 'flex',
+        alignItems: 'center',
       }}
     >
-      <TextField
-        size="small"
-        fullWidth
-        label="Buscar por teléfono o nombre"
-        value={filters.search ?? ''}
-        onChange={(e) => onChange({ search: e.target.value })}
-      />
-      <Stack direction="row" spacing={1}>
-        <FormControl size="small" fullWidth>
-          <InputLabel id="conv-status-filter">Estado</InputLabel>
-          <Select
-            labelId="conv-status-filter"
-            label="Estado"
-            value={filters.status ?? ''}
-            onChange={(e) =>
-              onChange({ status: e.target.value as ConversationStatus | '' })
-            }
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <MenuItem key={opt.value || 'all'} value={opt.value}>
-                {opt.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <FormControl size="small" fullWidth>
-          <InputLabel id="conv-channel-filter" shrink>
-            Canal
-          </InputLabel>
-          <Select
-            labelId="conv-channel-filter"
-            label="Canal"
-            value={channelValue}
-            displayEmpty
-            renderValue={(selected) =>
-              channelFilterLabel(selected as ConversationChannel | typeof CHANNEL_FILTER_ALL)
-            }
-            onChange={(e) =>
-              onChange({
-                channel: e.target.value as ConversationListFilters['channel'],
-              })
-            }
-          >
-            <MenuItem value={CHANNEL_FILTER_ALL}>{CHANNEL_FILTER_LABELS.all}</MenuItem>
-            <MenuItem value="whatsapp">{CHANNEL_FILTER_LABELS.whatsapp}</MenuItem>
-            <MenuItem value="simulator">{CHANNEL_FILTER_LABELS.simulator}</MenuItem>
-          </Select>
-        </FormControl>
-      </Stack>
-      <Button
-        variant="outlined"
-        size="small"
-        startIcon={<Refresh />}
-        onClick={onRefresh}
-        disabled={refreshing}
+      <Stack
+        direction={{ xs: 'column', md: 'row' }}
+        spacing={0.75}
+        alignItems={{ md: 'center' }}
+        sx={{ width: '100%' }}
       >
-        Actualizar
-      </Button>
-    </Stack>
+        <TextField
+          size="small"
+          label="Buscar"
+          placeholder="Teléfono o nombre"
+          value={filters.search ?? ''}
+          onChange={(e) => onChange({ search: e.target.value })}
+          sx={{
+            flex: { xs: 1, md: '1 1 120px' },
+            minWidth: { md: 100 },
+            maxWidth: { md: 160 },
+            ...compactControlSx,
+          }}
+        />
+        <Stack
+          direction="row"
+          spacing={0.75}
+          sx={{ width: { xs: '100%', md: 'auto' }, flexShrink: 0, alignItems: 'center' }}
+        >
+          <FormControl size="small" sx={{ flex: 1, minWidth: { md: 108 }, ...compactControlSx }}>
+            <InputLabel id="conv-status-filter">Estado</InputLabel>
+            <Select
+              labelId="conv-status-filter"
+              label="Estado"
+              value={filters.status ?? ''}
+              onChange={(e) =>
+                onChange({ status: e.target.value as ConversationStatus | '' })
+              }
+            >
+              {STATUS_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value || 'all'} value={opt.value}>
+                  {opt.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ flex: 1, minWidth: { md: 108 }, ...compactControlSx }}>
+            <InputLabel id="conv-channel-filter" shrink>
+              Canal
+            </InputLabel>
+            <Select
+              labelId="conv-channel-filter"
+              label="Canal"
+              value={channelValue}
+              displayEmpty
+              renderValue={(selected) =>
+                channelFilterLabel(selected as ConversationChannel | typeof CHANNEL_FILTER_ALL)
+              }
+              onChange={(e) =>
+                onChange({
+                  channel: e.target.value as ConversationListFilters['channel'],
+                })
+              }
+            >
+              <MenuItem value={CHANNEL_FILTER_ALL}>{CHANNEL_FILTER_LABELS.all}</MenuItem>
+              <MenuItem value="whatsapp">{CHANNEL_FILTER_LABELS.whatsapp}</MenuItem>
+              <MenuItem value="simulator">{CHANNEL_FILTER_LABELS.simulator}</MenuItem>
+            </Select>
+          </FormControl>
+          <Tooltip title="Actualizar">
+            <span>
+              <IconButton
+                size="small"
+                aria-label="Actualizar conversaciones"
+                onClick={onRefresh}
+                disabled={refreshing}
+                sx={{
+                  width: conversationUiDensity.controlHeight,
+                  height: conversationUiDensity.controlHeight,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  flexShrink: 0,
+                }}
+              >
+                <Refresh fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Refresh />}
+            onClick={onRefresh}
+            disabled={refreshing}
+            sx={{
+              display: { xs: 'inline-flex', md: 'none' },
+              minHeight: conversationUiDensity.controlHeight,
+            }}
+          >
+            Actualizar
+          </Button>
+        </Stack>
+      </Stack>
+    </Box>
   );
 };

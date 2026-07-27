@@ -7,10 +7,15 @@ import {
   CircularProgress,
   Button,
   IconButton,
+  Tooltip,
+  Menu,
+  MenuItem,
+  ListItemText,
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import type { ConversationDetailResponse } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
 import { ConversationMessageTimeline } from './ConversationMessageTimeline';
@@ -18,14 +23,11 @@ import { ConversationComposer } from './ConversationComposer';
 import { ContactNameEditor } from './ContactNameEditor';
 import type { ConversationMessage } from '../types/conversation.types';
 import {
-  formatConversationTitle,
-  formatListItemSecondary,
-} from '../utils/conversationUiLabels';
-import {
-  channelLabel,
-  formatDetailSubtitle,
+  formatConversationHeaderMeta,
   handoffReasonHumanText,
 } from '../utils/conversationDisplay';
+import { formatConversationTitle } from '../utils/conversationUiLabels';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   detail: ConversationDetailResponse | undefined;
@@ -78,6 +80,7 @@ export const ConversationDetail: React.FC<Props> = ({
   const isMobileViewport = useMediaQuery(theme.breakpoints.down('md'));
   const isCompactDetail = isMobileViewport || Boolean(onBack);
   const [closeConfirm, setCloseConfirm] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
 
   if (loadingDetail) {
     return (
@@ -88,7 +91,7 @@ export const ConversationDetail: React.FC<Props> = ({
   }
 
   if (detailError) {
-    return <Alert severity="error" sx={{ m: 2 }}>{detailError}</Alert>;
+    return <Alert severity="error" sx={{ m: 1 }}>{detailError}</Alert>;
   }
 
   if (!detail) {
@@ -100,10 +103,10 @@ export const ConversationDetail: React.FC<Props> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          p: 3,
+          p: 2,
         }}
       >
-        <Typography color="text.secondary" textAlign="center">
+        <Typography color="text.secondary" textAlign="center" variant="body2">
           Seleccioná una conversación para ver el detalle
         </Typography>
       </Box>
@@ -112,15 +115,9 @@ export const ConversationDetail: React.FC<Props> = ({
 
   const { conversation, humanHandoff } = detail;
   const title = formatConversationTitle(conversation.phoneNumber, conversation.displayName);
-  const contactSecondary = formatListItemSecondary(
-    conversation.phoneNumber,
-    conversation.displayName,
-    channelLabel(conversation.channel),
-  );
-  const subtitle = formatDetailSubtitle(
+  const headerMeta = formatConversationHeaderMeta(
     conversation.channel,
     conversation.provider,
-    conversation.status,
     conversation.lastMessageAt,
   );
   const motivo =
@@ -149,34 +146,23 @@ export const ConversationDetail: React.FC<Props> = ({
       ? 'Cerrar'
       : 'Cerrar y devolver al bot';
 
-  const compactHeader = (
-    <Stack
-      direction="row"
-      alignItems="center"
-      spacing={0.5}
-      sx={{ minHeight: 44, width: '100%' }}
-    >
-      {onBack && (
-        <IconButton
-          onClick={onBack}
-          aria-label="Volver a la lista"
-          edge="start"
-          size="small"
-        >
-          <ArrowBackIcon />
-        </IconButton>
-      )}
-      <Typography
-        variant="subtitle1"
-        fontWeight={700}
-        noWrap
-        sx={{ flex: 1, minWidth: 0 }}
-      >
-        {title}
-      </Typography>
+  const headerActions = (
+    <Stack direction="row" spacing={0.5} alignItems="center" flexShrink={0}>
       {closeConfirm && (
-        <Button size="small" onClick={() => setCloseConfirm(false)} sx={{ flexShrink: 0 }}>
+        <Button size="small" onClick={() => setCloseConfirm(false)} sx={{ minWidth: 0, px: 1 }}>
           No
+        </Button>
+      )}
+      {showClaimInHeader && (
+        <Button
+          size="small"
+          variant="contained"
+          color="primary"
+          onClick={() => void onClaim()}
+          disabled={claiming}
+          sx={{ minHeight: 32, px: 1, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'inline-flex' } }}
+        >
+          {claiming ? '…' : 'Tomar'}
         </Button>
       )}
       {canClose && (
@@ -186,92 +172,137 @@ export const ConversationDetail: React.FC<Props> = ({
           color="error"
           onClick={() => void handleClose()}
           disabled={closing}
-          sx={{ flexShrink: 0, minWidth: closeConfirm ? 72 : 56, px: 1 }}
+          sx={{ minHeight: 32, px: 1, whiteSpace: 'nowrap' }}
         >
           {closing ? '…' : closeButtonLabel}
         </Button>
       )}
+      <IconButton
+        size="small"
+        aria-label="Más acciones de la conversación"
+        onClick={(e) => setMenuAnchor(e.currentTarget)}
+        sx={{ flexShrink: 0 }}
+      >
+        <MoreVertIcon fontSize="small" />
+      </IconButton>
     </Stack>
   );
 
-  const desktopHeader = (
-    <>
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+  const detailHeader = (
+    <Stack spacing={contactError ? 0.5 : 0} sx={{ width: '100%', minWidth: 0 }}>
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={0.75}
+        sx={{
+          minHeight: conversationUiDensity.headerHeight,
+          maxHeight: conversationUiDensity.headerHeight,
+          width: '100%',
+          minWidth: 0,
+          flexWrap: 'nowrap',
+        }}
+      >
         {onBack && (
           <IconButton
             onClick={onBack}
             aria-label="Volver a la lista"
             edge="start"
             size="small"
-            sx={{ mr: 0.5 }}
+            sx={{ flexShrink: 0 }}
           >
-            <ArrowBackIcon />
+            <ArrowBackIcon fontSize="small" />
           </IconButton>
         )}
-        <Typography variant="h6" fontWeight={800}>
+
+        <Typography
+          variant="body1"
+          fontWeight={700}
+          noWrap
+          sx={{ flexShrink: 1, minWidth: 0, maxWidth: { xs: '38%', sm: '32%', md: '28%' }, fontSize: '0.9375rem' }}
+        >
           {title}
         </Typography>
+
         <ContactNameEditor
           displayName={conversation.displayName}
           saving={savingContact}
           error={contactError}
           onSave={onUpdateContact}
         />
-        <ConversationStatusBadge status={conversation.status} size="medium" />
+
+        <ConversationStatusBadge status={conversation.status} />
+
+        <Tooltip title={headerMeta}>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            noWrap
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              display: { xs: 'none', md: 'block' },
+              fontSize: '0.8125rem',
+            }}
+          >
+            {headerMeta}
+          </Typography>
+        </Tooltip>
+
+        {headerActions}
       </Stack>
 
+      {contactError && (
+        <Typography variant="caption" color="error.main" sx={{ px: onBack ? 0.5 : 0 }}>
+          {contactError}
+        </Typography>
+      )}
+    </Stack>
+  );
+
+  const overflowMenu = (
+    <Menu
+      anchorEl={menuAnchor}
+      open={Boolean(menuAnchor)}
+      onClose={() => setMenuAnchor(null)}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+    >
+      {showClaimInHeader && (
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null);
+            void onClaim();
+          }}
+          disabled={claiming}
+        >
+          Tomar conversación
+        </MenuItem>
+      )}
       {conversation.displayName?.trim() && conversation.phoneNumber && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          {contactSecondary}
-        </Typography>
+        <MenuItem disabled sx={{ opacity: '1 !important' }}>
+          <ListItemText primary={conversation.phoneNumber} primaryTypographyProps={{ variant: 'body2' }} />
+        </MenuItem>
       )}
-
       {conversation.contactEmail?.trim() && (
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-          Email: {conversation.contactEmail.trim()}
-        </Typography>
+        <MenuItem disabled sx={{ opacity: '1 !important' }}>
+          <ListItemText
+            primary={`Email: ${conversation.contactEmail.trim()}`}
+            primaryTypographyProps={{ variant: 'body2' }}
+          />
+        </MenuItem>
       )}
-
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-        {subtitle}
-      </Typography>
-
       {motivo && (
-        <Typography variant="body2" sx={{ mt: 0.75 }}>
-          <strong>Motivo:</strong> {motivo}
-        </Typography>
+        <MenuItem disabled sx={{ opacity: '1 !important' }}>
+          <ListItemText
+            primary={`Motivo: ${motivo}`}
+            primaryTypographyProps={{ variant: 'body2' }}
+          />
+        </MenuItem>
       )}
-
-      <Stack direction="row" spacing={1} sx={{ mt: 1.5 }} flexWrap="wrap">
-        {showClaimInHeader && (
-          <Button
-            size="small"
-            variant="contained"
-            color="primary"
-            onClick={() => void onClaim()}
-            disabled={claiming}
-          >
-            {claiming ? 'Tomando…' : 'Tomar conversación'}
-          </Button>
-        )}
-        {canClose && (
-          <Button
-            size="small"
-            variant="outlined"
-            color="error"
-            onClick={() => void handleClose()}
-            disabled={closing}
-          >
-            {closeButtonLabel}
-          </Button>
-        )}
-        {closeConfirm && !isCompactDetail && (
-          <Button size="small" onClick={() => setCloseConfirm(false)}>
-            Cancelar
-          </Button>
-        )}
-      </Stack>
-    </>
+      <MenuItem disabled sx={{ opacity: '1 !important', display: { md: 'none' } }}>
+        <ListItemText primary={headerMeta} primaryTypographyProps={{ variant: 'body2' }} />
+      </MenuItem>
+    </Menu>
   );
 
   return (
@@ -288,18 +319,16 @@ export const ConversationDetail: React.FC<Props> = ({
       <Box
         sx={{
           flexShrink: 0,
-          maxHeight: isCompactDetail ? 'none' : '36%',
-          minHeight: 0,
-          overflowY: isCompactDetail ? 'visible' : 'auto',
-          overflowX: 'hidden',
-          px: isCompactDetail ? 1 : 2,
-          py: isCompactDetail ? 0.75 : 2,
+          overflow: 'hidden',
+          px: { xs: 1, md: 1.5 },
+          py: 0,
           borderBottom: '1px solid',
           borderColor: 'divider',
           bgcolor: 'background.paper',
         }}
       >
-        {isCompactDetail ? compactHeader : desktopHeader}
+        {detailHeader}
+        {overflowMenu}
       </Box>
 
       <ConversationMessageTimeline

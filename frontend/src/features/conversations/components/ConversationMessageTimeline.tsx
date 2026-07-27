@@ -5,12 +5,14 @@ import { senderTypeLabel } from '../utils/conversationUiLabels';
 import {
   messageDisplayBody,
   resolveMessageBubbleRole,
+  type MessageBubbleRole,
 } from '../utils/conversationMessageDisplay';
 import {
   findFirstUnreadMessage,
   getReadThroughAt,
   hasUnreadMessagesForAgent,
 } from '../utils/conversationUnread';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   messages: ConversationMessage[];
@@ -20,6 +22,11 @@ interface Props {
   readAt?: string | null;
   onCaughtUp?: (readThroughAt: string) => void;
   scrollFooter?: React.ReactNode;
+}
+
+interface MessageGroup {
+  role: MessageBubbleRole;
+  messages: ConversationMessage[];
 }
 
 function formatTime(iso: string): string {
@@ -33,6 +40,20 @@ function formatTime(iso: string): string {
   } catch {
     return '';
   }
+}
+
+function groupMessages(messages: ConversationMessage[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+  for (const msg of messages) {
+    const role = resolveMessageBubbleRole(msg);
+    const last = groups[groups.length - 1];
+    if (last && last.role === role && role !== 'system') {
+      last.messages.push(msg);
+    } else {
+      groups.push({ role, messages: [msg] });
+    }
+  }
+  return groups;
 }
 
 const SCROLL_NEAR_BOTTOM_PX = 80;
@@ -61,6 +82,8 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
       ),
     [messages],
   );
+
+  const groups = useMemo(() => groupMessages(sorted), [sorted]);
 
   const isNearBottom = useCallback(() => {
     const el = scrollRef.current;
@@ -184,68 +207,91 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
           overflowY: 'auto',
           overflowX: 'hidden',
           overscrollBehavior: 'contain',
-          p: { xs: 1.5, md: 2 },
+          px: conversationUiDensity.messageAreaPaddingX,
+          py: conversationUiDensity.messageAreaPaddingY,
         }}
         onScroll={handleScroll}
       >
         {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-            <CircularProgress size={28} />
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+            <CircularProgress size={24} />
           </Box>
         )}
 
         {error && <Alert severity="error">{error}</Alert>}
 
         {!loading && !error && sorted.length === 0 && (
-          <Typography color="text.secondary" sx={{ textAlign: 'center', py: 3 }}>
+          <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }} variant="body2">
             Sin mensajes
           </Typography>
         )}
 
         {!loading && !error && sorted.length > 0 && (
-          <Stack spacing={1.5}>
-            {sorted.map((msg) => {
-              const role = resolveMessageBubbleRole(msg);
-              const isUser = role === 'user';
-              const isSystem = role === 'system';
-              const isAgent = role === 'agent';
+          <Stack spacing={conversationUiDensity.messageGapGroup}>
+            {groups.map((group) => {
+              const isUser = group.role === 'user';
+              const isSystem = group.role === 'system';
+              const isAgent = group.role === 'agent';
               const align = isSystem ? 'center' : isUser ? 'flex-start' : 'flex-end';
+              const firstMsg = group.messages[0];
 
               return (
-                <Box
-                  key={msg.id}
-                  ref={(el: HTMLDivElement | null) => {
-                    messageRefs.current[msg.id] = el;
-                  }}
-                  sx={{ display: 'flex', justifyContent: align }}
+                <Stack
+                  key={firstMsg.id}
+                  spacing={conversationUiDensity.messageGapSameSender}
+                  sx={{ width: '100%' }}
                 >
-                  <Paper
-                    elevation={0}
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
                     sx={{
-                      px: 1.5,
-                      py: 1,
-                      maxWidth: '78%',
-                      bgcolor: isSystem
-                        ? 'grey.200'
-                        : isUser
-                          ? 'background.paper'
-                          : isAgent
-                            ? 'success.light'
-                            : 'primary.light',
-                      color:
-                        isUser || isSystem ? 'text.primary' : 'primary.contrastText',
-                      border: '1px solid',
-                      borderColor: 'divider',
+                      px: 0.5,
+                      textAlign: isSystem ? 'center' : isUser ? 'left' : 'right',
+                      fontSize: '0.75rem',
                     }}
                   >
-                    <Typography variant="caption" color="text.secondary" display="block">
-                      {senderTypeLabel(msg.senderType)} · {formatTime(msg.createdAt)}
-                    </Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.25 }}>
-                      {messageDisplayBody(msg)}
-                    </Typography>
-                  </Paper>
-                </Box>
+                    {senderTypeLabel(firstMsg.senderType)} · {formatTime(firstMsg.createdAt)}
+                  </Typography>
+                  {group.messages.map((msg, index) => {
+                    const isLastInGroup = index === group.messages.length - 1;
+                    return (
+                      <Box
+                        key={msg.id}
+                        ref={(el: HTMLDivElement | null) => {
+                          messageRefs.current[msg.id] = el;
+                        }}
+                        sx={{ display: 'flex', justifyContent: align }}
+                      >
+                        <Paper
+                          elevation={0}
+                          sx={{
+                            px: conversationUiDensity.bubblePaddingX,
+                            py: conversationUiDensity.bubblePaddingY,
+                            maxWidth: '78%',
+                            width: 'fit-content',
+                            bgcolor: isSystem
+                              ? 'grey.200'
+                              : isUser
+                                ? 'background.paper'
+                                : isAgent
+                                  ? 'success.light'
+                                  : 'primary.light',
+                            color:
+                              isUser || isSystem ? 'text.primary' : 'primary.contrastText',
+                            border: '1px solid',
+                            borderColor: 'divider',
+                            borderBottomLeftRadius: isUser && !isLastInGroup ? 6 : undefined,
+                            borderBottomRightRadius: !isUser && !isSystem && !isLastInGroup ? 6 : undefined,
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', lineHeight: 1.45 }}>
+                            {messageDisplayBody(msg)}
+                          </Typography>
+                        </Paper>
+                      </Box>
+                    );
+                  })}
+                </Stack>
               );
             })}
             {scrollFooter}

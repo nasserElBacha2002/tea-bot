@@ -41,6 +41,13 @@ export function buildSessionSyncPatch(memorySession, engineResult, conversation)
     currentNodeKey: engineResult.currentNodeId || memorySession?.currentNode || null,
     variablesJson: engineResult.variables || memorySession?.variables || {},
     historyJson: memorySession?.history || [],
+    trackingJson: {
+      answers: memorySession?.answers || {},
+      visitedNodes: memorySession?.visitedNodes || [],
+      transitionTrail: memorySession?.transitionTrail || [],
+      lastUserMessage: memorySession?.lastUserMessage || null,
+      startedAt: memorySession?.startedAt || null,
+    },
   };
 }
 
@@ -191,6 +198,15 @@ class ConversationService {
       currentNode: dbSession.currentNodeKey,
       flowId: dbSession.flowId,
       flowVersion: dbSession.flowVersion,
+      answers: dbSession.trackingJson?.answers || {},
+      visitedNodes: Array.isArray(dbSession.trackingJson?.visitedNodes)
+        ? dbSession.trackingJson.visitedNodes
+        : [],
+      transitionTrail: Array.isArray(dbSession.trackingJson?.transitionTrail)
+        ? dbSession.trackingJson.transitionTrail
+        : [],
+      lastUserMessage: dbSession.trackingJson?.lastUserMessage || '',
+      startedAt: dbSession.trackingJson?.startedAt || undefined,
     });
 
     return sessionService.getSession(userId);
@@ -205,6 +221,7 @@ class ConversationService {
       currentNodeKey,
       variablesJson: variables,
       historyJson: history,
+      trackingJson,
     } = sync;
 
     let activeSession = dbSession;
@@ -224,6 +241,7 @@ class ConversationService {
         currentNodeKey,
         variablesJson: variables,
         historyJson: history,
+        trackingJson,
       });
     }
 
