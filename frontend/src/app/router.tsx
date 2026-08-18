@@ -18,6 +18,7 @@ export const AppRouter: React.FC = () => {
         <Route element={<RequireAuth />}>
           <Route element={<AppShell />}>
             <Route path="/conversations" element={<ConversationsPage />} />
+            <Route path="/conversations/:conversationId" element={<ConversationsPage />} />
             <Route
               path="/admin/flows"
               element={

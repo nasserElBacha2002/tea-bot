@@ -3,6 +3,7 @@ import conversationMessageRepository from '../repositories/conversation-message.
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationService from './conversation.service.js';
+import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
 import sessionService from './session.service.js';
 import twilioWhatsAppService from './twilio-whatsapp.service.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
@@ -320,24 +321,10 @@ export class ConversationInboxService {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
 
-    await conversationSessionRepository.endAllActiveForConversation(conversationId);
-
-    if (conversation.externalUserId) {
-      await sessionService.resetSession(conversation.externalUserId);
-    }
-
-    const handoff =
-      (await humanHandoffRepository.findPendingByConversationId(conversationId))
-      || (await humanHandoffRepository.findLatestByConversationId(conversationId));
-    if (handoff && ['pending', 'assigned'].includes(handoff.status)) {
-      await humanHandoffRepository.updateHandoff(handoff.id, {
-        status: 'resolved',
-        resolvedAt: new Date(),
-        resolutionNote: resolutionNote || null,
-      });
-    }
-
-    const updated = await conversationService.returnConversationToBot(conversationId);
+    const { conversation: updated } = await conversationBotLifecycleService.returnConversationToBot(
+      conversation,
+      { resolutionNote },
+    );
 
     await conversationMessageRepository.createMessage({
       conversationId,

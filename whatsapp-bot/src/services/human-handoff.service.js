@@ -1,6 +1,7 @@
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+import { withTransaction } from '../db/index.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import {
@@ -24,12 +25,14 @@ export class HumanHandoffService {
    *   handoffRepo?: typeof humanHandoffRepository,
    *   conversationRepo?: typeof conversationRepository,
    *   sessionRepo?: typeof conversationSessionRepository,
+   *   runTransaction?: typeof withTransaction,
    * }} [deps]
    */
   constructor(deps = {}) {
     this.handoffRepo = deps.handoffRepo || humanHandoffRepository;
     this.conversationRepo = deps.conversationRepo || conversationRepository;
     this.sessionRepo = deps.sessionRepo || conversationSessionRepository;
+    this.runTransaction = deps.runTransaction || withTransaction;
   }
 
   isConversationInHumanMode(conversation) {
@@ -41,60 +44,25 @@ export class HumanHandoffService {
    * @param {HandoffContext} context
    */
   async ensurePendingHandoff(conversation, context = {}) {
-    const existing = await this.handoffRepo.findPendingByConversationId(conversation.id);
-    if (existing) return { handoff: existing, created: false };
-
-    const handoff = await this.handoffRepo.createHandoff({
-      conversationId: conversation.id,
-      requestedBy: context.requestedBy || 'bot',
-      reason: context.reason || null,
-      status: 'pending',
+    return this.runTransaction(async (transaction) => {
+      await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
+      return this.handoffRepo.ensurePendingHandoffAtomic(
+        conversation.id,
+        {
+          requestedBy: context.requestedBy || 'bot',
+          reason: context.reason || null,
+        },
+        { transaction },
+      );
     });
-    return { handoff, created: true };
   }
 
   /**
+   * Transición atómica: handoff pending + conversation waiting_human + session paused.
+   * Realtime/outbound ocurren después del commit.
+   *
    * @param {object} conversation
-   * @param {object | null} dbSession
-   * @param {HandoffContext} handoffContext
-   */
-  async pauseConversationForHuman(conversation, dbSession, handoffContext = {}) {
-    const nodeKey = handoffContext.nodeKey || conversation.currentNodeKey || 'human_handoff';
-    const flowId = handoffContext.flowId || conversation.currentFlowId;
-    const flowVersion = handoffContext.flowVersion || conversation.currentFlowVersion;
-
-    const updatedConversation = await this.conversationRepo.updateConversation(conversation.id, {
-      status: 'waiting_human',
-      assignedAgentId: null,
-      currentNodeKey: nodeKey,
-      currentFlowId: flowId,
-      currentFlowVersion: flowVersion,
-    });
-
-    let pausedSession = dbSession;
-    if (pausedSession) {
-      pausedSession = await this.sessionRepo.updateSession(pausedSession.id, {
-        status: 'paused',
-        currentNodeKey: nodeKey,
-        flowId,
-        flowVersion,
-      });
-    } else {
-      const active = await this.sessionRepo.findActiveByConversationId(conversation.id);
-      if (active) {
-        pausedSession = await this.sessionRepo.updateSession(active.id, {
-          status: 'paused',
-          currentNodeKey: nodeKey,
-        });
-      }
-    }
-
-    return { conversation: updatedConversation, session: pausedSession };
-  }
-
-  /**
-   * @param {object} conversation
-   * @param {{ engineResult: object, dbSession?: object | null, event?: object }} params
+   * @param {{ engineResult: object, dbSession?: object | null, event?: object, memorySession?: object }} params
    */
   async requestHumanHandoff(conversation, params = {}) {
     const { engineResult, dbSession = null, event = {} } = params;
@@ -110,22 +78,66 @@ export class HumanHandoffService {
       || null;
 
     const wasBot = String(conversation.status || 'bot') === 'bot';
-    const { handoff, created } = await this.ensurePendingHandoff(conversation, {
-      requestedBy: 'bot',
-      reason: engineResult?.terminalReason || 'human_handoff',
-      nodeKey,
-      flowId,
-      flowVersion,
+
+    const txResult = await this.runTransaction(async (transaction) => {
+      await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
+
+      const { handoff, created } = await this.handoffRepo.ensurePendingHandoffAtomic(
+        conversation.id,
+        {
+          requestedBy: 'bot',
+          reason: engineResult?.terminalReason || 'human_handoff',
+        },
+        { transaction },
+      );
+
+      const updatedConversation = await this.conversationRepo.updateConversation(
+        conversation.id,
+        {
+          status: 'waiting_human',
+          assignedAgentId: null,
+          currentNodeKey: nodeKey,
+          currentFlowId: flowId,
+          currentFlowVersion: flowVersion,
+        },
+        { transaction },
+      );
+
+      let pausedSession = dbSession;
+      if (pausedSession) {
+        pausedSession = await this.sessionRepo.updateSession(
+          pausedSession.id,
+          {
+            status: 'paused',
+            currentNodeKey: nodeKey,
+            flowId,
+            flowVersion,
+          },
+          { transaction },
+        );
+      } else {
+        const active = await this.sessionRepo.findActiveByConversationId(conversation.id, {
+          transaction,
+        });
+        if (active) {
+          pausedSession = await this.sessionRepo.updateSession(
+            active.id,
+            {
+              status: 'paused',
+              currentNodeKey: nodeKey,
+              flowId,
+              flowVersion,
+            },
+            { transaction },
+          );
+        }
+      }
+
+      return { handoff, created, conversation: updatedConversation, session: pausedSession };
     });
 
-    const { conversation: updatedConversation, session } = await this.pauseConversationForHuman(
-      conversation,
-      dbSession,
-      { nodeKey, flowId, flowVersion },
-    );
-
-    notifyConversationUpdated(updatedConversation, {
-      humanHandoff: mapHumanHandoffPublic(handoff),
+    notifyConversationUpdated(txResult.conversation, {
+      humanHandoff: mapHumanHandoffPublic(txResult.handoff),
     });
 
     const confirmationMessage = resolveHandoffConfirmationMessage(
@@ -134,10 +146,10 @@ export class HumanHandoffService {
     );
 
     return {
-      handoff,
-      created,
-      conversation: updatedConversation,
-      session,
+      handoff: txResult.handoff,
+      created: txResult.created,
+      conversation: txResult.conversation,
+      session: txResult.session,
       confirmationMessage,
       shouldSendConfirmation: wasBot,
       nodeKey,

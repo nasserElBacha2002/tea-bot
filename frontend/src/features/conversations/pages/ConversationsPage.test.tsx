@@ -4,7 +4,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ConversationsPage } from './ConversationsPage';
 
 const refreshMock = vi.fn();
@@ -170,15 +170,18 @@ vi.mock('../hooks/useConversations', () => ({
   useUpdateContact: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),
 }));
 
-function renderPage() {
+function renderPage(initialEntry = '/conversations') {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider theme={createTheme()}>
-        <MemoryRouter>
-          <ConversationsPage />
+        <MemoryRouter initialEntries={[initialEntry]}>
+          <Routes>
+            <Route path="/conversations" element={<ConversationsPage />} />
+            <Route path="/conversations/:conversationId" element={<ConversationsPage />} />
+          </Routes>
         </MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>,
@@ -203,8 +206,7 @@ describe('ConversationsPage', () => {
 
   it('no muestra datos técnicos al abrir detalle', async () => {
     const user = userEvent.setup();
-    renderPage();
-    await user.click(screen.getByText('Simulación - Esperando humano'));
+    renderPage('/conversations/conv-1');
     expect(screen.queryByText('Flujo actual:')).toBeNull();
     expect(screen.queryByText(/7319B35A/i)).toBeNull();
     expect(screen.queryByText('Detalles técnicos')).not.toBeInTheDocument();
@@ -231,9 +233,7 @@ describe('ConversationsPage', () => {
   });
 
   it('no muestra el botón Devolver al bot', async () => {
-    const user = userEvent.setup();
-    renderPage();
-    await user.click(screen.getByText('Simulación - Esperando humano'));
+    renderPage('/conversations/conv-1');
     expect(screen.queryByRole('button', { name: /^devolver al bot$/i })).not.toBeInTheDocument();
   });
 
@@ -247,7 +247,7 @@ describe('ConversationsPage', () => {
   it('en mobile oculta la lista al abrir detalle y permite volver', async () => {
     useMediaQueryMock.mockReturnValue(true);
     const user = userEvent.setup();
-    renderPage();
+    renderPage('/conversations');
 
     expect(screen.getByTestId('conversation-list-panel')).toBeVisible();
     expect(screen.getByTestId('conversation-detail-panel')).not.toBeVisible();

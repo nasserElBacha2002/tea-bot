@@ -18,6 +18,11 @@ const ERROR_MESSAGES: Record<string, string> = {
     'El bot está activo. Para responder, primero tomá la conversación.',
   EMPTY_BODY: 'Escribí un mensaje antes de enviar.',
   REQUEST_FAILED: 'No se pudo completar la solicitud. Intentá nuevamente.',
+  NOT_FOUND: 'Recurso no encontrado.',
+  UNAUTHORIZED: 'No autorizado. Iniciá sesión nuevamente.',
+  FORBIDDEN: 'No tenés permisos para realizar esta acción.',
+  SERVER_ERROR: 'Error interno del servidor. Intentá nuevamente.',
+  NETWORK_ERROR: 'No se pudo conectar con el servidor. Verificá tu conexión.',
   UNKNOWN_ERROR: 'Ocurrió un error inesperado. Intentá nuevamente.',
   FLOW_NOT_FOUND: 'Flujo no encontrado.',
   FLOW_VERSION_NOT_FOUND: 'Versión de flujo no encontrada.',
@@ -91,20 +96,46 @@ export function extractApiError(error: unknown): {
       data?.error
       || data?.details?.cause
       || (status === 503 ? 'CONVERSATION_PERSISTENCE_UNAVAILABLE' : 'REQUEST_FAILED');
+
+    const statusFallbackMessage =
+      status === 401
+        ? ERROR_MESSAGES.UNAUTHORIZED
+        : status === 403
+          ? ERROR_MESSAGES.FORBIDDEN
+          : status === 404
+            ? ERROR_MESSAGES.NOT_FOUND
+            : status != null && status >= 500
+              ? ERROR_MESSAGES.SERVER_ERROR
+              : !error.response
+                ? ERROR_MESSAGES.NETWORK_ERROR
+                : undefined;
+
     const validationLines = formatFlowValidationErrors(data?.details);
     const message =
       validationLines
       || data?.message
+      || statusFallbackMessage
       || mapApiErrorCode(code, typeof data?.error === 'string' ? data.error : undefined);
     return { code, message, status, details: data?.details };
   }
   if (error instanceof Error) {
+    const enriched = error as Error & { code?: string; status?: number };
+    if (enriched.status != null || enriched.code) {
+      return {
+        code: enriched.code || 'UNKNOWN_ERROR',
+        message: error.message,
+        status: enriched.status,
+      };
+    }
     return { code: 'UNKNOWN_ERROR', message: error.message };
   }
   return { code: 'UNKNOWN_ERROR', message: ERROR_MESSAGES.UNKNOWN_ERROR };
 }
 
-export function toUserFacingError(error: unknown): Error {
-  const { message } = extractApiError(error);
-  return new Error(message);
+export function toUserFacingError(error: unknown): Error & { code?: string; status?: number } {
+  const extracted = extractApiError(error);
+  const err = new Error(extracted.message) as Error & { code?: string; status?: number };
+  err.code = extracted.code;
+  err.status = extracted.status;
+  return err;
 }

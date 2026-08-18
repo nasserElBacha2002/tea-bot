@@ -39,6 +39,29 @@ function createMocks() {
       handoffs.push(row);
       return row;
     },
+    async ensurePendingHandoffAtomic(conversationId, data) {
+      const existing = [...handoffs]
+        .reverse()
+        .find(
+          (h) =>
+            h.conversationId === conversationId
+            && ['pending', 'assigned'].includes(h.status),
+        );
+      if (existing) {
+        return { handoff: existing, created: false };
+      }
+      const row = {
+        id: `handoff-${handoffs.length + 1}`,
+        conversationId,
+        requestedBy: data.requestedBy,
+        reason: data.reason,
+        status: 'pending',
+        assignedAgentId: null,
+        requestedAt: new Date(),
+      };
+      handoffs.push(row);
+      return { handoff: row, created: true };
+    },
     async findPendingByConversationId(conversationId) {
       return (
         [...handoffs]
@@ -53,9 +76,23 @@ function createMocks() {
           .find((h) => h.conversationId === conversationId) || null
       );
     },
+    async findLatestActiveByConversationId(conversationId) {
+      return (
+        [...handoffs]
+          .reverse()
+          .find(
+            (h) =>
+              h.conversationId === conversationId
+              && ['pending', 'assigned'].includes(h.status),
+          ) || null
+      );
+    },
   };
 
   const conversationRepo = {
+    async findByIdForUpdate(id) {
+      return id === conversation.id ? conversation : null;
+    },
     async updateConversation(id, patch) {
       if (id !== conversation.id) return conversation;
       conversation = { ...conversation, ...patch };
@@ -82,13 +119,18 @@ function createMocks() {
     handoffRepo,
     conversationRepo,
     sessionRepo,
+    runTransaction: async (fn) => fn({}),
     getState: () => ({ handoffs, conversation, session }),
   };
 }
 
+function createService(mocks) {
+  return new HumanHandoffService(mocks);
+}
+
 test('requestHumanHandoff crea pending y marca waiting_human con sesion pausada', async () => {
   const mocks = createMocks();
-  const service = new HumanHandoffService(mocks);
+  const service = createService(mocks);
   const { conversation, session } = mocks.getState();
 
   const result = await service.requestHumanHandoff(conversation, {
@@ -114,7 +156,7 @@ test('requestHumanHandoff crea pending y marca waiting_human con sesion pausada'
 
 test('ensurePendingHandoff reutiliza pending existente', async () => {
   const mocks = createMocks();
-  const service = new HumanHandoffService(mocks);
+  const service = createService(mocks);
   const { conversation, session } = mocks.getState();
 
   await service.requestHumanHandoff(conversation, {
@@ -134,7 +176,7 @@ test('ensurePendingHandoff reutiliza pending existente', async () => {
 
 test('requestHumanHandoff no duplica confirmacion si ya estaba en human mode', async () => {
   const mocks = createMocks();
-  const service = new HumanHandoffService(mocks);
+  const service = createService(mocks);
   const { conversation, session } = mocks.getState();
 
   await service.requestHumanHandoff(conversation, {
@@ -162,7 +204,7 @@ test('requestHumanHandoff emite conversation.updated con waiting_human y humanHa
   });
 
   const mocks = createMocks();
-  const service = new HumanHandoffService(mocks);
+  const service = createService(mocks);
   const { conversation, session } = mocks.getState();
 
   await service.requestHumanHandoff(conversation, {

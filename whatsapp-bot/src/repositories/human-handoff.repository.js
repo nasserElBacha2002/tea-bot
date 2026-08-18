@@ -19,7 +19,7 @@ function mapRow(row) {
 }
 
 class HumanHandoffRepository {
-  async createHandoff(data) {
+  async createHandoff(data, { transaction } = {}) {
     const {
       conversationId,
       requestedBy,
@@ -35,8 +35,65 @@ class HumanHandoffRepository {
       OUTPUT INSERTED.*
       VALUES ($1, $2, $3, $4, $5)`,
       [conversationId, requestedBy, reason, status, assignedAgentId],
+      { transaction },
     );
     return mapRow(rows[0]);
+  }
+
+  async findActiveByConversationIdForUpdate(conversationId, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT * FROM dbo.human_handoffs WITH (UPDLOCK, ROWLOCK)
+       WHERE conversation_id = $1 AND status IN (N'pending', N'assigned')
+       ORDER BY requested_at DESC`,
+      [conversationId],
+      { transaction },
+    );
+    return rows.map(mapRow);
+  }
+
+  /**
+   * Resuelve todos los handoffs activos de una conversación dentro de una transacción.
+   * @returns {Promise<string[]>} ids resueltos
+   */
+  async resolveActiveHandoffs(conversationId, patch = {}, { transaction } = {}) {
+    const resolvedAt = patch.resolvedAt ?? new Date();
+    const resolutionNote = patch.resolutionNote ?? null;
+    const { rows } = await query(
+      `UPDATE dbo.human_handoffs
+       SET status = N'resolved',
+           resolved_at = $2,
+           resolution_note = $3,
+           updated_at = SYSUTCDATETIME()
+       OUTPUT INSERTED.id
+       WHERE conversation_id = $1 AND status IN (N'pending', N'assigned')`,
+      [conversationId, resolvedAt, resolutionNote],
+      { transaction },
+    );
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Garantiza un único handoff pending bajo lock de filas activas.
+   * @returns {Promise<{ handoff: object, created: boolean }>}
+   */
+  async ensurePendingHandoffAtomic(conversationId, data, { transaction } = {}) {
+    const active = await this.findActiveByConversationIdForUpdate(conversationId, { transaction });
+    if (active.length > 0) {
+      const pending = active.find((row) => row.status === 'pending');
+      return { handoff: pending || active[0], created: false };
+    }
+
+    const handoff = await this.createHandoff(
+      {
+        conversationId,
+        requestedBy: data.requestedBy || 'bot',
+        reason: data.reason ?? null,
+        status: 'pending',
+        assignedAgentId: null,
+      },
+      { transaction },
+    );
+    return { handoff, created: true };
   }
 
   async findPendingByConversationId(conversationId) {
@@ -59,6 +116,23 @@ class HumanHandoffRepository {
     return mapRow(rows[0]);
   }
 
+  /** Handoffs activos (pending o assigned), más reciente primero. */
+  async findActiveByConversationId(conversationId) {
+    const { rows } = await query(
+      `SELECT * FROM dbo.human_handoffs
+       WHERE conversation_id = $1 AND status IN (N'pending', N'assigned')
+       ORDER BY requested_at DESC`,
+      [conversationId],
+    );
+    return rows.map(mapRow);
+  }
+
+  /** Handoff activo más reciente, si existe. */
+  async findLatestActiveByConversationId(conversationId) {
+    const active = await this.findActiveByConversationId(conversationId);
+    return active[0] || null;
+  }
+
   async findById(id) {
     const { rows } = await query(
       'SELECT TOP (1) * FROM dbo.human_handoffs WHERE id = $1',
@@ -67,7 +141,7 @@ class HumanHandoffRepository {
     return mapRow(rows[0]);
   }
 
-  async updateHandoff(id, patch) {
+  async updateHandoff(id, patch, { transaction } = {}) {
     const fields = [];
     const values = [];
     let i = 1;
@@ -100,6 +174,7 @@ class HumanHandoffRepository {
        OUTPUT INSERTED.*
        WHERE id = $${i}`,
       values,
+      { transaction },
     );
     return mapRow(rows[0]);
   }

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ConversationFilters } from '../components/ConversationFilters';
@@ -25,17 +26,23 @@ import { extractApiError } from '../../../utils/apiError';
 import { useCurrentAgent } from '../hooks/useCurrentAgent';
 import { isConversationDerivedUnread } from '../utils/conversationUnread';
 import { conversationUiDensity } from '../constants/conversationUiDensity';
+import { useResizableSidebarWidth } from '../hooks/useResizableSidebarWidth';
+import { ConversationSidebarResizeHandle } from '../components/ConversationSidebarResizeHandle';
 
 export const ConversationsPage: React.FC = () => {
   const theme = useTheme();
+  const navigate = useNavigate();
+  const { conversationId: selectedId = null } = useParams<{ conversationId?: string }>();
   const isMobileInbox = useMediaQuery(theme.breakpoints.down('md'));
+  const isDesktopInbox = !isMobileInbox;
+  const { width: sidebarWidth, minWidth: sidebarMinWidth, maxWidth: sidebarMaxWidth, beginResize, nudgeWidth } =
+    useResizableSidebarWidth(isDesktopInbox);
   const [filters, setFilters] = useState<ConversationListFilters>({
     limit: 50,
     offset: 0,
     sort: 'last_message_at_desc',
     channel: DEFAULT_CONVERSATION_CHANNEL,
   });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [unreadIds, setUnreadIds] = useState<Set<string>>(() => new Set());
@@ -181,13 +188,13 @@ export const ConversationsPage: React.FC = () => {
   };
 
   const handleSelectConversation = (id: string) => {
-    setSelectedId(id);
+    navigate(`/conversations/${id}`);
     setActionError(null);
     setSuccessMessage(null);
   };
 
   const handleBackToList = () => {
-    setSelectedId(null);
+    navigate('/conversations');
     setActionError(null);
     setSuccessMessage(null);
   };
@@ -239,12 +246,16 @@ export const ConversationsPage: React.FC = () => {
         : 'Error al cargar conversaciones'
       : null;
 
-  const detailError =
-    detailQuery.isError
-      ? detailQuery.error instanceof Error
-        ? detailQuery.error.message
-        : 'Error al cargar detalle'
-      : null;
+  const detailErrorInfo = detailQuery.isError ? extractApiError(detailQuery.error) : null;
+  const detailError = detailQuery.isError
+    ? detailErrorInfo?.status === 404 || detailErrorInfo?.code === 'NOT_FOUND'
+      ? 'Conversación no encontrada'
+      : detailErrorInfo?.status === 401 || detailErrorInfo?.status === 403
+        ? detailErrorInfo.message
+        : detailQuery.error instanceof Error
+          ? detailQuery.error.message
+          : 'Error al cargar detalle'
+    : null;
 
   const messagesError =
     messagesQuery.isError
@@ -301,14 +312,14 @@ export const ConversationsPage: React.FC = () => {
       >
         <Box
           sx={{
-            width: { xs: '100%', md: 390 },
+            width: { xs: '100%', md: sidebarWidth },
             maxWidth: '100%',
             flexShrink: 0,
             height: '100%',
             minHeight: 0,
             display: showSidebar ? 'flex' : 'none',
             flexDirection: 'column',
-            borderRight: { md: '1px solid' },
+            borderRight: { md: 'none' },
             borderColor: 'divider',
             minWidth: 0,
             overflow: 'hidden',
@@ -424,6 +435,16 @@ export const ConversationsPage: React.FC = () => {
           </Box>
         </Box>
 
+        {isDesktopInbox && showSidebar && (
+          <ConversationSidebarResizeHandle
+            width={sidebarWidth}
+            minWidth={sidebarMinWidth}
+            maxWidth={sidebarMaxWidth}
+            onPointerDown={beginResize}
+            onKeyboardNudge={nudgeWidth}
+          />
+        )}
+
         <Box
           sx={{
             flex: 1,
@@ -438,6 +459,8 @@ export const ConversationsPage: React.FC = () => {
               : 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            borderLeft: { md: '1px solid' },
+            borderColor: 'divider',
           }}
           data-testid="conversation-detail-panel"
         >

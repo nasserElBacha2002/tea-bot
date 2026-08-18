@@ -1,12 +1,21 @@
 import conversationService from './conversation.service.js';
 import humanHandoffService from './human-handoff.service.js';
+import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
+import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
 import { isConversationInHumanMode } from '../utils/handoff-detection.js';
+import { shouldBlockBotFlow } from '../utils/conversation-handoff-policy.js';
 import { isConversationDbEnabled } from '../db/index.js';
 
-function inboundSkipMetadata(conversation) {
+function inboundSkipMetadata(conversation, activeHandoff = null) {
   if (conversation.status === 'assigned') {
     return { botSkipped: true, skipReason: 'conversation_assigned' };
+  }
+  if (conversation.status === 'waiting_human') {
+    return { botSkipped: true, skipReason: 'conversation_waiting_human' };
+  }
+  if (activeHandoff) {
+    return { botSkipped: true, skipReason: 'inconsistent_active_handoff' };
   }
   return { botSkipped: true, skipReason: 'conversation_waiting_human' };
 }
@@ -42,7 +51,24 @@ class MessagePersistenceService {
       return { conversation, dbSession: null, skipFlowEngine: true };
     }
 
+    const activeHandoff = await humanHandoffRepository.findLatestActiveByConversationId(
+      conversation.id,
+    );
+    if (shouldBlockBotFlow(conversation, activeHandoff)) {
+      await conversationService.persistInboundMessage(
+        conversation,
+        event,
+        inboundSkipMetadata(conversation, activeHandoff),
+      );
+      return { conversation, dbSession: null, skipFlowEngine: true };
+    }
+
     await conversationService.persistInboundMessage(conversation, event);
+
+    const normalized = await conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded(
+      conversation,
+    );
+    conversation = normalized.conversation;
 
     const { session: dbSession } = await conversationService.getOrCreateActiveSession(
       conversation,
@@ -53,6 +79,7 @@ class MessagePersistenceService {
       event.userId,
       dbSession,
       event,
+      conversation,
     );
 
     return { conversation, dbSession, skipFlowEngine: false };

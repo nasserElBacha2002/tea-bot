@@ -33,23 +33,25 @@ class ConversationSessionRepository {
     return mapRow(rows[0]);
   }
 
-  async findActiveByConversationId(conversationId) {
+  async findActiveByConversationId(conversationId, { transaction } = {}) {
     const { rows } = await query(
       `SELECT TOP (1) * FROM dbo.conversation_sessions
        WHERE conversation_id = $1 AND status = N'active'
        ORDER BY started_at DESC`,
       [conversationId],
+      { transaction },
     );
     return mapRow(rows[0]);
   }
 
   /** Sesión abierta más reciente (active o paused). */
-  async findLatestOpenByConversationId(conversationId) {
+  async findLatestOpenByConversationId(conversationId, { transaction } = {}) {
     const { rows } = await query(
       `SELECT TOP (1) * FROM dbo.conversation_sessions
        WHERE conversation_id = $1 AND status IN (N'active', N'paused')
        ORDER BY started_at DESC`,
       [conversationId],
+      { transaction },
     );
     return mapRow(rows[0]);
   }
@@ -87,7 +89,7 @@ class ConversationSessionRepository {
     return mapRow(rows[0]);
   }
 
-  async updateSession(id, patch) {
+  async updateSession(id, patch, { transaction } = {}) {
     const fields = [];
     const values = [];
     let i = 1;
@@ -129,6 +131,7 @@ class ConversationSessionRepository {
       const { rows } = await query(
         'SELECT TOP (1) * FROM dbo.conversation_sessions WHERE id = $1',
         [id],
+        { transaction },
       );
       return mapRow(rows[0]);
     }
@@ -141,6 +144,7 @@ class ConversationSessionRepository {
        OUTPUT INSERTED.*
        WHERE id = $${i}`,
       values,
+      { transaction },
     );
     return mapRow(rows[0]);
   }
@@ -156,6 +160,19 @@ class ConversationSessionRepository {
        WHERE conversation_id = $1 AND status = N'active'`,
       [conversationId, endedAt],
     );
+  }
+
+  /** Finaliza sesiones abiertas (active o paused). Idempotente. */
+  async endAllOpenForConversation(conversationId, endedAt = new Date(), { transaction } = {}) {
+    const { rows } = await query(
+      `UPDATE dbo.conversation_sessions
+       SET status = N'ended', ended_at = $2, updated_at = SYSUTCDATETIME()
+       OUTPUT INSERTED.id
+       WHERE conversation_id = $1 AND status IN (N'active', N'paused')`,
+      [conversationId, endedAt],
+      { transaction },
+    );
+    return rows.length;
   }
 }
 

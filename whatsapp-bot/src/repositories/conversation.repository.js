@@ -48,10 +48,21 @@ class ConversationRepository {
     return mapRow(rows[0]);
   }
 
-  async findById(id) {
+  async findById(id, { transaction } = {}) {
     const { rows } = await query(
       'SELECT TOP (1) * FROM dbo.conversations WHERE id = $1',
       [id],
+      { transaction },
+    );
+    return mapRow(rows[0]);
+  }
+
+  async findByIdForUpdate(id, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversations WITH (UPDLOCK, ROWLOCK)
+       WHERE id = $1`,
+      [id],
+      { transaction },
     );
     return mapRow(rows[0]);
   }
@@ -128,7 +139,7 @@ class ConversationRepository {
     return mapRow(rows[0]);
   }
 
-  async updateConversation(id, patch) {
+  async updateConversation(id, patch, { transaction } = {}) {
     const fields = [];
     const values = [];
     let i = 1;
@@ -165,6 +176,7 @@ class ConversationRepository {
        OUTPUT INSERTED.*
        WHERE id = $${i}`,
       values,
+      { transaction },
     );
     return mapRow(rows[0]);
   }

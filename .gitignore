@@ -14,3 +14,11 @@ whatsapp-bot/flows/
 
 # Local JSON backups (post-migración; no versionar)
 backups/
+
+# Generated implementation review artifacts
+implementation-*-diff.txt
+implementation-*-diffstat.txt
+implementation-*-status.txt
+latest-diff.txt
+latest-diffstat.txt
+latest-status.txt

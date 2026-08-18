@@ -201,6 +201,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
     >
       <Box
         ref={scrollRef}
+        data-testid="conversation-messages-scroll-region"
         sx={{
           flex: 1,
           minHeight: 0,

@@ -12,6 +12,7 @@ import {
 } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import conversationReopenService from './conversation-reopen.service.js';
+import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
 import { CHANNEL_WHATSAPP } from '../constants/conversation-channels.js';
 
 /** @internal exported for unit tests */
@@ -173,7 +174,7 @@ class ConversationService {
   /**
    * Hidrata sessionService desde la sesión activa en DB si no hay sesión en memoria.
    */
-  async hydrateRuntimeSessionIfNeeded(userId, dbSession, event) {
+  async hydrateRuntimeSessionIfNeeded(userId, dbSession, event, conversation = null) {
     const memorySession = sessionService.getSession(userId);
     if (memorySession) return memorySession;
 
@@ -185,17 +186,19 @@ class ConversationService {
       flowVersion: dbSession.flowVersion,
     };
 
+    let resumeNodeKey = dbSession.currentNodeKey || 'welcome';
+
     await sessionService.createSession(
       userId,
       dbSession.flowId,
-      dbSession.currentNodeKey || 'welcome',
+      resumeNodeKey,
       extra,
     );
 
     await sessionService.updateSession(userId, {
       variables: dbSession.variablesJson || {},
       history: Array.isArray(dbSession.historyJson) ? dbSession.historyJson : [],
-      currentNode: dbSession.currentNodeKey,
+      currentNode: resumeNodeKey,
       flowId: dbSession.flowId,
       flowVersion: dbSession.flowVersion,
       answers: dbSession.trackingJson?.answers || {},
@@ -256,7 +259,7 @@ class ConversationService {
   }
 
   async endActiveSessionsForConversation(conversationId) {
-    await conversationSessionRepository.endAllActiveForConversation(conversationId);
+    await conversationSessionRepository.endAllOpenForConversation(conversationId);
   }
 
   async updateStatus(conversationId, status) {
@@ -292,11 +295,12 @@ class ConversationService {
   }
 
   async returnConversationToBot(conversationId) {
-    return conversationRepository.updateConversation(conversationId, {
-      status: 'bot',
-      assignedAgentId: null,
-      closedAt: null,
-    });
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation) return null;
+    const { conversation: updated } = await conversationBotLifecycleService.returnConversationToBot(
+      conversation,
+    );
+    return updated;
   }
 
   async reloadConversation(conversation) {
