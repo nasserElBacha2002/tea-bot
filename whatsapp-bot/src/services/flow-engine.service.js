@@ -87,6 +87,34 @@ export class FlowEngine {
         perfContext
       );
 
+      const openingCommand = detectGlobalCommand(rawText);
+      if (openingCommand.type === 'human') {
+        const globalResult = await this._resolveGlobalCommand({
+          globalCommand: 'human',
+          userId,
+          flow,
+          compiled,
+          session,
+          flowMode,
+          perfContext,
+          hasStoredEmail,
+        });
+        if (globalResult) {
+          perfContext?.add?.('globalCommand', 'human');
+          perfContext?.add?.('firstContact', true);
+          perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
+          logPerf('flow_resolve', {
+            flowId: flow.id,
+            version: flow.version,
+            nodeId: globalResult.currentNodeId,
+            resolveMs: perfContext?.toJSON?.().resolveIncomingMessageMs,
+            globalCommand: 'human',
+            matched: 'first_contact_human',
+          });
+          return globalResult;
+        }
+      }
+
       const entryLookupStart = nowMs();
       const entryNode = this._getNode(compiled, flow, startNodeId);
       perfContext?.add?.('entryNodeLookupMs', roundMs(nowMs() - entryLookupStart));

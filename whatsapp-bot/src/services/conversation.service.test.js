@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import conversationService, {
   buildTwilioConversationFields,
   buildSessionSyncPatch,
 } from './conversation.service.js';
+import sessionService from './session.service.js';
 
 const sampleEvent = {
   provider: 'twilio',
@@ -48,4 +49,40 @@ test('buildSessionSyncPatch usa resultado del motor y sesion en memoria', () => 
   assert.equal(patch.currentNodeKey, 'si_menu');
   assert.deepEqual(patch.variablesJson, { a: 1, b: 2 });
   assert.deepEqual(patch.historyJson, ['welcome']);
+});
+
+test('hydrateRuntimeSessionIfNeeded no inventa welcome en first contact', async () => {
+  const userId = 'test:hydrate:first-contact';
+  await sessionService.resetSession(userId);
+  const result = await conversationService.hydrateRuntimeSessionIfNeeded(
+    userId,
+    { flowId: 'main-menu', flowVersion: 'v1', currentNodeKey: null, variablesJson: {}, historyJson: [] },
+    { provider: 'twilio', phone: '+5491100000000', rawPayload: {} },
+    { id: 'conv-new', currentNodeKey: null },
+  );
+  assert.equal(result, null);
+  assert.equal(sessionService.getSession(userId), null);
+});
+
+test('hydrateRuntimeSessionIfNeeded hidrata cuando el flujo ya tiene nodo', async () => {
+  const userId = 'test:hydrate:resumed';
+  await sessionService.resetSession(userId);
+  try {
+    const result = await conversationService.hydrateRuntimeSessionIfNeeded(
+      userId,
+      {
+        flowId: 'main-menu',
+        flowVersion: 'v1',
+        currentNodeKey: 'welcome',
+        variablesJson: {},
+        historyJson: [],
+      },
+      { provider: 'twilio', phone: '+5491100000001', rawPayload: {} },
+      { id: 'conv-old', currentNodeKey: 'welcome' },
+    );
+    assert.equal(result.currentNode, 'welcome');
+    assert.equal(result.flowId, 'main-menu');
+  } finally {
+    await sessionService.resetSession(userId);
+  }
 });

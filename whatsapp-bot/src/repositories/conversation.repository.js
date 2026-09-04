@@ -1,4 +1,5 @@
 import { query, isConversationDbEnabled } from '../db/index.js';
+import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
 
 function mapRow(row) {
   if (!row) return null;
@@ -276,6 +277,58 @@ class ConversationRepository {
 
   async getConversationById(id) {
     return this.findById(id);
+  }
+
+  /**
+   * Selecciona y borra un batch de inactivas en un solo statement.
+   * El DELETE revalida el cutoff para no borrar actividad nueva (cierra TOCTOU).
+   * UPDLOCK + READPAST: no espera filas que inbound está actualizando.
+   */
+  async deleteInactiveBatchBefore(cutoff, { limit = 100, transaction } = {}) {
+    const safeLimit = clampRetentionBatchSize(limit);
+    const { rows } = await query(
+      `WITH stale AS (
+         SELECT TOP ($2) id
+         FROM dbo.conversations WITH (UPDLOCK, READPAST, ROWLOCK)
+         WHERE (last_message_at IS NOT NULL AND last_message_at < $1)
+            OR (last_message_at IS NULL AND started_at < $1)
+         ORDER BY COALESCE(last_message_at, started_at) ASC
+       )
+       DELETE c
+       OUTPUT DELETED.id, DELETED.external_user_id
+       FROM dbo.conversations AS c
+       INNER JOIN stale AS s ON s.id = c.id
+       WHERE (c.last_message_at IS NOT NULL AND c.last_message_at < $1)
+          OR (c.last_message_at IS NULL AND c.started_at < $1)`,
+      [cutoff, safeLimit],
+      { transaction },
+    );
+    return (rows || []).map((row) => ({
+      id: row.id,
+      externalUserId: row.external_user_id,
+    }));
+  }
+
+  /**
+   * DELETE explícito por id (cleanup de tests / seed). No usar para retención.
+   * Dependientes cascadian; audit_logs no tiene FK y se conservan.
+   */
+  async deleteByIds(ids, { transaction } = {}) {
+    const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+    if (uniqueIds.length === 0) return [];
+
+    const placeholders = uniqueIds.map((_, index) => `$${index + 1}`).join(', ');
+    const { rows } = await query(
+      `DELETE FROM dbo.conversations
+       OUTPUT DELETED.id, DELETED.external_user_id
+       WHERE id IN (${placeholders})`,
+      uniqueIds,
+      { transaction },
+    );
+    return rows.map((row) => ({
+      id: row.id,
+      externalUserId: row.external_user_id,
+    }));
   }
 
   async countConversationsWithContactEmail() {

@@ -14,6 +14,10 @@ import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import conversationReopenService from './conversation-reopen.service.js';
 import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
 import { CHANNEL_WHATSAPP } from '../constants/conversation-channels.js';
+import {
+  resolveHydrationNodeKey,
+  shouldHydrateRuntimeSession,
+} from '../utils/conversation-flow-lifecycle.js';
 
 /** @internal exported for unit tests */
 export function buildTwilioConversationFields(event) {
@@ -84,6 +88,13 @@ class ConversationService {
       console.log(
         `[ConversationDB] conversation_created id=${conversation.id} phone=${phoneNumber || 'n/a'}`,
       );
+      try {
+        await sessionService.resetSession(externalUserId);
+      } catch (error) {
+        console.warn(
+          `[ConversationDB] leftover_runtime_reset_failed id=${conversation.id} error=${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       notifyConversationCreated(conversation);
       return { conversation, created: true };
     }
@@ -173,12 +184,16 @@ class ConversationService {
 
   /**
    * Hidrata sessionService desde la sesión activa en DB si no hay sesión en memoria.
+   * No hidrata si el flujo todavía no se presentó (FIRST_CONTACT).
    */
   async hydrateRuntimeSessionIfNeeded(userId, dbSession, event, conversation = null) {
     const memorySession = sessionService.getSession(userId);
     if (memorySession) return memorySession;
 
     if (!dbSession) return null;
+    if (!shouldHydrateRuntimeSession(dbSession, conversation)) {
+      return null;
+    }
 
     const extra = {
       provider: event.provider,
@@ -186,7 +201,8 @@ class ConversationService {
       flowVersion: dbSession.flowVersion,
     };
 
-    let resumeNodeKey = dbSession.currentNodeKey || 'welcome';
+    const resumeNodeKey = resolveHydrationNodeKey(dbSession, conversation);
+    if (!resumeNodeKey) return null;
 
     await sessionService.createSession(
       userId,

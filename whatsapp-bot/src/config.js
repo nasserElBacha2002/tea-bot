@@ -1,4 +1,8 @@
 import dotenv from 'dotenv';
+import {
+  clampRetentionBatchSize,
+  parsePositiveInt,
+} from './utils/conversation-retention.js';
 
 dotenv.config();
 
@@ -47,6 +51,17 @@ export const config = {
   ),
   conversationDbEnabled: ['1', 'true', 'yes', 'on'].includes(
     String(process.env.CONVERSATION_DB_ENABLED || '').trim().toLowerCase(),
+  ),
+  conversationRetentionEnabled: ['1', 'true', 'yes', 'on'].includes(
+    String(process.env.CONVERSATION_RETENTION_ENABLED || 'false').trim().toLowerCase(),
+  ),
+  conversationRetentionDays: parsePositiveInt(process.env.CONVERSATION_RETENTION_DAYS, 30),
+  conversationRetentionIntervalHours: parsePositiveInt(
+    process.env.CONVERSATION_RETENTION_INTERVAL_HOURS,
+    24,
+  ),
+  conversationRetentionBatchSize: clampRetentionBatchSize(
+    process.env.CONVERSATION_RETENTION_BATCH_SIZE,
   ),
   conversationClassificationMode: (() => {
     const raw = String(process.env.CONVERSATION_CLASSIFICATION_MODE || 'legacy').trim().toLowerCase();
