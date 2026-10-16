@@ -109,6 +109,16 @@ const AppShellToolbar: React.FC = () => {
           ) : null}
           {showFlows ? (
             <Button
+              variant={location.pathname.startsWith('/monitoring') ? 'contained' : 'text'}
+              size="small"
+              onClick={() => navigate('/monitoring')}
+              sx={{ minHeight: 36, px: { xs: 1, sm: 1.5 } }}
+            >
+              Monitoreo
+            </Button>
+          ) : null}
+          {showFlows ? (
+            <Button
               variant={location.pathname.startsWith('/flows') ? 'contained' : 'text'}
               size="small"
               onClick={() => navigate('/flows')}

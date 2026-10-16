@@ -8,6 +8,7 @@ import { RequireAuth } from '../features/auth/components/RequireAuth';
 import { RequireAdminRoute } from '../features/auth/components/RequireAdminRoute';
 import { LoginPage } from '../features/auth/pages/LoginPage';
 import { ConversationsPage } from '../features/conversations/pages/ConversationsPage';
+import { MonitoringPage } from '../features/monitoring/pages/MonitoringPage';
 import { DefaultHomeRedirect } from './DefaultHomeRedirect';
 
 export const AppRouter: React.FC = () => {
@@ -64,6 +65,14 @@ export const AppRouter: React.FC = () => {
               element={
                 <RequireAdminRoute>
                   <RedirectToConversationEditor />
+                </RequireAdminRoute>
+              }
+            />
+            <Route
+              path="/monitoring"
+              element={
+                <RequireAdminRoute>
+                  <MonitoringPage />
                 </RequireAdminRoute>
               }
             />

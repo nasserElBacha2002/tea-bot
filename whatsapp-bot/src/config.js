@@ -6,6 +6,22 @@ import {
 
 dotenv.config();
 
+function envFlag(name, fallback = false) {
+  const raw = process.env[name];
+  if (raw == null || String(raw).trim() === '') return fallback;
+  return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase());
+}
+
+function parseNonNegativeNumber(value, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return parsed;
+}
+
+function monitoringIntervalMinutes(value, fallback) {
+  return Math.max(5, parsePositiveInt(value, fallback));
+}
+
 const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProduction = NODE_ENV === 'production';
@@ -63,6 +79,30 @@ export const config = {
   conversationRetentionBatchSize: clampRetentionBatchSize(
     process.env.CONVERSATION_RETENTION_BATCH_SIZE,
   ),
+  monitoringEnabled: envFlag('MONITORING_ENABLED', false),
+  monitoringTwilioEnabled: envFlag('MONITORING_TWILIO_ENABLED', false),
+  monitoringTwilioIntervalMinutes: monitoringIntervalMinutes(
+    process.env.MONITORING_TWILIO_INTERVAL_MINUTES,
+    10,
+  ),
+  monitoringReconciliationIntervalMinutes: monitoringIntervalMinutes(
+    process.env.MONITORING_RECONCILIATION_INTERVAL_MINUTES,
+    15,
+  ),
+  twilioBalanceWarningUsd: parseNonNegativeNumber(process.env.TWILIO_BALANCE_WARNING_USD, 20),
+  twilioBalanceCriticalUsd: parseNonNegativeNumber(process.env.TWILIO_BALANCE_CRITICAL_USD, 10),
+  twilioBalanceEmergencyUsd: parseNonNegativeNumber(process.env.TWILIO_BALANCE_EMERGENCY_USD, 5),
+  inboundAnomalyEnabled: envFlag('INBOUND_ANOMALY_ENABLED', false),
+  inboundAnomalyWindowMinutes: parsePositiveInt(process.env.INBOUND_ANOMALY_WINDOW_MINUTES, 30),
+  inboundAnomalyMinExpected: parsePositiveInt(process.env.INBOUND_ANOMALY_MIN_EXPECTED, 5),
+  twilioReconciliationEnabled: envFlag('TWILIO_RECONCILIATION_ENABLED', false),
+  twilioReconciliationLookbackMinutes: parsePositiveInt(
+    process.env.TWILIO_RECONCILIATION_LOOKBACK_MINUTES,
+    60,
+  ),
+  webhookMaxProcessingAttempts: parsePositiveInt(process.env.WEBHOOK_MAX_PROCESSING_ATTEMPTS, 3),
+  monitoringAlertsEnabled: envFlag('MONITORING_ALERTS_ENABLED', false),
+  monitoringAlertCooldownMinutes: parsePositiveInt(process.env.MONITORING_ALERT_COOLDOWN_MINUTES, 60),
   conversationClassificationMode: (() => {
     const raw = String(process.env.CONVERSATION_CLASSIFICATION_MODE || 'legacy').trim().toLowerCase();
     return ['legacy', 'shadow', 'enabled'].includes(raw) ? raw : 'legacy';

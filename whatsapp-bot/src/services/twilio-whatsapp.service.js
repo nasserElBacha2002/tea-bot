@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../config.js';
 import { normalizeTwilioWhatsappNumber } from '../utils/twilio-phone.js';
+import { noteActivity } from '../monitoring/activity-store.js';
 
 /**
  * @param {string | null | undefined} phoneNumber E.164 o whatsapp:+...
@@ -54,10 +55,12 @@ export class TwilioWhatsAppService {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         timeout: Number(process.env.TWILIO_REQUEST_TIMEOUT_MS || 15000),
       });
+      noteActivity('lastOutboundAt');
       return { sid: data?.sid || null };
     } catch (error) {
       const twilioMsg =
         error.response?.data?.message || error.message || 'Error desconocido de Twilio';
+      noteActivity('lastErrorAt', twilioMsg);
       console.error('[TwilioWhatsApp] send failed:', twilioMsg);
       const err = new Error('No se pudo enviar el mensaje por Twilio');
       err.code = 'TWILIO_SEND_FAILED';

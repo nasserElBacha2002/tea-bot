@@ -10,6 +10,8 @@ import simulatorRouter from './routes/simulator.routes.js';
 import conversationsRouter from './routes/conversations.routes.js';
 import devConversationsRouter from './routes/dev-conversations.routes.js';
 import flowManagementRouter from './routes/flow-management.routes.js';
+import monitoringRouter from './routes/monitoring.routes.js';
+import monitoringService from './monitoring/monitoring.service.js';
 import flowLoader from './utils/flow-loader.js';
 import compositeFlowLoader from './loaders/composite-flow-loader.js';
 import { getFlowStorageMode } from './config/flow-storage.js';
@@ -48,6 +50,7 @@ validateConfig();
     await sessionService.loadSessions();
     conversationAbandonmentService.start();
     conversationRetentionService.start();
+    monitoringService.start();
 
     if (isConversationDbEnabled()) {
       try {
@@ -80,6 +83,7 @@ app.use('/api/simulator', simulatorRouter);
 app.use('/api/conversations', conversationsRouter);
 app.use('/api/dev/conversations', devConversationsRouter);
 app.use('/api/flow-management', flowManagementRouter);
+app.use('/api/monitoring', monitoringRouter);
 
 /**
  * Health check endpoint.

@@ -3,6 +3,7 @@ import { isConversationDbEnabled, withTransaction } from '../db/index.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import sessionService from './session.service.js';
 import { computeRetentionCutoff } from '../utils/conversation-retention.js';
+import { noteRetentionSignal } from '../monitoring/job-status.store.js';
 
 function logRetention(event, payload = {}) {
   console.log(JSON.stringify({
@@ -10,6 +11,11 @@ function logRetention(event, payload = {}) {
     job: 'conversation_retention',
     ...payload,
   }));
+  try {
+    noteRetentionSignal(event, payload);
+  } catch (error) {
+    console.error(`[Monitoring] retention signal failed: ${error.message}`);
+  }
 }
 
 /**

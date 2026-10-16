@@ -1,0 +1,148 @@
+-- Operational monitoring. Forward-only. Does not alter retention deletes.
+-- idx_conversation_messages_created_at_direction: activity windows filter
+-- created_at without conversation_id. The existing index leads with conversation_id
+-- and cannot seek that predicate.
+
+IF OBJECT_ID(N'dbo.provider_webhook_events', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.provider_webhook_events (
+    id UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_provider_webhook_events_id DEFAULT NEWID(),
+    provider NVARCHAR(32) NOT NULL,
+    event_type NVARCHAR(32) NOT NULL,
+    provider_message_id NVARCHAR(128) NULL,
+    received_at DATETIME2 NOT NULL CONSTRAINT DF_provider_webhook_events_received_at DEFAULT SYSUTCDATETIME(),
+    processed_at DATETIME2 NULL,
+    status NVARCHAR(32) NOT NULL,
+    attempts INT NOT NULL CONSTRAINT DF_provider_webhook_events_attempts DEFAULT 1,
+    error_code NVARCHAR(64) NULL,
+    error_message NVARCHAR(400) NULL,
+    payload_json NVARCHAR(MAX) NULL,
+    CONSTRAINT PK_provider_webhook_events PRIMARY KEY (id)
+  );
+END;
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'UQ_provider_webhook_events_message'
+    AND object_id = OBJECT_ID(N'dbo.provider_webhook_events')
+)
+  CREATE UNIQUE INDEX UQ_provider_webhook_events_message
+    ON dbo.provider_webhook_events (provider, event_type, provider_message_id)
+    WHERE provider_message_id IS NOT NULL AND provider_message_id <> N'';
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_provider_webhook_events_status_received'
+    AND object_id = OBJECT_ID(N'dbo.provider_webhook_events')
+)
+  CREATE INDEX idx_provider_webhook_events_status_received
+    ON dbo.provider_webhook_events (status, received_at DESC);
+GO
+
+IF OBJECT_ID(N'dbo.message_delivery_status', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.message_delivery_status (
+    provider NVARCHAR(32) NOT NULL,
+    provider_message_id NVARCHAR(128) NOT NULL,
+    status NVARCHAR(32) NOT NULL,
+    error_code NVARCHAR(64) NULL,
+    error_message NVARCHAR(400) NULL,
+    status_at DATETIME2 NOT NULL CONSTRAINT DF_message_delivery_status_status_at DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL CONSTRAINT DF_message_delivery_status_updated_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_message_delivery_status PRIMARY KEY (provider, provider_message_id)
+  );
+END;
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_message_delivery_status_updated'
+    AND object_id = OBJECT_ID(N'dbo.message_delivery_status')
+)
+  CREATE INDEX idx_message_delivery_status_updated
+    ON dbo.message_delivery_status (updated_at ASC, status)
+    INCLUDE (error_code);
+GO
+
+IF OBJECT_ID(N'dbo.monitoring_incidents', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.monitoring_incidents (
+    id UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_monitoring_incidents_id DEFAULT NEWID(),
+    type NVARCHAR(64) NOT NULL,
+    severity NVARCHAR(32) NOT NULL,
+    status NVARCHAR(16) NOT NULL,
+    started_at DATETIME2 NOT NULL CONSTRAINT DF_monitoring_incidents_started_at DEFAULT SYSUTCDATETIME(),
+    resolved_at DATETIME2 NULL,
+    summary NVARCHAR(400) NOT NULL,
+    details_json NVARCHAR(MAX) NULL,
+    created_at DATETIME2 NOT NULL CONSTRAINT DF_monitoring_incidents_created_at DEFAULT SYSUTCDATETIME(),
+    updated_at DATETIME2 NOT NULL CONSTRAINT DF_monitoring_incidents_updated_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_monitoring_incidents PRIMARY KEY (id)
+  );
+END;
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_monitoring_incidents_status_started'
+    AND object_id = OBJECT_ID(N'dbo.monitoring_incidents')
+)
+  CREATE INDEX idx_monitoring_incidents_status_started
+    ON dbo.monitoring_incidents (status, started_at DESC);
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_monitoring_incidents_type_status'
+    AND object_id = OBJECT_ID(N'dbo.monitoring_incidents')
+)
+  CREATE INDEX idx_monitoring_incidents_type_status
+    ON dbo.monitoring_incidents (type, status, started_at DESC);
+GO
+
+IF OBJECT_ID(N'dbo.monitoring_job_status', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.monitoring_job_status (
+    job_name NVARCHAR(64) NOT NULL,
+    last_started_at DATETIME2 NULL,
+    last_finished_at DATETIME2 NULL,
+    last_status NVARCHAR(32) NULL,
+    last_error NVARCHAR(400) NULL,
+    details_json NVARCHAR(MAX) NULL,
+    updated_at DATETIME2 NOT NULL CONSTRAINT DF_monitoring_job_status_updated_at DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT PK_monitoring_job_status PRIMARY KEY (job_name)
+  );
+END;
+GO
+
+IF OBJECT_ID(N'dbo.monitoring_balance_samples', N'U') IS NULL
+BEGIN
+  CREATE TABLE dbo.monitoring_balance_samples (
+    id UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_monitoring_balance_samples_id DEFAULT NEWID(),
+    checked_at DATETIME2 NOT NULL CONSTRAINT DF_monitoring_balance_samples_checked_at DEFAULT SYSUTCDATETIME(),
+    balance_usd DECIMAL(18, 4) NOT NULL,
+    currency NVARCHAR(8) NOT NULL CONSTRAINT DF_monitoring_balance_samples_currency DEFAULT N'USD',
+    CONSTRAINT PK_monitoring_balance_samples PRIMARY KEY (id)
+  );
+END;
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_monitoring_balance_samples_checked_at'
+    AND object_id = OBJECT_ID(N'dbo.monitoring_balance_samples')
+)
+  CREATE INDEX idx_monitoring_balance_samples_checked_at
+    ON dbo.monitoring_balance_samples (checked_at ASC);
+GO
+
+IF NOT EXISTS (
+  SELECT 1 FROM sys.indexes
+  WHERE name = N'idx_conversation_messages_created_at_direction'
+    AND object_id = OBJECT_ID(N'dbo.conversation_messages')
+)
+  CREATE INDEX idx_conversation_messages_created_at_direction
+    ON dbo.conversation_messages (created_at ASC, direction);
+GO
