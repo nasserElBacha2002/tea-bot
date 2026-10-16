@@ -42,3 +42,41 @@ export function resetActivityForTests() {
   state.lastErrorMessage = null;
   state.lastSuccessfulFlowAt = null;
 }
+
+function toIso(value) {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString();
+}
+
+export function laterTimestamp(left, right) {
+  const leftIso = toIso(left);
+  const rightIso = toIso(right);
+  if (!leftIso) return rightIso;
+  if (!rightIso) return leftIso;
+  return new Date(leftIso).getTime() >= new Date(rightIso).getTime() ? leftIso : rightIso;
+}
+
+/**
+ * Memory stays the fast path. A successful DB read can only move a timestamp
+ * forward. A failed read does not invent timestamps and does not count as ok.
+ */
+export function mergeActivityTimestamps(memory, persisted) {
+  const base = {
+    lastInboundAt: memory.lastInboundAt,
+    lastOutboundAt: memory.lastOutboundAt,
+    lastProcessedAt: memory.lastProcessedAt,
+    lastSuccessfulFlowAt: memory.lastSuccessfulFlowAt,
+    lastErrorAt: memory.lastErrorAt,
+    activityPersistenceOk: false,
+  };
+  if (persisted?.ok !== true) return base;
+  return {
+    ...base,
+    lastInboundAt: laterTimestamp(memory.lastInboundAt, persisted.lastInboundAt),
+    lastOutboundAt: laterTimestamp(memory.lastOutboundAt, persisted.lastOutboundAt),
+    lastProcessedAt: laterTimestamp(memory.lastProcessedAt, persisted.lastProcessedAt),
+    activityPersistenceOk: true,
+  };
+}

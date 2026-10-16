@@ -18,6 +18,7 @@ function mapWebhook(row) {
     attempts: Number(row.attempts || 0),
     errorCode: row.error_code,
     errorMessage: row.error_message,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -55,21 +56,88 @@ export async function insertWebhookEvent(row) {
   }
 }
 
-export async function markWebhookProcessing(id, attempts) {
-  const { rows } = await query(
+/**
+ * One owner for (provider, event_type, provider_message_id).
+ * Insert wins the new event. Otherwise a conditional UPDATE ... OUTPUT is the
+ * only way to move RECEIVED, FAILED, or a stale PROCESSING row to PROCESSING.
+ * Zero rows means this caller did not acquire the message.
+ */
+export async function acquireInboundProcessing({
+  provider,
+  eventType,
+  providerMessageId,
+  payloadJson,
+  maxAttempts,
+  staleBefore,
+}) {
+  try {
+    const { rows } = await query(
+      `INSERT INTO dbo.provider_webhook_events (
+        provider, event_type, provider_message_id, status, attempts, payload_json
+      )
+      OUTPUT INSERTED.*
+      VALUES ($1, $2, $3, N'PROCESSING', 1, $4)`,
+      [provider, eventType, providerMessageId, payloadJson],
+    );
+    return { acquired: true, row: mapWebhook(rows[0]), reason: 'acquired' };
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+  }
+
+  const claimed = await query(
     `UPDATE dbo.provider_webhook_events
-     SET status = N'PROCESSING', attempts = $2, error_code = NULL, error_message = NULL
+     SET status = N'PROCESSING',
+         attempts = CASE WHEN status = N'RECEIVED' THEN attempts ELSE attempts + 1 END,
+         updated_at = SYSUTCDATETIME(),
+         error_code = NULL,
+         error_message = NULL
      OUTPUT INSERTED.*
-     WHERE id = $1`,
-    [id, attempts],
+     WHERE provider = $1
+       AND event_type = $2
+       AND provider_message_id = $3
+       AND (
+         (status = N'RECEIVED' AND attempts <= $4)
+         OR (status = N'FAILED' AND attempts < $4)
+         OR (status = N'PROCESSING' AND updated_at < $5 AND attempts < $4)
+       )`,
+    [provider, eventType, providerMessageId, maxAttempts, staleBefore],
   );
-  return mapWebhook(rows[0]);
+  if (claimed.rows[0]) {
+    return { acquired: true, row: mapWebhook(claimed.rows[0]), reason: 'acquired' };
+  }
+
+  const exhausted = await query(
+    `UPDATE dbo.provider_webhook_events
+     SET status = N'DEAD_LETTER',
+         updated_at = SYSUTCDATETIME(),
+         error_message = COALESCE(NULLIF(error_message, N''), N'max_attempts')
+     OUTPUT INSERTED.*
+     WHERE provider = $1
+       AND event_type = $2
+       AND provider_message_id = $3
+       AND attempts >= $4
+       AND (
+         status IN (N'FAILED', N'RECEIVED')
+         OR (status = N'PROCESSING' AND updated_at < $5)
+       )`,
+    [provider, eventType, providerMessageId, maxAttempts, staleBefore],
+  );
+  const row = mapWebhook(exhausted.rows[0])
+    || await findWebhookEvent(provider, eventType, providerMessageId);
+  if (!row) {
+    throw new Error('webhook event disappeared after unique violation');
+  }
+  let reason = 'in_flight';
+  if (row.status === 'PROCESSED') reason = 'processed';
+  else if (row.status === 'DEAD_LETTER') reason = 'dead_letter';
+  return { acquired: false, row, reason };
 }
 
 export async function markWebhookProcessed(id) {
   await query(
     `UPDATE dbo.provider_webhook_events
-     SET status = N'PROCESSED', processed_at = SYSUTCDATETIME(), error_code = NULL, error_message = NULL
+     SET status = N'PROCESSED', processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+         error_code = NULL, error_message = NULL
      WHERE id = $1`,
     [id],
   );
@@ -78,7 +146,8 @@ export async function markWebhookProcessed(id) {
 export async function markWebhookFailed(id, { status, errorCode, errorMessage }) {
   await query(
     `UPDATE dbo.provider_webhook_events
-     SET status = $2, processed_at = SYSUTCDATETIME(), error_code = $3, error_message = $4
+     SET status = $2, processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+         error_code = $3, error_message = $4
      WHERE id = $1`,
     [id, status, errorCode, errorMessage],
   );
@@ -367,4 +436,20 @@ export async function listRecentIncidents(limit = 20) {
     resolvedAt: row.resolved_at,
     summary: row.summary,
   }));
+}
+
+export async function readLatestActivity() {
+  const { rows } = await query(
+    `SELECT
+       (SELECT MAX(created_at) FROM dbo.conversation_messages WHERE direction = N'inbound') AS last_inbound_at,
+       (SELECT MAX(created_at) FROM dbo.conversation_messages WHERE direction = N'outbound') AS last_outbound_at,
+       (SELECT MAX(processed_at) FROM dbo.provider_webhook_events WHERE status = N'PROCESSED') AS last_processed_at`,
+  );
+  const row = rows[0] || {};
+  return {
+    ok: true,
+    lastInboundAt: row.last_inbound_at || null,
+    lastOutboundAt: row.last_outbound_at || null,
+    lastProcessedAt: row.last_processed_at || null,
+  };
 }

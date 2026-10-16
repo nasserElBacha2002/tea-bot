@@ -17,6 +17,7 @@ test('migracion 007 define tablas e indice de actividad', () => {
   assert.match(sql, /monitoring_incidents/);
   assert.match(sql, /monitoring_job_status/);
   assert.match(sql, /monitoring_balance_samples/);
+  assert.match(sql, /updated_at DATETIME2 NOT NULL/);
   assert.match(sql, /idx_conversation_messages_created_at_direction/);
   assert.match(sql, /idx_monitoring_incidents_status_started/);
 });

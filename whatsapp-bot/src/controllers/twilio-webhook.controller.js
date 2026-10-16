@@ -57,7 +57,7 @@ export const receiveTwilioMessage = async (req, res) => {
 
     if (gate.action === 'skip') {
       console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored`,
+        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
       );
       perfContext.add('duplicate', true);
       perfContext.add('totalMs', roundMs(nowMs() - requestStart));
@@ -68,7 +68,7 @@ export const receiveTwilioMessage = async (req, res) => {
     if (!gate.tracked) {
       if (dedupeKey && (await webhookDedupe.isDuplicate(dedupeKey, perfContext))) {
         console.log(
-          `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored`,
+          `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
         );
         perfContext.add('duplicate', true);
         perfContext.add('totalMs', roundMs(nowMs() - requestStart));

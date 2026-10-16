@@ -30,6 +30,7 @@ export interface MonitoringOverview {
       lastProcessedAt: string | null;
       lastSuccessfulFlowAt: string | null;
       lastErrorAt: string | null;
+      activityPersistenceOk?: boolean;
     };
   };
   twilio: {

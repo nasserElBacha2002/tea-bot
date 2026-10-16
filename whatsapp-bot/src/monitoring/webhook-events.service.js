@@ -9,7 +9,16 @@ function maxAttempts() {
   return Number.isFinite(value) && value > 0 ? value : MAX_ATTEMPTS_FALLBACK;
 }
 
+function staleBeforeDate() {
+  const seconds = Number(config.webhookProcessingStaleSeconds);
+  const windowSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 120;
+  return new Date(Date.now() - windowSeconds * 1000);
+}
+
 /**
+ * DB ownership is the only process decision when monitoring persistence works.
+ * The historical file dedupe is not consulted for a tracked event.
+ *
  * @param {{ event: { provider?: string, messageId?: string }, payload: object }} input
  * @param {typeof repository} [repo]
  */
@@ -17,50 +26,39 @@ export async function beginInboundEvent(input, repo = repository) {
   const provider = input.event?.provider || 'twilio';
   const providerMessageId = input.event?.messageId || null;
   const payloadJson = JSON.stringify(sanitizeWebhookPayload(input.payload));
-  if (providerMessageId) {
-    const existing = await repo.findWebhookEvent(provider, 'inbound', providerMessageId);
-    if (existing?.status === 'PROCESSED' || existing?.status === 'DEAD_LETTER') {
-      return { action: 'skip', tracked: true, id: existing.id, attempts: existing.attempts };
-    }
-    if (existing && existing.attempts >= maxAttempts() && existing.status !== 'PROCESSED') {
-      await repo.markWebhookFailed(existing.id, {
-        status: 'DEAD_LETTER',
-        errorCode: existing.errorCode,
-        errorMessage: existing.errorMessage || 'max_attempts',
-      });
-      return { action: 'skip', tracked: true, id: existing.id, attempts: existing.attempts };
-    }
-    if (existing && (existing.status === 'FAILED' || existing.status === 'RECEIVED' || existing.status === 'PROCESSING')) {
-      const attempts = existing.attempts + (existing.status === 'FAILED' ? 1 : 0);
-      if (attempts > maxAttempts()) {
-        await repo.markWebhookFailed(existing.id, {
-          status: 'DEAD_LETTER',
-          errorCode: existing.errorCode,
-          errorMessage: existing.errorMessage || 'max_attempts',
-        });
-        return { action: 'skip', tracked: true, id: existing.id, attempts: existing.attempts };
-      }
-      await repo.markWebhookProcessing(existing.id, attempts);
-      return { action: 'process', tracked: true, id: existing.id, attempts };
-    }
+
+  if (!providerMessageId) {
+    const inserted = await repo.insertWebhookEvent({
+      provider,
+      eventType: 'inbound',
+      providerMessageId: null,
+      status: 'PROCESSING',
+      attempts: 1,
+      payloadJson,
+    });
+    return {
+      action: 'process',
+      reason: 'acquired',
+      tracked: Boolean(inserted.row?.id),
+      id: inserted.row?.id || null,
+      attempts: inserted.row?.attempts || 1,
+    };
   }
 
-  const inserted = await repo.insertWebhookEvent({
+  const result = await repo.acquireInboundProcessing({
     provider,
     eventType: 'inbound',
     providerMessageId,
-    status: 'PROCESSING',
-    attempts: 1,
     payloadJson,
+    maxAttempts: maxAttempts(),
+    staleBefore: staleBeforeDate(),
   });
-  if (!inserted.inserted && inserted.row?.status === 'PROCESSED') {
-    return { action: 'skip', tracked: true, id: inserted.row.id, attempts: inserted.row.attempts };
-  }
   return {
-    action: 'process',
+    action: result.acquired ? 'process' : 'skip',
+    reason: result.reason,
     tracked: true,
-    id: inserted.row?.id || null,
-    attempts: inserted.row?.attempts || 1,
+    id: result.row?.id || null,
+    attempts: result.row?.attempts || 0,
   };
 }
 

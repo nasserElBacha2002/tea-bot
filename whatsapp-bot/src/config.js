@@ -101,6 +101,9 @@ export const config = {
     60,
   ),
   webhookMaxProcessingAttempts: parsePositiveInt(process.env.WEBHOOK_MAX_PROCESSING_ATTEMPTS, 3),
+  // A PROCESSING row older than this may be reclaimed. The clock is updated_at,
+  // refreshed on every ownership change. Default 120s.
+  webhookProcessingStaleSeconds: parsePositiveInt(process.env.WEBHOOK_PROCESSING_STALE_SECONDS, 120),
   monitoringAlertsEnabled: envFlag('MONITORING_ALERTS_ENABLED', false),
   monitoringAlertCooldownMinutes: parsePositiveInt(process.env.MONITORING_ALERT_COOLDOWN_MINUTES, 60),
   conversationClassificationMode: (() => {

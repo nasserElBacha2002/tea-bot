@@ -17,9 +17,18 @@ BEGIN
     error_code NVARCHAR(64) NULL,
     error_message NVARCHAR(400) NULL,
     payload_json NVARCHAR(MAX) NULL,
+    updated_at DATETIME2 NOT NULL CONSTRAINT DF_provider_webhook_events_updated_at DEFAULT SYSUTCDATETIME(),
     CONSTRAINT PK_provider_webhook_events PRIMARY KEY (id)
   );
 END;
+GO
+
+-- updated_at is the reclaim clock for a PROCESSING row. received_at stays the
+-- original arrival and must not be used to decide that a worker is stale.
+IF COL_LENGTH(N'dbo.provider_webhook_events', N'updated_at') IS NULL
+  ALTER TABLE dbo.provider_webhook_events
+    ADD updated_at DATETIME2 NOT NULL
+      CONSTRAINT DF_provider_webhook_events_updated_at DEFAULT SYSUTCDATETIME();
 GO
 
 IF NOT EXISTS (

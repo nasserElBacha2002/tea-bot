@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { isConversationDbEnabled, pingDatabase } from '../db/index.js';
 import flowLoader from '../utils/flow-loader.js';
-import { getActivitySnapshot, noteActivity } from './activity-store.js';
+import { getActivitySnapshot, mergeActivityTimestamps, noteActivity } from './activity-store.js';
 import {
   getMonitorJobView,
   getRetentionJobView,
@@ -217,14 +217,31 @@ export class MonitoringService {
         database = { ok: false, latencyMs: Date.now() - started };
       }
     }
+    let persisted = { ok: false };
+    if (!isConversationDbEnabled()) {
+      persisted = {
+        ok: true,
+        lastInboundAt: null,
+        lastOutboundAt: null,
+        lastProcessedAt: null,
+      };
+    } else if (database.ok) {
+      try {
+        persisted = await repository.readLatestActivity();
+      } catch (error) {
+        console.error(`[Monitoring] activity fallback failed: ${error.message}`);
+        persisted = { ok: false };
+      }
+    }
+    const merged = mergeActivityTimestamps(activity, persisted);
     const flowsLoaded = (flowLoader.cache?.size || 0) > 0;
     const derived = deriveBotHealth({
       processUp: true,
       databaseOk: database.ok,
       flowsLoaded,
-      lastErrorAt: activity.lastErrorAt,
-      lastProcessedAt: activity.lastProcessedAt,
-      lastSuccessfulFlowAt: activity.lastSuccessfulFlowAt,
+      lastErrorAt: merged.lastErrorAt,
+      lastProcessedAt: merged.lastProcessedAt,
+      lastSuccessfulFlowAt: merged.lastSuccessfulFlowAt,
     });
     return {
       status: derived.status,
@@ -233,11 +250,12 @@ export class MonitoringService {
       database,
       flowsLoaded,
       activity: {
-        lastInboundAt: activity.lastInboundAt,
-        lastOutboundAt: activity.lastOutboundAt,
-        lastProcessedAt: activity.lastProcessedAt,
-        lastSuccessfulFlowAt: activity.lastSuccessfulFlowAt,
-        lastErrorAt: activity.lastErrorAt,
+        lastInboundAt: merged.lastInboundAt,
+        lastOutboundAt: merged.lastOutboundAt,
+        lastProcessedAt: merged.lastProcessedAt,
+        lastSuccessfulFlowAt: merged.lastSuccessfulFlowAt,
+        lastErrorAt: merged.lastErrorAt,
+        activityPersistenceOk: merged.activityPersistenceOk,
       },
     };
   }
