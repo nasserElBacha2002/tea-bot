@@ -119,6 +119,17 @@ export const receiveTwilioMessage = async (req, res) => {
       return sendTwiml(res, buildEmptyTwimlResponse());
     }
 
+    if (processed.kind === 'reentry') {
+      console.log(
+        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=reentry`,
+      );
+      perfContext.add('reentry', true);
+      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+      logPerf('twilio_webhook', perfContext.toJSON());
+      await markHandled({ flow: true });
+      return sendTwiml(res, buildTwimlMessage(processed.reply));
+    }
+
     if (processed.kind === 'human_handoff') {
       console.log(
         `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_handoff node=${processed.result?.currentNodeId}`,

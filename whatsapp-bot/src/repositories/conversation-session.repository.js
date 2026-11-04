@@ -56,7 +56,7 @@ class ConversationSessionRepository {
     return mapRow(rows[0]);
   }
 
-  async createSession(data) {
+  async createSession(data, { transaction } = {}) {
     const {
       conversationId,
       flowId,
@@ -85,6 +85,7 @@ class ConversationSessionRepository {
         serializeJson(trackingJson),
         status,
       ],
+      { transaction },
     );
     return mapRow(rows[0]);
   }

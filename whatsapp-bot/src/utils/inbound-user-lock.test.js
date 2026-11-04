@@ -19,6 +19,17 @@ test('serializa callbacks del mismo userId', async () => {
   assert.deepEqual(order, ['a-start', 'a-end', 'b']);
 });
 
+test('un fallo no deja la cola trabada ni una promesa suelta', async () => {
+  await assert.rejects(
+    withInboundUserLock('u-fail', async () => {
+      throw new Error('boom');
+    }),
+    /boom/,
+  );
+  const next = await withInboundUserLock('u-fail', async () => 'ok');
+  assert.equal(next, 'ok');
+});
+
 test('userIds distintos no se bloquean entre sí', async () => {
   let released = false;
   const slow = withInboundUserLock('u-slow', async () => {

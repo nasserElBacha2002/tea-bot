@@ -225,8 +225,14 @@ export function useConversationsLiveUpdates({
     };
 
     ws.onclose = (ev) => {
+      const isCurrent = socketRef.current === ws;
+      if (!isCurrent) {
+        devLog('ignored close of stale socket', ev.code, ev.reason);
+        return;
+      }
+
       clearHeartbeatTimer();
-      if (socketRef.current === ws) socketRef.current = null;
+      socketRef.current = null;
 
       if (intentionalCloseRef.current || !mountedRef.current || !enabled) {
         setStatus('manual');
@@ -234,9 +240,9 @@ export function useConversationsLiveUpdates({
         return;
       }
 
-      if (ev.code === 1008 || ev.code === 4001) {
+      if (ev.code === 1008 || ev.code === 4001 || ev.reason === 'replaced_by_new_session') {
         setStatus('disconnected');
-        devLog('auth closed, no reconnect');
+        devLog('closed without reconnect', ev.code, ev.reason);
         return;
       }
 

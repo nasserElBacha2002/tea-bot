@@ -1,4 +1,4 @@
-import { query, isConversationDbEnabled } from '../db/index.js';
+import { query, isConversationDbEnabled, parseJsonColumn } from '../db/index.js';
 import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
 
 function mapRow(row) {
@@ -15,6 +15,7 @@ function mapRow(row) {
     currentFlowId: row.current_flow_id,
     currentFlowVersion: row.current_flow_version,
     currentNodeKey: row.current_node_key,
+    reentryJson: parseJsonColumn(row.reentry_json, null),
     assignedAgentId: row.assigned_agent_id,
     lastMessageAt: row.last_message_at,
     startedAt: row.started_at,
@@ -165,6 +166,11 @@ class ConversationRepository {
       }
     }
 
+    if (patch.reentryJson !== undefined) {
+      fields.push(`reentry_json = $${i++}`);
+      values.push(patch.reentryJson == null ? null : JSON.stringify(patch.reentryJson));
+    }
+
     if (fields.length === 0) {
       return this.findById(id);
     }
@@ -188,6 +194,34 @@ class ConversationRepository {
 
   async updateCurrentNode(id, currentNodeKey) {
     return this.updateConversation(id, { currentNodeKey });
+  }
+
+  /**
+   * Escribe el cursor del motor solo si el cierre no armó una reentrada
+   * y la conversación sigue en bot. Devuelve null si el UPDATE no matchea.
+   */
+  async updateFlowPositionIfNoReentry(id, patch, { transaction } = {}) {
+    const { rows } = await query(
+      `UPDATE dbo.conversations
+       SET current_flow_id = $2,
+           current_flow_version = $3,
+           current_node_key = $4,
+           last_message_at = $5,
+           updated_at = SYSUTCDATETIME()
+       OUTPUT INSERTED.*
+       WHERE id = $1
+         AND reentry_json IS NULL
+         AND status = N'bot'`,
+      [
+        id,
+        patch.currentFlowId ?? null,
+        patch.currentFlowVersion ?? null,
+        patch.currentNodeKey ?? null,
+        patch.lastMessageAt ?? new Date(),
+      ],
+      { transaction },
+    );
+    return mapRow(rows[0]);
   }
 
   /**

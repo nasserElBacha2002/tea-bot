@@ -6,6 +6,8 @@ import conversationService from './conversation.service.js';
 import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
+import conversationReentryService, { REENTRY_PROMPT } from './conversation-reentry.service.js';
+import messagePersistence from './message-persistence.service.js';
 
 const INSCRIPTION_TEXT =
   'Hola, buenos días, quería saber si todavía están abiertas las inscripciones para agosto o si solo hay inscripciones en marzo.';
@@ -179,6 +181,180 @@ test('dos webhooks concurrentes del mismo usuario no duplican el inicio', async 
     assert.ok(['welcome', 'fallback'].includes(conversation.currentNodeKey));
     assert.equal(sessionService.getSession(userId) != null, true);
   } finally {
+    humanHandoffRepository.findLatestActiveByConversationId = prevHandoff;
+    conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
+    restore();
+    await sessionService.resetSession(userId);
+  }
+});
+
+test('cierre durante el motor reemplaza el fallback por la reentrada y no sincroniza el cursor', async () => {
+  const userId = `twilio:whatsapp:+54911race${Date.now()}`;
+  await sessionService.resetSession(userId);
+  const conversation = {
+    id: 'conv-race-close',
+    status: 'bot',
+    currentNodeKey: 'welcome',
+    currentFlowId: 'first-contact-e2e-flow',
+    externalUserId: userId,
+    contactEmail: 'race@example.com',
+  };
+  let reloads = 0;
+  let syncs = 0;
+  const extras = {
+    outbounds: [],
+    overrides: {
+      reloadConversation: async (current) => {
+        reloads += 1;
+        if (reloads >= 3) {
+          return {
+            ...current,
+            status: 'bot',
+            currentNodeKey: null,
+            reentryJson: {
+              v: 1,
+              status: 'pending',
+              flowId: 'main-menu',
+              resumeNodeKey: 'no_presenciales_menu',
+              variables: {},
+              history: [],
+              tracking: {},
+            },
+          };
+        }
+        return current;
+      },
+      syncSessionFromFlowEngine: async () => {
+        syncs += 1;
+        conversation.currentNodeKey = 'fallback_global';
+      },
+      hydrateRuntimeSessionIfNeeded: async (hydratedUserId) => {
+        await sessionService.createSession(hydratedUserId, conversation.currentFlowId, 'welcome', {
+          simulatorFlowOverride: buildMenuFlow(),
+        });
+        return sessionService.getSession(hydratedUserId);
+      },
+    },
+  };
+  const restore = stubConversationService(conversation, extras);
+  const prevNormalize = conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded;
+  conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = async (current) => ({
+    conversation: current,
+    normalized: false,
+  });
+  const prevHandoff = humanHandoffRepository.findLatestActiveByConversationId;
+  humanHandoffRepository.findLatestActiveByConversationId = async () => null;
+  const prevConsume = conversationReentryService.consumeInbound;
+  conversationReentryService.consumeInbound = async (current) => {
+    if (!current?.reentryJson) return null;
+    return {
+      action: 'prompt',
+      reply: REENTRY_PROMPT,
+      conversation: { ...current, currentNodeKey: null, reentryJson: { ...current.reentryJson, status: 'awaiting_choice' } },
+    };
+  };
+
+  try {
+    const processed = await processCanonicalTwilioInbound({
+      userId,
+      flowId: conversation.currentFlowId,
+      text: 'quería seguir con la misma consulta',
+      messageId: 'SM-race-close',
+      provider: 'twilio',
+      phone: '+5491100000099',
+      rawPayload: {},
+    }, { flowSnapshot: buildMenuFlow() });
+    assert.equal(processed.kind, 'reentry');
+    assert.equal(processed.reply, REENTRY_PROMPT);
+    assert.equal(/No pude entender/i.test(processed.reply), false);
+    assert.equal(syncs, 0);
+    assert.equal(conversation.currentNodeKey, 'welcome');
+    assert.deepEqual(extras.outbounds, [REENTRY_PROMPT]);
+  } finally {
+    conversationReentryService.consumeInbound = prevConsume;
+    humanHandoffRepository.findLatestActiveByConversationId = prevHandoff;
+    conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
+    restore();
+    await sessionService.resetSession(userId);
+  }
+});
+
+test('si el outbound de reentrada no se persiste no se devuelve el prompt', async () => {
+  const userId = `twilio:whatsapp:+54911fail${Date.now()}`;
+  await sessionService.resetSession(userId);
+  const conversation = {
+    id: 'conv-reentry-fail',
+    status: 'bot',
+    currentNodeKey: 'welcome',
+    currentFlowId: 'first-contact-e2e-flow',
+    externalUserId: userId,
+    contactEmail: 'fail@example.com',
+  };
+  let syncs = 0;
+  let reloads = 0;
+  const extras = {
+    overrides: {
+      reloadConversation: async (current) => {
+        reloads += 1;
+        if (reloads >= 3) {
+          return {
+            ...current,
+            currentNodeKey: null,
+            reentryJson: { v: 1, status: 'pending', flowId: 'main-menu', flowVersion: 'v1' },
+          };
+        }
+        return current;
+      },
+      syncSessionFromFlowEngine: async () => {
+        syncs += 1;
+      },
+      hydrateRuntimeSessionIfNeeded: async (hydratedUserId) => {
+        await sessionService.createSession(hydratedUserId, conversation.currentFlowId, 'welcome', {
+          simulatorFlowOverride: buildMenuFlow(),
+        });
+        return sessionService.getSession(hydratedUserId);
+      },
+    },
+  };
+  const restore = stubConversationService(conversation, extras);
+  const prevNormalize = conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded;
+  conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = async (current) => ({
+    conversation: current,
+    normalized: false,
+  });
+  const prevHandoff = humanHandoffRepository.findLatestActiveByConversationId;
+  humanHandoffRepository.findLatestActiveByConversationId = async () => null;
+  const prevConsume = conversationReentryService.consumeInbound;
+  conversationReentryService.consumeInbound = async (current) => {
+    if (!current?.reentryJson) return null;
+    return {
+      action: 'prompt',
+      reply: REENTRY_PROMPT,
+      conversation: current,
+    };
+  };
+  const prevFinish = messagePersistence.finishReentry;
+  messagePersistence.finishReentry = async () => {
+    throw new Error('outbound insert failed');
+  };
+
+  try {
+    await assert.rejects(
+      () => processCanonicalTwilioInbound({
+        userId,
+        flowId: conversation.currentFlowId,
+        text: 'texto libre',
+        messageId: 'SM-reentry-fail',
+        provider: 'twilio',
+        phone: '+5491100000098',
+        rawPayload: {},
+      }, { flowSnapshot: buildMenuFlow() }),
+      /outbound insert failed/,
+    );
+    assert.equal(syncs, 0);
+  } finally {
+    messagePersistence.finishReentry = prevFinish;
+    conversationReentryService.consumeInbound = prevConsume;
     humanHandoffRepository.findLatestActiveByConversationId = prevHandoff;
     conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
     restore();

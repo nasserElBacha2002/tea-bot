@@ -243,9 +243,26 @@ class ConversationService {
       trackingJson,
     } = sync;
 
+    const updated = await conversationRepository.updateFlowPositionIfNoReentry(conversation.id, {
+      currentFlowId: flowId,
+      currentFlowVersion: flowVersion,
+      currentNodeKey,
+      lastMessageAt: new Date(),
+    });
+    if (!updated) {
+      try {
+        await sessionService.resetSession(userId);
+      } catch (error) {
+        console.warn(
+          `[ConversationDB] reentry_sync_reset_failed user=${userId} error=${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      return null;
+    }
+
     let activeSession = dbSession;
     if (!activeSession) {
-      const created = await this.getOrCreateActiveSession(conversation, {
+      const created = await this.getOrCreateActiveSession(updated, {
         flowId,
         flowVersion,
         currentNodeKey,
@@ -263,13 +280,6 @@ class ConversationService {
         trackingJson,
       });
     }
-
-    await conversationRepository.updateConversation(conversation.id, {
-      currentFlowId: flowId,
-      currentFlowVersion: flowVersion,
-      currentNodeKey,
-      lastMessageAt: new Date(),
-    });
 
     return activeSession;
   }

@@ -16,7 +16,7 @@ export function withInboundUserLock(userId, fn) {
   const key = String(userId || '');
   const previous = tails.get(key) || Promise.resolve();
   const run = previous.catch(() => undefined).then(fn);
-  const tracked = run.finally(() => {
+  const tracked = run.then(() => undefined, () => undefined).finally(() => {
     if (tails.get(key) === tracked) tails.delete(key);
   });
   tails.set(key, tracked);

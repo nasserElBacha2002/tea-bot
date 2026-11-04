@@ -1,6 +1,7 @@
 import conversationService from './conversation.service.js';
 import humanHandoffService from './human-handoff.service.js';
 import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
+import conversationReentryService from './conversation-reentry.service.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
 import { isConversationInHumanMode } from '../utils/handoff-detection.js';
@@ -64,6 +65,13 @@ class MessagePersistenceService {
     }
 
     await conversationService.persistInboundMessage(conversation, event);
+    conversation = await conversationService.reloadConversation(conversation);
+
+    const reentry = await conversationReentryService.consumeInbound(conversation, event.text || '');
+    if (reentry?.action && reentry.action !== 'delegate') {
+      return this.finishReentry(reentry);
+    }
+    if (reentry?.conversation) conversation = reentry.conversation;
 
     const normalized = await conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded(
       conversation,
@@ -83,6 +91,37 @@ class MessagePersistenceService {
     );
 
     return { conversation, dbSession, skipFlowEngine: false };
+  }
+
+  /**
+   * Una sola respuesta. present_entry y legacy_cleared delegan la presentación al motor,
+   * con la sesión en memoria ya reseteada para que el texto no se matchee.
+   */
+  async finishReentry(reentry) {
+    const conversation = reentry.conversation;
+    if (reentry.action === 'human_skip') {
+      return { conversation, dbSession: null, skipFlowEngine: true };
+    }
+    if (reentry.action === 'present_entry' || reentry.action === 'legacy_cleared') {
+      await conversationReentryService.resetRuntime(conversation);
+      return { conversation, dbSession: null, skipFlowEngine: false };
+    }
+
+    await conversationService.persistOutboundBotMessage(conversation, reentry.reply, {
+      flowId: conversation.currentFlowId,
+      flowVersion: conversation.currentFlowVersion,
+      nodeKey: reentry.nodeKey || conversation.currentNodeKey,
+      event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
+      handoffId: reentry.handoff?.id,
+      handoff: reentry.handoff,
+    });
+
+    return {
+      conversation,
+      dbSession: reentry.dbSession || null,
+      skipFlowEngine: true,
+      reentryReply: reentry.reply,
+    };
   }
 
   /**
@@ -162,13 +201,18 @@ class MessagePersistenceService {
   /**
    * Envuelve operaciones DB: loguea y no relanza (webhook sigue).
    */
-  async safeRun(label, fn) {
+  /**
+   * @param {{ required?: boolean }} [options]
+   * required no traga el error cuando la base está habilitada.
+   * Si la base está apagada, sigue devolviendo null para que el motor responda sin persistencia.
+   */
+  async safeRun(label, fn, { required = false } = {}) {
     if (!isConversationDbEnabled()) return null;
     try {
       return await fn();
     } catch (error) {
       console.error(`[ConversationDB] ${label} failed:`, error.message);
-      if (process.env.CONVERSATION_DB_STRICT === '1') {
+      if (required || process.env.CONVERSATION_DB_STRICT === '1') {
         throw error;
       }
       return null;

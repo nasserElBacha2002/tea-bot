@@ -139,6 +139,32 @@ describe('useConversationsLiveUpdates', () => {
     expect(MockWebSocket.instances.length).toBe(1);
   });
 
+  it('does not reconnect when the server replaced this socket', async () => {
+    vi.useFakeTimers();
+    globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
+    renderHook(
+      () =>
+        useConversationsLiveUpdates({
+          enabled: true,
+          selectedConversationId: null,
+        }),
+      { wrapper },
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(MockWebSocket.instances.length).toBe(1);
+    const ws = MockWebSocket.instances[0];
+
+    await act(async () => {
+      ws.close(4000, 'replaced_by_new_session');
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(MockWebSocket.instances.length).toBe(1);
+  });
+
   it('reconnects after abnormal close', async () => {
     globalThis.WebSocket = MockWebSocket as unknown as typeof WebSocket;
     renderHook(

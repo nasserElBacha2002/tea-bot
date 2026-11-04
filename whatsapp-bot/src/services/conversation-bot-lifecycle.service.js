@@ -4,9 +4,13 @@ import conversationSessionRepository from '../repositories/conversation-session.
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
 import { resolveResumeNodeKey } from './flow-entry-node.service.js';
-import { evaluateLegacyNormalizationCandidate } from '../utils/conversation-handoff-policy.js';
+import { evaluateLegacyNormalizationCandidate, isHandoffTerminalNode } from '../utils/conversation-handoff-policy.js';
+import {
+  buildReentrySnapshot,
+  resolveReentryPolicy,
+} from '../utils/conversation-reentry-policy.js';
 
-export { isHandoffTerminalNode } from '../utils/conversation-handoff-policy.js';
+export { isHandoffTerminalNode };
 
 function logLifecycleEvent(payload) {
   console.log(JSON.stringify(payload));
@@ -60,8 +64,12 @@ export class ConversationBotLifecycleService {
     const conversationId = conversation.id;
     const previousStatus = conversation.status;
     const previousNodeKey = conversation.currentNodeKey ?? null;
-
-    const resumeNodeKey = await resolveResumeNodeKey(conversation);
+    const reentryPolicy = resolveReentryPolicy();
+    const promptReentry = reentryPolicy === 'prompt';
+    const degradedReentry = reentryPolicy === 'degraded';
+    const memorySession = typeof this.runtimeSession.getSession === 'function'
+      ? this.runtimeSession.getSession(conversation.externalUserId)
+      : null;
     const resolvedAt = new Date();
 
     const txResult = await this.runTransaction(async (transaction) => {
@@ -71,6 +79,11 @@ export class ConversationBotLifecycleService {
         err.code = 'NOT_FOUND';
         throw err;
       }
+
+      const openSession = await this.sessionRepo.findLatestOpenByConversationId(
+        conversationId,
+        { transaction },
+      );
 
       const resolvedHandoffIds = await this.handoffRepo.resolveActiveHandoffs(
         conversationId,
@@ -87,14 +100,44 @@ export class ConversationBotLifecycleService {
         { transaction },
       );
 
+      const existingReentry = locked.reentryJson;
+      const keepExisting = existingReentry
+        && (existingReentry.status === 'pending' || existingReentry.status === 'awaiting_choice');
+      const returningFromHuman = locked.status === 'waiting_human'
+        || locked.status === 'assigned'
+        || isHandoffTerminalNode(locked.currentNodeKey)
+        || resolvedHandoffIds.length > 0;
+
+      let reentryJson = null;
+      let resumeNodeKey = null;
+      let writeReentry = true;
+      if (promptReentry && keepExisting) {
+        reentryJson = existingReentry;
+      } else if (promptReentry && returningFromHuman) {
+        reentryJson = buildReentrySnapshot({
+          conversation: locked,
+          openSession,
+          memorySession,
+          capturedAt: resolvedAt.toISOString(),
+        });
+      } else if (degradedReentry && (keepExisting || returningFromHuman)) {
+        resumeNodeKey = null;
+        writeReentry = false;
+      } else {
+        resumeNodeKey = await resolveResumeNodeKey(locked);
+      }
+
+      const patch = {
+        status: 'bot',
+        assignedAgentId: null,
+        closedAt: null,
+        currentNodeKey: resumeNodeKey,
+      };
+      if (writeReentry) patch.reentryJson = reentryJson;
+
       const updated = await this.conversationRepo.updateConversation(
         conversationId,
-        {
-          status: 'bot',
-          assignedAgentId: null,
-          closedAt: null,
-          currentNodeKey: resumeNodeKey,
-        },
+        patch,
         { transaction },
       );
 
@@ -102,6 +145,8 @@ export class ConversationBotLifecycleService {
         conversation: updated,
         resolvedHandoffIds,
         endedSessionCount,
+        resumeNodeKey,
+        reentryArmed: Boolean(reentryJson),
       };
     });
 
@@ -113,7 +158,8 @@ export class ConversationBotLifecycleService {
       previousStatus,
       newStatus: 'bot',
       previousNodeKey,
-      resumeNodeKey,
+      resumeNodeKey: txResult.resumeNodeKey,
+      reentryArmed: txResult.reentryArmed,
       resolvedHandoffIds: txResult.resolvedHandoffIds,
       resolvedHandoffCount: txResult.resolvedHandoffIds.length,
       endedSessionCount: txResult.endedSessionCount,
@@ -123,7 +169,8 @@ export class ConversationBotLifecycleService {
 
     return {
       conversation: txResult.conversation,
-      resumeNodeKey,
+      resumeNodeKey: txResult.resumeNodeKey,
+      reentryArmed: txResult.reentryArmed,
       resolvedHandoffIds: txResult.resolvedHandoffIds,
       endedSessionCount: txResult.endedSessionCount,
     };

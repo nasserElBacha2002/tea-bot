@@ -20,6 +20,7 @@ import conversationAbandonmentService from './services/conversationAbandonment.s
 import conversationRetentionService from './services/conversationRetention.service.js';
 import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
+import { probeReentryColumn } from './services/conversation-reentry.service.js';
 import { attachConversationLiveWebSocket } from './realtime/conversation-live.ws.js';
 
 const app = express();
@@ -57,6 +58,7 @@ validateConfig();
         const dbPing = await pingDatabase();
         if (dbPing.ok) {
           console.log('🗄️  Persistencia de conversaciones (SQL Server) conectada.');
+          await probeReentryColumn();
         } else {
           console.warn('⚠️ CONVERSATION_DB_ENABLED pero la base no respondió al ping.');
         }

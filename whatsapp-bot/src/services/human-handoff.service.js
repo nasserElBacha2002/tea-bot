@@ -79,7 +79,7 @@ export class HumanHandoffService {
 
     const wasBot = String(conversation.status || 'bot') === 'bot';
 
-    const txResult = await this.runTransaction(async (transaction) => {
+    const run = async (transaction) => {
       await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
 
       const { handoff, created } = await this.handoffRepo.ensurePendingHandoffAtomic(
@@ -91,15 +91,18 @@ export class HumanHandoffService {
         { transaction },
       );
 
+      const conversationPatch = {
+        status: 'waiting_human',
+        assignedAgentId: null,
+        currentNodeKey: nodeKey,
+        currentFlowId: flowId,
+        currentFlowVersion: flowVersion,
+      };
+      if (params.clearReentry) conversationPatch.reentryJson = null;
+
       const updatedConversation = await this.conversationRepo.updateConversation(
         conversation.id,
-        {
-          status: 'waiting_human',
-          assignedAgentId: null,
-          currentNodeKey: nodeKey,
-          currentFlowId: flowId,
-          currentFlowVersion: flowVersion,
-        },
+        conversationPatch,
         { transaction },
       );
 
@@ -134,11 +137,17 @@ export class HumanHandoffService {
       }
 
       return { handoff, created, conversation: updatedConversation, session: pausedSession };
-    });
+    };
 
-    notifyConversationUpdated(txResult.conversation, {
-      humanHandoff: mapHumanHandoffPublic(txResult.handoff),
-    });
+    const txResult = params.transaction
+      ? await run(params.transaction)
+      : await this.runTransaction(run);
+
+    if (!params.deferNotify) {
+      notifyConversationUpdated(txResult.conversation, {
+        humanHandoff: mapHumanHandoffPublic(txResult.handoff),
+      });
+    }
 
     const confirmationMessage = resolveHandoffConfirmationMessage(
       nodeKey,
