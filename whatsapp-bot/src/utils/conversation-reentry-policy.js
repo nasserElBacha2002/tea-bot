@@ -3,6 +3,32 @@ import { normalizeGlobalCommandInput, detectGlobalCommand } from './global-comma
 
 const UNSAFE_RESUME_NODES = new Set([...HUMAN_NODE_IDS, 'fallback_global', 'fallback']);
 
+export const RETURN_TO_BOT_EVENT = 'conversation_returned_to_bot';
+
+export const RETURN_TO_BOT_BODY =
+  'Conversación cerrada por el equipo. El bot retomará la atención.';
+
+/** El fallback del cursor viejo no es un paso del flujo. */
+const LEGACY_PARKED_NODE_KEYS = new Set(['fallback_global', 'fallback']);
+
+/**
+ * Outbound posteriores al cierre humano. Un nodo real, o un mensaje de agente,
+ * significa que el hilo ya siguió. Esos casos no se rearman.
+ * @param {object[] | null | undefined} outboundMessages
+ */
+export function hasFlowProgressAfterReturn(outboundMessages) {
+  if (!Array.isArray(outboundMessages)) return false;
+  for (const message of outboundMessages) {
+    if (!message || message.direction === 'inbound') continue;
+    if (message.senderType === 'agent') return true;
+    if (message.senderType !== 'bot') continue;
+    const nodeKey = String(message.metadataJson?.nodeKey || '').trim();
+    if (!nodeKey || LEGACY_PARKED_NODE_KEYS.has(nodeKey)) continue;
+    return true;
+  }
+  return false;
+}
+
 /** Respuestas inválidas persistidas antes de salir de awaiting_choice. */
 export const MAX_INVALID_REENTRY_ATTEMPTS = 3;
 

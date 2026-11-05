@@ -22,6 +22,10 @@ import {
 } from '../realtime/conversation-live.notify.js';
 import { validateContactName } from '../utils/contact-name.js';
 import { CONVERSATION_CHANNELS } from '../constants/conversation-channels.js';
+import {
+  RETURN_TO_BOT_BODY,
+  RETURN_TO_BOT_EVENT,
+} from '../utils/conversation-reentry-policy.js';
 
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
 const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
@@ -313,7 +317,7 @@ export class ConversationInboxService {
 
   async _returnConversationToBot(conversationId, {
     resolutionNote = null,
-    systemMessage = 'Conversación cerrada por el equipo. El bot retomará la atención.',
+    systemMessage = RETURN_TO_BOT_BODY,
     generatedBy = 'agent_inbox',
   } = {}) {
     const conversation = await conversationRepository.getConversationById(conversationId);
@@ -332,7 +336,7 @@ export class ConversationInboxService {
       senderType: 'system',
       body: systemMessage,
       provider: conversation.provider,
-      metadataJson: { event: 'conversation_returned_to_bot', generatedBy },
+      metadataJson: { event: RETURN_TO_BOT_EVENT, generatedBy },
     });
 
     const result = { conversation: mapConversationPublic(updated) };

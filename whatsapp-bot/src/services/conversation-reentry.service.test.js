@@ -10,7 +10,13 @@ import conversationReentryService, { REENTRY_PROMPT } from './conversation-reent
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
 import webhookDedupe from './webhook-dedupe.service.js';
-import { classifyReentryInput, noteReentryColumn } from '../utils/conversation-reentry-policy.js';
+import {
+  classifyReentryInput,
+  hasFlowProgressAfterReturn,
+  noteReentryColumn,
+  RETURN_TO_BOT_BODY,
+  RETURN_TO_BOT_EVENT,
+} from '../utils/conversation-reentry-policy.js';
 
 const CASE_ID = '7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3';
 const FREE_TEXT = 'Quería seguir con la misma consulta de inscripciones';
@@ -142,6 +148,15 @@ function createWorld(overrides = {}) {
         (item) => item.conversationId === conversationId && item.status === 'active',
       ) || null;
     },
+    async findLatestStartedAtOrBefore(conversationId, at) {
+      const limit = new Date(at).getTime();
+      const eligible = sessions.filter((item) => {
+        if (item.conversationId !== conversationId) return false;
+        if (item.startedAt == null) return true;
+        return new Date(item.startedAt).getTime() <= limit;
+      });
+      return eligible[eligible.length - 1] || null;
+    },
     async endAllOpenForConversation(conversationId) {
       let count = 0;
       sessions = sessions.map((item) => {
@@ -239,6 +254,15 @@ function createWorld(overrides = {}) {
     loadHistoricalFlow: overrides.loadHistoricalFlow,
     runTransaction,
     policy: () => (process.env.REENTRY_POLICY === 'legacy' ? 'legacy' : 'prompt'),
+    queriesEnabled: () => true,
+    messageRepo: overrides.messageRepo || {
+      async findLatestReturnToBot() {
+        return null;
+      },
+      async listOutboundSince() {
+        return [];
+      },
+    },
   });
 
   return {
@@ -713,6 +737,168 @@ test('sin la columna, el cierre no escribe reentry y deja el cursor en null', as
     assert.equal(world.conversation.contactEmail, 'student@example.com');
   } finally {
     noteReentryColumn(null);
+  }
+});
+
+function oldCloseFixture(outbound = []) {
+  const returnedAt = new Date('2026-11-03T20:42:00.000Z');
+  return {
+    messageRepo: {
+      async findLatestReturnToBot() {
+        return {
+          senderType: 'system',
+          direction: 'outbound',
+          body: RETURN_TO_BOT_BODY,
+          createdAt: returnedAt,
+          metadataJson: { event: RETURN_TO_BOT_EVENT },
+        };
+      },
+      async listOutboundSince() {
+        return outbound;
+      },
+    },
+  };
+}
+
+function parkLegacyConversation(world) {
+  world.conversation.status = 'bot';
+  world.conversation.reentryJson = null;
+  world.conversation.currentNodeKey = 'welcome';
+  world.conversation.assignedAgentId = null;
+  world.sessions[0].status = 'ended';
+  world.sessions[0].startedAt = new Date('2026-11-03T18:00:00.000Z');
+  for (const handoff of world.handoffs) {
+    if (handoff.status === 'pending' || handoff.status === 'assigned') {
+      handoff.status = 'resolved';
+    }
+  }
+}
+
+test('el fallback posterior a un cierre viejo no cuenta como avance del flujo', () => {
+  assert.equal(hasFlowProgressAfterReturn([]), false);
+  assert.equal(hasFlowProgressAfterReturn([
+    {
+      senderType: 'bot',
+      direction: 'outbound',
+      metadataJson: { nodeKey: 'fallback_global' },
+    },
+  ]), false);
+  assert.equal(hasFlowProgressAfterReturn([
+    {
+      senderType: 'bot',
+      direction: 'outbound',
+      metadataJson: { nodeKey: 'welcome' },
+    },
+  ]), true);
+  assert.equal(hasFlowProgressAfterReturn([
+    { senderType: 'agent', direction: 'outbound' },
+  ]), true);
+});
+
+test('cierre viejo sin reentry_json ofrece el prompt y no el fallback', async () => {
+  const world = createWorld({ messageRepo: oldCloseFixture().messageRepo });
+  parkLegacyConversation(world);
+
+  const first = await world.reentry.consumeInbound(
+    world.conversation,
+    'No puedo entrar a este link me lo enviarias de nuevo?',
+  );
+  assert.equal(first.action, 'prompt');
+  assert.equal(first.reason, 'legacy_return');
+  assert.equal(first.reply, REENTRY_PROMPT);
+  assert.equal(/No pude entender/i.test(first.reply), false);
+  assert.equal(world.conversation.reentryJson.status, 'awaiting_choice');
+  assert.equal(world.conversation.reentryJson.source, 'legacy_return');
+  assert.equal(world.conversation.reentryJson.resumeNodeKey, 'no_presenciales_menu');
+  assert.equal(world.conversation.currentNodeKey, null);
+
+  const choice = await world.reentry.consumeInbound(world.conversation, '1');
+  assert.equal(choice.action, 'present_node');
+  assert.equal(choice.nodeKey, 'no_presenciales_menu');
+  await sessionService.resetSession(world.userId);
+});
+
+test('cierre viejo que ya recibió el fallback igual ofrece la reentrada', async () => {
+  const world = createWorld({
+    messageRepo: oldCloseFixture([
+      {
+        senderType: 'bot',
+        direction: 'outbound',
+        createdAt: new Date('2026-11-05T16:43:00.000Z'),
+        metadataJson: { nodeKey: 'fallback_global' },
+        body: 'No pude entender tu respuesta.',
+      },
+    ]).messageRepo,
+  });
+  parkLegacyConversation(world);
+  world.sessions.push({
+    id: 'sess-fallback',
+    conversationId: world.conversation.id,
+    status: 'active',
+    flowId: 'main-menu',
+    flowVersion: 'v11',
+    currentNodeKey: 'fallback_global',
+    startedAt: new Date('2026-11-05T16:43:00.000Z'),
+    variablesJson: {},
+    historyJson: ['welcome', 'fallback_global'],
+    trackingJson: {},
+  });
+
+  const first = await world.reentry.consumeInbound(world.conversation, 'de nuevo el link');
+  assert.equal(first.action, 'prompt');
+  assert.equal(first.reason, 'legacy_return');
+  assert.equal(world.conversation.reentryJson.resumeNodeKey, 'no_presenciales_menu');
+  assert.equal(world.sessions.find((item) => item.id === 'sess-fallback').status, 'ended');
+});
+
+test('cierre viejo que ya entró a un menú no se rearma', async () => {
+  const world = createWorld({
+    messageRepo: oldCloseFixture([
+      {
+        senderType: 'bot',
+        direction: 'outbound',
+        metadataJson: { nodeKey: 'no_presenciales_menu' },
+      },
+    ]).messageRepo,
+  });
+  parkLegacyConversation(world);
+  const result = await world.reentry.consumeInbound(world.conversation, 'sigo');
+  assert.equal(result, null);
+  assert.equal(world.conversation.reentryJson, null);
+  assert.equal(world.conversation.currentNodeKey, 'welcome');
+});
+
+test('sin mensaje de devolución no se arma la reentrada vieja', async () => {
+  const world = createWorld();
+  parkLegacyConversation(world);
+  const result = await world.reentry.consumeInbound(world.conversation, 'hola');
+  assert.equal(result, null);
+  assert.equal(world.conversation.reentryJson, null);
+});
+
+test('cierre viejo y pedido de humano deriva sin el fallback', async () => {
+  const world = createWorld({ messageRepo: oldCloseFixture().messageRepo });
+  parkLegacyConversation(world);
+  const result = await world.reentry.consumeInbound(world.conversation, 'Humano');
+  assert.equal(result.action, 'handoff');
+  assert.equal(result.reason, 'new_handoff');
+  assert.equal(/No pude entender/i.test(result.reply), false);
+  assert.equal(world.conversation.reentryJson, null);
+  assert.equal(world.conversation.status, 'waiting_human');
+});
+
+test('REENTRY_POLICY=legacy no rearma un cierre viejo', async () => {
+  const previous = process.env.REENTRY_POLICY;
+  process.env.REENTRY_POLICY = 'legacy';
+  try {
+    const world = createWorld({ messageRepo: oldCloseFixture().messageRepo });
+    parkLegacyConversation(world);
+    const result = await world.reentry.consumeInbound(world.conversation, 'el link');
+    assert.equal(result, null);
+    assert.equal(world.conversation.reentryJson, null);
+  } finally {
+    if (previous === undefined) delete process.env.REENTRY_POLICY;
+    else process.env.REENTRY_POLICY = previous;
   }
 });
 

@@ -1,24 +1,34 @@
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+import conversationMessageRepository from '../repositories/conversation-message.repository.js';
 import flowDbRepository from '../repositories/flow-db.repository.js';
 import humanHandoffService from './human-handoff.service.js';
 import sessionService from './session.service.js';
 import flowLoader from '../utils/flow-loader.js';
-import { query, withTransaction } from '../db/index.js';
+import {
+  isConversationDbEnabled,
+  query,
+  validateSqlServerEnv,
+  withTransaction,
+} from '../db/index.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import { isConversationInHumanMode, DEFAULT_HANDOFF_MESSAGE } from '../utils/handoff-detection.js';
 import {
   MAX_INVALID_REENTRY_ATTEMPTS,
   REENTRY_PROMPT,
+  buildReentrySnapshot,
   classifyReentryInput,
   decideResumeCompatibility,
+  hasFlowProgressAfterReturn,
   normalizeFlowVersion,
   noteReentryColumn,
   resolveReentryPolicy,
 } from '../utils/conversation-reentry-policy.js';
 
 export { REENTRY_PROMPT, resolveReentryPolicy };
+
+const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function logReentry(event, payload) {
   console.log(JSON.stringify({ event, ...payload }));
@@ -69,17 +79,22 @@ export class ConversationReentryService {
    *   loadHistoricalFlow?: (flowId: string, version: string) => Promise<object | null>,
    *   runTransaction?: typeof withTransaction,
    *   policy?: () => 'prompt' | 'legacy' | 'degraded',
+   *   queriesEnabled?: () => boolean,
    * }} [deps]
    */
   constructor(deps = {}) {
     this.conversationRepo = deps.conversationRepo || conversationRepository;
     this.sessionRepo = deps.sessionRepo || conversationSessionRepository;
+    this.messageRepo = deps.messageRepo || conversationMessageRepository;
     this.handoffService = deps.handoffService || humanHandoffService;
     this.runtimeSession = deps.runtimeSession || sessionService;
     this.flowLoader = deps.flowLoader || flowLoader;
     this.loadHistoricalFlow = deps.loadHistoricalFlow || ((flowId, version) => this.defaultLoadHistoricalFlow(flowId, version));
     this.runTransaction = deps.runTransaction || withTransaction;
     this.policy = deps.policy || resolveReentryPolicy;
+    this.queriesEnabled = deps.queriesEnabled || (() => (
+      isConversationDbEnabled() && validateSqlServerEnv().ok
+    ));
   }
 
   async defaultLoadHistoricalFlow(flowId, version) {
@@ -162,11 +177,56 @@ export class ConversationReentryService {
    * @param {string} text
    */
   async consumeInbound(conversation, text) {
-    if (!conversation?.id || !conversation.reentryJson) return null;
+    if (!conversation?.id) return null;
+    if (!conversation.reentryJson) {
+      if (this.policy() !== 'prompt') return null;
+      const parked = await this.legacyParkedState(conversation.id);
+      if (!parked?.parked) return null;
+      return this.advance(conversation, text);
+    }
     if (this.policy() === 'legacy') {
       return this.rollbackPending(conversation);
     }
     return this.advance(conversation, text);
+  }
+
+  /**
+   * Cierres anteriores al snapshot: no hay reentry_json, pero el system de
+   * devolución sigue siendo el último paso real. El fallback no cuenta.
+   * @returns {Promise<{ parked: boolean, returnedAt: Date | string } | null>}
+   */
+  async legacyParkedState(conversationId, transaction) {
+    if (this.policy() !== 'prompt' || !this.queriesEnabled()) return null;
+    if (!CONVERSATION_ID.test(String(conversationId || ''))) return null;
+    const returned = await this.messageRepo.findLatestReturnToBot(conversationId, { transaction });
+    if (!returned?.createdAt) return null;
+    const outbound = await this.messageRepo.listOutboundSince(
+      conversationId,
+      returned.createdAt,
+      { transaction },
+    );
+    return {
+      parked: !hasFlowProgressAfterReturn(outbound),
+      returnedAt: returned.createdAt,
+    };
+  }
+
+  async legacySnapshot(locked, transaction) {
+    const parked = await this.legacyParkedState(locked.id, transaction);
+    if (!parked?.parked) return null;
+    const session = await this.sessionRepo.findLatestStartedAtOrBefore(
+      locked.id,
+      parked.returnedAt,
+      { transaction },
+    );
+    return {
+      ...buildReentrySnapshot({
+        conversation: locked,
+        openSession: session,
+        capturedAt: new Date().toISOString(),
+      }),
+      source: 'legacy_return',
+    };
   }
 
   async rollbackPending(conversation) {
@@ -207,17 +267,30 @@ export class ConversationReentryService {
         return { action: 'human_skip', conversation: locked };
       }
 
-      const reentry = locked.reentryJson;
+      let current = locked;
+      let armedLegacy = false;
+      if (!current.reentryJson) {
+        const snapshot = await this.legacySnapshot(current, transaction);
+        if (!snapshot) return { action: 'delegate', conversation: current };
+        await this.sessionRepo.endAllOpenForConversation(current.id, new Date(), { transaction });
+        current = { ...current, reentryJson: snapshot, currentNodeKey: null };
+        armedLegacy = true;
+      }
+
+      const reentry = current.reentryJson;
       if (!reentry || (reentry.status !== 'pending' && reentry.status !== 'awaiting_choice')) {
-        return { action: 'delegate', conversation: locked };
+        return { action: 'delegate', conversation: current };
       }
 
       const decision = classifyReentryInput(text, reentry.status);
-      if (decision === 'human') return this.applyHuman(locked, transaction);
-      if (decision === 'fresh') return this.applyFresh(locked, transaction, 'fresh');
-      if (decision === 'continue') return this.applyContinue(locked, transaction);
-      if (decision === 'present') return this.applyPrompt(locked, transaction, text);
-      return this.applyReprompt(locked, transaction);
+      let applied;
+      if (decision === 'human') applied = await this.applyHuman(current, transaction);
+      else if (decision === 'fresh') applied = await this.applyFresh(current, transaction, 'fresh');
+      else if (decision === 'continue') applied = await this.applyContinue(current, transaction);
+      else if (decision === 'present') applied = await this.applyPrompt(current, transaction, text);
+      else applied = await this.applyReprompt(current, transaction);
+      if (armedLegacy && applied && !applied.reason) applied.reason = 'legacy_return';
+      return applied;
     });
 
     if (txResult?.action === 'handoff') {

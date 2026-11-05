@@ -1,4 +1,8 @@
 import { query, parseJsonColumn } from '../db/index.js';
+import {
+  RETURN_TO_BOT_BODY,
+  RETURN_TO_BOT_EVENT,
+} from '../utils/conversation-reentry-policy.js';
 
 function mapRow(row) {
   if (!row) return null;
@@ -80,6 +84,43 @@ class ConversationMessageRepository {
        ORDER BY created_at ${order}
        OFFSET $3 ROWS FETCH NEXT $2 ROWS ONLY`,
       [conversationId, limit, offset],
+    );
+    return rows.map(mapRow);
+  }
+
+  /**
+   * Último «el bot retomará la atención». El evento es la señal; el texto
+   * cubre filas viejas que tengan el mismo cuerpo.
+   */
+  async findLatestReturnToBot(conversationId, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT TOP (1) *
+       FROM dbo.conversation_messages
+       WHERE conversation_id = $1
+         AND sender_type = N'system'
+         AND (
+           (ISJSON(metadata_json) = 1 AND JSON_VALUE(metadata_json, '$.event') = $2)
+           OR body = $3
+         )
+       ORDER BY created_at DESC`,
+      [conversationId, RETURN_TO_BOT_EVENT, RETURN_TO_BOT_BODY],
+      { transaction },
+    );
+    return mapRow(rows[0]);
+  }
+
+  /** Outbound estrictamente posteriores a un cierre. El propio system no entra. */
+  async listOutboundSince(conversationId, since, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT *
+       FROM dbo.conversation_messages
+       WHERE conversation_id = $1
+         AND created_at > $2
+         AND direction = N'outbound'
+         AND sender_type IN (N'bot', N'agent')
+       ORDER BY created_at ASC`,
+      [conversationId, since],
+      { transaction },
     );
     return rows.map(mapRow);
   }

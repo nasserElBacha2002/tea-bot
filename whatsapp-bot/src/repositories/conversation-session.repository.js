@@ -44,6 +44,21 @@ class ConversationSessionRepository {
     return mapRow(rows[0]);
   }
 
+  /**
+   * Sesión que ya existía al devolver la conversación al bot.
+   * Una sesión creada después, por el fallback, no es el punto de retoma.
+   */
+  async findLatestStartedAtOrBefore(conversationId, at, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversation_sessions
+       WHERE conversation_id = $1 AND started_at <= $2
+       ORDER BY started_at DESC`,
+      [conversationId, at],
+      { transaction },
+    );
+    return mapRow(rows[0]);
+  }
+
   /** Sesión abierta más reciente (active o paused). */
   async findLatestOpenByConversationId(conversationId, { transaction } = {}) {
     const { rows } = await query(
