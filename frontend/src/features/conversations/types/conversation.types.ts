@@ -35,6 +35,13 @@ export interface InboxConversationItem {
   contactEmail?: string | null;
   status: ConversationStatus;
   assignedAgentId: string | null;
+  statusVersion?: number | null;
+  canTakeover?: boolean;
+  takeoverBlock?: string | null;
+  reentryStatus?: string | null;
+  botPaused?: boolean;
+  assignedAgentLabel?: string | null;
+  canReassign?: boolean;
   currentFlowId: string | null;
   currentFlowVersion: string | null;
   currentNodeKey: string | null;

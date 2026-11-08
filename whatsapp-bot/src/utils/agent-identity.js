@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { config } from '../config.js';
 
 /**
  * @param {string | null | undefined} agentId
@@ -45,4 +46,40 @@ export function resolveAgentIdFromUsername(username = 'system') {
  */
 export function resolveAgentIdFromRequest(req) {
   return resolveAgentIdFromUsername(req?.adminUser?.username);
+}
+
+function enabledAccount(username, role, passwordHash) {
+  if (!username || !/^[a-f0-9]{64}$/.test(String(passwordHash || ''))) return null;
+  return {
+    username,
+    role,
+    agentId: resolveAgentIdFromUsername(username),
+    enabled: true,
+  };
+}
+
+/**
+ * Cuentas reales del panel: admin y, si está configurado, el operador de conversaciones.
+ * No hay organizaciones ni equipos. El inbox es compartido entre esas cuentas.
+ */
+export function listEnabledPanelAgents() {
+  return [
+    enabledAccount(config.adminUsername, 'admin', config.adminPasswordHash),
+    enabledAccount(
+      config.conversationsOperatorUsername,
+      'conversations_only',
+      config.conversationsOperatorPasswordHash,
+    ),
+  ].filter(Boolean);
+}
+
+export function resolveEnabledPanelAgent(username) {
+  const needle = String(username || '').trim().toLowerCase();
+  if (!needle) return null;
+  return listEnabledPanelAgents().find((agent) => agent.username.toLowerCase() === needle) || null;
+}
+
+export function labelForAssignedAgent(agentId) {
+  if (!agentId) return null;
+  return listEnabledPanelAgents().find((agent) => agentsMatch(agent.agentId, agentId))?.username || null;
 }

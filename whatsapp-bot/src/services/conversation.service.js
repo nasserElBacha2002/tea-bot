@@ -113,7 +113,8 @@ class ConversationService {
     return { conversation, created: false };
   }
 
-  async persistOutboundBotMessage(conversation, reply, context = {}) {
+  async persistOutboundBotMessage(conversation, reply, context = {}, options = {}) {
+    const { transaction = null, deferNotify = false } = options;
     const message = await conversationMessageRepository.createMessage({
       conversationId: conversation.id,
       direction: 'outbound',
@@ -130,16 +131,32 @@ class ConversationService {
         handoffId: context.handoffId,
         ...context.metadataExtra,
       },
-    });
+    }, { transaction });
 
-    await conversationRepository.touchLastMessage(conversation.id);
+    await conversationRepository.updateConversation(
+      conversation.id,
+      { lastMessageAt: new Date() },
+      { transaction },
+    );
+    if (deferNotify) return message;
+
     const refreshed = await this.reloadConversation(conversation);
+    this._notifyOutbound(refreshed, message, context);
+    return message;
+  }
+
+  _notifyOutbound(conversation, message, context = {}) {
     const notifyExtras = {};
     if (context.handoff) {
       notifyExtras.humanHandoff = mapHumanHandoffPublic(context.handoff);
     }
-    notifyConversationMessageCreated(refreshed, message, notifyExtras);
-    return message;
+    notifyConversationMessageCreated(conversation, message, notifyExtras);
+  }
+
+  async publishPersistedOutbound(conversation, message, context = {}) {
+    const refreshed = await this.reloadConversation(conversation);
+    this._notifyOutbound(refreshed || conversation, message, context);
+    return refreshed;
   }
 
   async getOrCreateActiveSession(conversation, flowContext = {}) {

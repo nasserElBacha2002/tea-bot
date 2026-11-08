@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Box, Paper, Typography, Stack, CircularProgress, Alert, Button } from '@mui/material';
 import type { ConversationMessage } from '../types/conversation.types';
-import { senderTypeLabel } from '../utils/conversationUiLabels';
+import { messageEventLabel, senderTypeLabel } from '../utils/conversationUiLabels';
 import {
   messageDisplayBody,
   resolveMessageBubbleRole,
@@ -251,7 +251,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
                       fontSize: '0.75rem',
                     }}
                   >
-                    {senderTypeLabel(firstMsg.senderType)} · {formatTime(firstMsg.createdAt)}
+                    {messageEventLabel(firstMsg.metadata) ?? senderTypeLabel(firstMsg.senderType)} · {formatTime(firstMsg.createdAt)}
                   </Typography>
                   {group.messages.map((msg, index) => {
                     const isLastInGroup = index === group.messages.length - 1;

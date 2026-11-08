@@ -26,7 +26,7 @@ function serializeJson(value) {
 }
 
 class ConversationMessageRepository {
-  async createMessage(data) {
+  async createMessage(data, { transaction } = {}) {
     const {
       conversationId,
       direction,
@@ -60,6 +60,20 @@ class ConversationMessageRepository {
         serializeJson(rawPayloadJson),
         serializeJson(metadataJson),
       ],
+      { transaction },
+    );
+    return mapRow(rows[0]);
+  }
+
+  async findLatestSystemEvent(conversationId, eventName, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversation_messages
+       WHERE conversation_id = $1
+         AND sender_type = N'system'
+         AND JSON_VALUE(metadata_json, '$.event') = $2
+       ORDER BY created_at DESC`,
+      [conversationId, eventName],
+      { transaction },
     );
     return mapRow(rows[0]);
   }

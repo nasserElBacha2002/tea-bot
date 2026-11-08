@@ -1,4 +1,7 @@
 import conversationInboxService from '../services/conversation-inbox.service.js';
+import conversationTakeoverService, {
+  actorFromAdminUser,
+} from '../services/conversation-takeover.service.js';
 import { resolveAgentIdFromRequest } from '../utils/agent-identity.js';
 import { sendSuccess, sendApiError, HTTP_STATUS } from '../utils/http-errors.js';
 
@@ -18,6 +21,7 @@ function handleServiceError(res, error) {
       error: error.apiError || error.code,
       message: error.apiMessage || error.message,
       status,
+      details: error.details,
     });
   }
 
@@ -31,7 +35,7 @@ function handleServiceError(res, error) {
 
 export const listConversations = async (req, res) => {
   try {
-    const data = await conversationInboxService.listInboxConversations(req.query);
+    const data = await conversationInboxService.listInboxConversations(req.query, req.adminUser);
     return sendSuccess(res, data);
   } catch (error) {
     return handleServiceError(res, error);
@@ -42,6 +46,7 @@ export const getConversation = async (req, res) => {
   try {
     const data = await conversationInboxService.getConversationDetail(
       req.params.conversationId,
+      req.adminUser,
     );
     return sendSuccess(res, data);
   } catch (error) {
@@ -67,6 +72,7 @@ export const claimConversation = async (req, res) => {
     const data = await conversationInboxService.claimConversation(
       req.params.conversationId,
       agentId,
+      req.adminUser,
     );
     return sendSuccess(res, data);
   } catch (error) {
@@ -81,6 +87,7 @@ export const sendAgentMessage = async (req, res) => {
       req.params.conversationId,
       req.body?.body,
       agentId,
+      req.adminUser,
     );
     return sendSuccess(res, data, HTTP_STATUS.CREATED);
   } catch (error) {
@@ -106,6 +113,37 @@ export const updateConversationContact = async (req, res) => {
       req.params.conversationId,
       req.body?.name,
     );
+    return sendSuccess(res, data);
+  } catch (error) {
+    return handleServiceError(res, error);
+  }
+};
+
+export const takeoverConversation = async (req, res) => {
+  try {
+    const actor = actorFromAdminUser(req.adminUser);
+    const data = await conversationTakeoverService.takeover({
+      conversationId: req.params.conversationId,
+      actor,
+      reason: req.body?.reason,
+      expectedVersion: req.body?.expectedVersion,
+      clientRequestId: req.body?.clientRequestId,
+    });
+    return sendSuccess(res, data);
+  } catch (error) {
+    return handleServiceError(res, error);
+  }
+};
+
+export const transferConversation = async (req, res) => {
+  try {
+    const actor = actorFromAdminUser(req.adminUser);
+    const data = await conversationTakeoverService.reassign({
+      conversationId: req.params.conversationId,
+      actor,
+      targetUsername: req.body?.targetUsername,
+      reason: req.body?.reason,
+    });
     return sendSuccess(res, data);
   } catch (error) {
     return handleServiceError(res, error);

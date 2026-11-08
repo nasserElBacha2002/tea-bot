@@ -1,0 +1,40 @@
+# tracked unstaged diffstat against 9b2ff0b
+ .../features/conversations/api/conversationsApi.ts |  8 +++
+ .../components/ConversationComposer.test.tsx       | 51 +++++++++++++++
+ .../components/ConversationComposer.tsx            | 72 ++++++++++++++++++++--
+ .../components/ConversationDetail.tsx              | 15 +++--
+ .../components/ConversationMessageTimeline.tsx     |  4 +-
+ .../conversations/hooks/useConversations.ts        | 22 +++++++
+ .../conversations/pages/ConversationsPage.test.tsx |  1 +
+ .../conversations/pages/ConversationsPage.tsx      | 14 ++++-
+ .../conversations/types/conversation.types.ts      |  7 +++
+ .../utils/applyConversationLiveEvent.ts            | 25 ++++++++
+ .../conversations/utils/conversationUiLabels.ts    |  8 +++
+ frontend/src/utils/apiError.ts                     |  4 ++
+ whatsapp-bot/.env.example                          |  7 +++
+ whatsapp-bot/src/auth/roles.js                     | 17 +++++
+ .../src/controllers/conversations.controller.js    | 40 +++++++++++-
+ .../conversation-message.repository.js             | 16 ++++-
+ .../conversation-session.repository.js             | 13 ++++
+ .../src/repositories/conversation.repository.js    | 19 ++++++
+ whatsapp-bot/src/routes/conversations.routes.js    |  4 ++
+ .../services/conversation-bot-lifecycle.service.js |  1 +
+ .../src/services/conversation-inbox.service.js     | 71 ++++++++++++++++++---
+ whatsapp-bot/src/services/human-handoff.service.js |  1 +
+ .../src/services/message-persistence.service.js    | 14 +++++
+ .../src/services/twilio-inbound-pipeline.js        | 50 +++++++++++++++
+ .../src/services/twilio-inbound-pipeline.test.js   | 50 +++++++++++++++
+ .../src/utils/conversation-inbox.mapper.js         |  1 +
+ 26 files changed, 512 insertions(+), 23 deletions(-)
+
+# untracked files as additions against /dev/null
+ .../migrations/009_conversation_status_version.sql            | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+ .../conversation-takeover.integration.test.js      | 125 +++++++++++++++++++++
+ 1 file changed, 125 insertions(+)
+ .../src/services/conversation-takeover.service.js  | 493 +++++++++++++++++++++
+ 1 file changed, 493 insertions(+)
+ .../services/conversation-takeover.service.test.js | 486 +++++++++++++++++++++
+ 1 file changed, 486 insertions(+)
+ .../services/conversation-turn-guard.service.js    | 41 ++++++++++++++++++++++
+ 1 file changed, 41 insertions(+)

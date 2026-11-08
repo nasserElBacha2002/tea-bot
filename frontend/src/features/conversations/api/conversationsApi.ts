@@ -67,6 +67,14 @@ export const conversationsApi = {
     return data.data;
   },
 
+  takeover: async (
+    conversationId: string,
+    body: { reason?: string; expectedVersion?: number | null; clientRequestId?: string } = {},
+  ): Promise<{ conversation: InboxConversationItem; idempotent?: boolean; assignedAgentLabel?: string | null }> => {
+    const { data } = await client.post(`/${conversationId}/takeover`, body);
+    return data.data;
+  },
+
   sendMessage: async (
     conversationId: string,
     body: string,

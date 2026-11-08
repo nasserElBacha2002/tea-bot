@@ -30,12 +30,33 @@ describe('ConversationComposer', () => {
     expect(onSend).toHaveBeenCalledWith('Hola desde el equipo');
   });
 
-  it('assigned permite responder aunque la tomó otro operador', async () => {
+  it('un agente que no es el dueño no puede responder', () => {
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer
+          status="assigned"
+          assignedAgentId="agent-ana"
+          currentAgentId="agent-luis"
+          onSend={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText(/otro agente/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+  });
+
+  it('con la toma apagada el inbox compartido sigue pudiendo responder', async () => {
     const user = userEvent.setup();
     const onSend = vi.fn().mockResolvedValue(undefined);
     render(
       <ThemeProvider theme={createTheme()}>
-        <ConversationComposer status="assigned" onSend={onSend} />
+        <ConversationComposer
+          status="assigned"
+          takeoverBlock="disabled"
+          assignedAgentId="agent-ana"
+          currentAgentId="agent-luis"
+          onSend={onSend}
+        />
       </ThemeProvider>,
     );
     const input = screen.getByPlaceholderText(/escribí una respuesta/i);
@@ -60,5 +81,56 @@ describe('ConversationComposer', () => {
       </ThemeProvider>,
     );
     expect(screen.getByText(/bot activo/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+  });
+
+  it('bot con permiso muestra Tomar y no habilita el composer', async () => {
+    const user = userEvent.setup();
+    const onTakeover = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer
+          status="bot"
+          canTakeover
+          onSend={vi.fn()}
+          onTakeover={onTakeover}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /tomar conversación/i }));
+    expect(onTakeover).toHaveBeenCalledOnce();
+  });
+
+  it('muestra el conflicto si otro agente ya la tiene y no habilita el composer', () => {
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer
+          status="assigned"
+          takeoverBlock="owned_by_other"
+          assignedAgentLabel="Ana"
+          actionError="La conversación ya está asignada a otro agente."
+          onSend={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ana/)).toBeInTheDocument();
+    expect(screen.getByText(/otro agente/i)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+  });
+
+  it('asignada al agente muestra bot pausado y el composer', () => {
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer
+          status="assigned"
+          takeoverBlock="already_owner"
+          onSend={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 });

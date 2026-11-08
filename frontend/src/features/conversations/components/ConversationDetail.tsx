@@ -48,9 +48,11 @@ interface Props {
   onCaughtUp?: (readThroughAt: string) => void;
   onSend: (body: string) => Promise<void>;
   onClaim: () => Promise<void>;
+  onTakeover?: () => Promise<void>;
   onClose: () => Promise<void>;
   onUpdateContact: (name: string) => Promise<void>;
   onBack?: () => void;
+  currentAgentId?: string | null;
 }
 
 export const ConversationDetail: React.FC<Props> = ({
@@ -72,9 +74,11 @@ export const ConversationDetail: React.FC<Props> = ({
   onCaughtUp,
   onSend,
   onClaim,
+  onTakeover,
   onClose,
   onUpdateContact,
   onBack,
+  currentAgentId = null,
 }) => {
   const theme = useTheme();
   const isMobileViewport = useMediaQuery(theme.breakpoints.down('md'));
@@ -127,7 +131,8 @@ export const ConversationDetail: React.FC<Props> = ({
       : null);
 
   const canClose = conversation.status !== 'closed';
-  const showClaimInHeader = conversation.status === 'waiting_human';
+  const showTakeover = Boolean(conversation.canTakeover);
+  const showClaimInHeader = showTakeover || conversation.status === 'waiting_human';
 
   const handleClose = async () => {
     if (!closeConfirm) {
@@ -158,11 +163,11 @@ export const ConversationDetail: React.FC<Props> = ({
           size="small"
           variant="contained"
           color="primary"
-          onClick={() => void onClaim()}
+          onClick={() => void (showTakeover ? onTakeover?.() : onClaim())}
           disabled={claiming}
           sx={{ minHeight: 32, px: 1, whiteSpace: 'nowrap', display: { xs: 'none', sm: 'inline-flex' } }}
         >
-          {claiming ? '…' : 'Tomar'}
+          {claiming ? '…' : 'Tomar conversación'}
         </Button>
       )}
       {canClose && (
@@ -271,7 +276,7 @@ export const ConversationDetail: React.FC<Props> = ({
         <MenuItem
           onClick={() => {
             setMenuAnchor(null);
-            void onClaim();
+            void (showTakeover ? onTakeover?.() : onClaim());
           }}
           disabled={claiming}
         >
@@ -356,8 +361,14 @@ export const ConversationDetail: React.FC<Props> = ({
           actionError={actionError}
           successMessage={successMessage}
           compact={isCompactDetail}
+          canTakeover={conversation.canTakeover}
+          takeoverBlock={conversation.takeoverBlock}
+          assignedAgentLabel={conversation.assignedAgentLabel}
+          assignedAgentId={conversation.assignedAgentId}
+          currentAgentId={currentAgentId}
           onSend={onSend}
           onClaim={onClaim}
+          onTakeover={onTakeover}
         />
       </Box>
     </Box>

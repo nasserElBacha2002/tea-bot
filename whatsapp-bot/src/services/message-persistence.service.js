@@ -4,9 +4,10 @@ import conversationBotLifecycleService from './conversation-bot-lifecycle.servic
 import conversationReentryService from './conversation-reentry.service.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
-import { isConversationInHumanMode } from '../utils/handoff-detection.js';
+import { isConversationInHumanMode, resolveHandoffConfirmationMessage } from '../utils/handoff-detection.js';
 import { shouldBlockBotFlow } from '../utils/conversation-handoff-policy.js';
 import { isConversationDbEnabled } from '../db/index.js';
+import { conversationTurnGuard } from './conversation-turn-guard.service.js';
 
 function inboundSkipMetadata(conversation, activeHandoff = null) {
   if (conversation.status === 'assigned') {
@@ -97,31 +98,86 @@ class MessagePersistenceService {
    * Una sola respuesta. present_entry y legacy_cleared delegan la presentación al motor,
    * con la sesión en memoria ya reseteada para que el texto no se matchee.
    */
-  async finishReentry(reentry) {
+  async finishReentry(reentry, statusVersionAtStart = null) {
     const conversation = reentry.conversation;
     if (reentry.action === 'human_skip') {
-      return { conversation, dbSession: null, skipFlowEngine: true };
+      return { conversation, dbSession: null, skipFlowEngine: true, decision: 'SUPPRESS' };
     }
     if (reentry.action === 'present_entry' || reentry.action === 'legacy_cleared') {
       await conversationReentryService.resetRuntime(conversation);
-      return { conversation, dbSession: null, skipFlowEngine: false };
+      return { conversation, dbSession: null, skipFlowEngine: false, decision: 'ALLOW' };
     }
 
-    await conversationService.persistOutboundBotMessage(conversation, reentry.reply, {
-      flowId: conversation.currentFlowId,
-      flowVersion: conversation.currentFlowVersion,
-      nodeKey: reentry.nodeKey || conversation.currentNodeKey,
-      event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
-      handoffId: reentry.handoff?.id,
-      handoff: reentry.handoff,
-    });
+    const decision = await this._authorizeBotReply(
+      conversation,
+      statusVersionAtStart ?? conversation.statusVersion ?? null,
+      reentry.reply,
+      {
+        flowId: conversation.currentFlowId,
+        flowVersion: conversation.currentFlowVersion,
+        nodeKey: reentry.nodeKey || conversation.currentNodeKey,
+        event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
+        handoffId: reentry.handoff?.id,
+        handoff: reentry.handoff,
+      },
+    );
+    if (decision.decision === 'SUPPRESS') {
+      return {
+        conversation: decision.conversation || conversation,
+        dbSession: null,
+        skipFlowEngine: true,
+        suppressedByTakeover: true,
+        decision: 'SUPPRESS',
+      };
+    }
+    if (decision.decision !== 'ALLOW') {
+      return {
+        conversation: decision.conversation || conversation,
+        dbSession: null,
+        skipFlowEngine: true,
+        decision: decision.decision,
+        reason: decision.reason,
+      };
+    }
+    if (!decision.persisted) {
+      await conversationService.persistOutboundBotMessage(conversation, reentry.reply, {
+        flowId: conversation.currentFlowId,
+        flowVersion: conversation.currentFlowVersion,
+        nodeKey: reentry.nodeKey || conversation.currentNodeKey,
+        event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
+        handoffId: reentry.handoff?.id,
+        handoff: reentry.handoff,
+      });
+    }
 
     return {
-      conversation,
+      conversation: decision.conversation || conversation,
       dbSession: reentry.dbSession || null,
       skipFlowEngine: true,
       reentryReply: reentry.reply,
+      decision: 'ALLOW',
     };
+  }
+
+  async _authorizeBotReply(conversation, statusVersionAtStart, reply, context) {
+    const decision = await conversationTurnGuard.authorizeAutomaticReply({
+      conversation,
+      statusVersionAtStart,
+      persist: async (transaction, locked) => conversationService.persistOutboundBotMessage(
+        locked,
+        reply,
+        context,
+        { transaction, deferNotify: true },
+      ),
+    });
+    if (decision.decision === 'ALLOW' && decision.persisted) {
+      await conversationService.publishPersistedOutbound(
+        decision.conversation || conversation,
+        decision.persisted,
+        context,
+      );
+    }
+    return decision;
   }
 
   /**
@@ -137,28 +193,36 @@ class MessagePersistenceService {
   /**
    * Después del motor: mensaje outbound + sync sesión/conversación (modo bot).
    */
-  async handleOutbound(conversationContext, engineResult, event) {
-    if (!this.isEnabled() || !conversationContext?.conversation) return;
+  async handleOutbound(conversationContext, engineResult, event, statusVersionAtStart = null) {
+    if (!this.isEnabled() || !conversationContext?.conversation) {
+      return { decision: 'ALLOW', reason: 'persistence_disabled' };
+    }
 
     const { conversation, dbSession } = conversationContext;
     const memorySession = sessionService.getSession(event.userId);
-
-    await conversationService.persistOutboundBotMessage(
+    const context = {
+      flowId: engineResult.flowId,
+      flowVersion: memorySession?.flowVersion,
+      nodeKey: engineResult.currentNodeId,
+    };
+    const decision = await this._authorizeBotReply(
       conversation,
+      statusVersionAtStart ?? conversation.statusVersion ?? null,
       engineResult.reply,
-      {
-        flowId: engineResult.flowId,
-        flowVersion: memorySession?.flowVersion,
-        nodeKey: engineResult.currentNodeId,
-      },
+      context,
     );
+    if (decision.decision !== 'ALLOW') return decision;
+    if (!decision.persisted) {
+      await conversationService.persistOutboundBotMessage(conversation, engineResult.reply, context);
+    }
 
     await conversationService.syncSessionFromFlowEngine(
-      conversation,
+      decision.conversation || conversation,
       dbSession,
       event.userId,
       engineResult,
     );
+    return { decision: 'ALLOW', reason: decision.reason };
   }
 
   /**
@@ -169,31 +233,53 @@ class MessagePersistenceService {
     if (!this.isEnabled() || !conversationContext?.conversation) return null;
 
     const memorySession = sessionService.getSession(event.userId);
+    const confirmation = resolveHandoffConfirmationMessage(
+      engineResult?.currentNodeId || conversationContext.conversation.currentNodeKey,
+      engineResult?.reply,
+    );
+    let persistedMessage = null;
     const handoffResult = await humanHandoffService.processEngineHandoff(
       conversationContext,
       engineResult,
       event,
-      { memorySession },
+      {
+        memorySession,
+        persistInside: async (transaction, conversation) => {
+          persistedMessage = await conversationService.persistOutboundBotMessage(
+            conversation,
+            confirmation,
+            {
+              flowId: engineResult?.flowId || conversation.currentFlowId,
+              flowVersion: memorySession?.flowVersion || conversation.currentFlowVersion,
+              nodeKey: engineResult?.currentNodeId || conversation.currentNodeKey,
+              event: 'human_handoff_requested',
+            },
+            { transaction, deferNotify: true },
+          );
+        },
+      },
     );
 
-    if (handoffResult.shouldSendConfirmation) {
-      await conversationService.persistOutboundBotMessage(
+    if (handoffResult.aborted || handoffResult.shouldSendConfirmation === false) {
+      return {
+        reply: null,
+        shouldSendTwiml: false,
+        aborted: true,
+        handoff: handoffResult.handoff,
+      };
+    }
+
+    if (persistedMessage) {
+      await conversationService.publishPersistedOutbound(
         handoffResult.conversation,
-        handoffResult.confirmationMessage,
-        {
-          flowId: handoffResult.flowId,
-          flowVersion: handoffResult.flowVersion,
-          nodeKey: handoffResult.nodeKey,
-          event: 'human_handoff_requested',
-          handoffId: handoffResult.handoff.id,
-          handoff: handoffResult.handoff,
-        },
+        persistedMessage,
+        { handoff: handoffResult.handoff },
       );
     }
 
     return {
-      reply: handoffResult.confirmationMessage,
-      shouldSendTwiml: handoffResult.shouldSendConfirmation,
+      reply: handoffResult.confirmationMessage || confirmation,
+      shouldSendTwiml: true,
       handoff: handoffResult.handoff,
     };
   }

@@ -43,6 +43,28 @@ export function useRefreshConversations() {
   };
 }
 
+export function useTakeoverConversation(filters: ConversationListFilters) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      expectedVersion,
+      clientRequestId,
+      reason,
+    }: {
+      conversationId: string;
+      expectedVersion?: number | null;
+      clientRequestId?: string;
+      reason?: string;
+    }) => conversationsApi.takeover(conversationId, { expectedVersion, clientRequestId, reason }),
+    onSuccess: (_data, { conversationId }) => {
+      queryClient.invalidateQueries({ queryKey: conversationKeys.list(filters) });
+      queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) });
+      queryClient.invalidateQueries({ queryKey: conversationKeys.messages(conversationId) });
+    },
+  });
+}
+
 export function useClaimConversation(filters: ConversationListFilters) {
   const queryClient = useQueryClient();
   return useMutation({

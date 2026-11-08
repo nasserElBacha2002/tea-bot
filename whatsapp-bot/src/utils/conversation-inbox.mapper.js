@@ -13,6 +13,7 @@ export function mapConversationPublic(row) {
     contactEmail: row.contactEmail ?? null,
     status: row.status,
     assignedAgentId: row.assignedAgentId ?? null,
+    statusVersion: row.statusVersion ?? null,
     currentFlowId: row.currentFlowId ?? null,
     currentFlowVersion: row.currentFlowVersion ?? null,
     currentNodeKey: row.currentNodeKey ?? null,

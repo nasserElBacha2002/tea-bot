@@ -165,6 +165,7 @@ vi.mock('../hooks/useConversations', () => ({
   }),
   useRefreshConversations: () => refreshMock,
   useClaimConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useTakeoverConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useSendAgentMessage: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useCloseConversation: () => ({ mutateAsync: vi.fn(), isPending: false }),
   useUpdateContact: () => ({ mutateAsync: vi.fn(), isPending: false, isError: false }),

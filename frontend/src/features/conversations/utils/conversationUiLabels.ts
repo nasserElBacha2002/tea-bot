@@ -48,6 +48,14 @@ export function formatListItemSecondary(
   return channelLabelText;
 }
 
+export function messageEventLabel(
+  metadata: Record<string, unknown> | null | undefined,
+): string | null {
+  if (metadata?.event === 'manual_takeover') return 'Toma manual';
+  if (metadata?.event === 'manual_reassign') return 'Reasignación';
+  return null;
+}
+
 export function senderTypeLabel(senderType: string): string {
   switch (senderType) {
     case 'user':

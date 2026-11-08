@@ -8,6 +8,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
 import sessionService from './session.service.js';
 import conversationReentryService, { REENTRY_PROMPT } from './conversation-reentry.service.js';
 import messagePersistence from './message-persistence.service.js';
+import { conversationTurnGuard } from './conversation-turn-guard.service.js';
 
 const INSCRIPTION_TEXT =
   'Hola, buenos días, quería saber si todavía están abiertas las inscripciones para agosto o si solo hay inscripciones en marzo.';
@@ -69,6 +70,8 @@ function stubConversationService(conversation, extras = {}) {
     syncSessionFromFlowEngine: async (_conv, _db, _userId, engineResult) => {
       conversation.currentNodeKey = engineResult.currentNodeId;
     },
+    publishPersistedOutbound: async () => conversation,
+    updateConversation: async () => conversation,
     ...extras.overrides,
   };
   for (const [key, fn] of Object.entries(stubs)) {
@@ -385,6 +388,57 @@ test('assigned no reinicia el bot en el pipeline', async () => {
     assert.equal(processed.kind, 'human_mode_skip');
     assert.equal(sessionService.getSession(userId), null);
   } finally {
+    restore();
+    await sessionService.resetSession(userId);
+  }
+});
+
+test('una toma que commitea durante el turno anula el TwiML del bot', async () => {
+  const userId = `twilio:whatsapp:+54911take${Date.now()}`;
+  await sessionService.resetSession(userId);
+  const conversation = {
+    id: 'conv-takeover-race',
+    status: 'bot',
+    currentNodeKey: null,
+    currentFlowId: 'first-contact-e2e-flow',
+    currentFlowVersion: null,
+    statusVersion: 2,
+  };
+  const extras = { outbounds: [] };
+  const restore = stubConversationService(conversation, extras);
+  const prevNormalize = conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded;
+  conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = async (current) => ({
+    conversation: current,
+    normalized: false,
+  });
+  const prevHandoff = humanHandoffRepository.findLatestActiveByConversationId;
+  humanHandoffRepository.findLatestActiveByConversationId = async () => null;
+  const prevGuard = conversationTurnGuard.authorizeAutomaticReply;
+  conversationTurnGuard.authorizeAutomaticReply = async () => ({
+    decision: 'SUPPRESS',
+    suppress: true,
+    reason: 'not_bot',
+    conversation: { ...conversation, status: 'assigned', statusVersion: 3 },
+    persisted: null,
+  });
+
+  try {
+    const processed = await processCanonicalTwilioInbound({
+      userId,
+      flowId: conversation.currentFlowId,
+      text: INSCRIPTION_TEXT,
+      messageId: 'SM-takeover-race',
+      provider: 'twilio',
+      rawPayload: {},
+    }, { flowSnapshot: buildMenuFlow() });
+    assert.equal(processed.kind, 'human_mode_skip');
+    assert.equal(processed.shouldSendTwiml, false);
+    assert.equal(processed.reply, null);
+    assert.deepEqual(extras.outbounds, []);
+  } finally {
+    conversationTurnGuard.authorizeAutomaticReply = prevGuard;
+    humanHandoffRepository.findLatestActiveByConversationId = prevHandoff;
+    conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
     restore();
     await sessionService.resetSession(userId);
   }

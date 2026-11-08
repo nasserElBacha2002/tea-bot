@@ -132,6 +132,7 @@ export class ConversationBotLifecycleService {
         assignedAgentId: null,
         closedAt: null,
         currentNodeKey: resumeNodeKey,
+        incrementStatusVersion: true,
       };
       if (writeReentry) patch.reentryJson = reentryJson;
 

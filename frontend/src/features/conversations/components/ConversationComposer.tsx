@@ -19,8 +19,14 @@ interface Props {
   actionError?: string | null;
   successMessage?: string | null;
   compact?: boolean;
+  canTakeover?: boolean;
+  takeoverBlock?: string | null;
+  assignedAgentLabel?: string | null;
+  assignedAgentId?: string | null;
+  currentAgentId?: string | null;
   onSend: (body: string) => Promise<void>;
   onClaim?: () => Promise<void>;
+  onTakeover?: () => Promise<void>;
   claiming?: boolean;
 }
 
@@ -70,7 +76,13 @@ export const ConversationComposer: React.FC<Props> = ({
   compact = false,
   onSend,
   onClaim,
+  onTakeover,
   claiming,
+  canTakeover = false,
+  takeoverBlock = null,
+  assignedAgentLabel = null,
+  assignedAgentId = null,
+  currentAgentId = null,
 }) => {
   const [text, setText] = useState('');
 
@@ -84,9 +96,54 @@ export const ConversationComposer: React.FC<Props> = ({
 
   if (status === 'bot') {
     return (
-      <CompactNotice tone="warning">
-        Bot activo · La respuesta manual se habilitará al derivar a humano.
-      </CompactNotice>
+      <Box sx={{ flexShrink: 0 }}>
+        <CompactNotice tone="warning">
+          {canTakeover
+            ? 'Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.'
+            : 'Bot activo · La respuesta manual se habilitará al derivar a humano.'}
+        </CompactNotice>
+        {canTakeover && (
+          <Box sx={{ p: compact ? 1 : 1.25 }}>
+            {actionError && (
+              <Alert severity="error" sx={{ mb: 0.75, py: 0.25 }}>
+                {actionError}
+              </Alert>
+            )}
+            <Button
+              variant="contained"
+              fullWidth
+              size="small"
+              onClick={() => void onTakeover?.()}
+              disabled={claiming}
+              sx={{ minHeight: conversationUiDensity.controlHeight }}
+            >
+              {claiming ? 'Tomando…' : 'Tomar conversación'}
+            </Button>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  const lostToAnotherAgent = takeoverBlock !== 'disabled'
+    && Boolean(currentAgentId)
+    && Boolean(assignedAgentId)
+    && currentAgentId !== assignedAgentId
+    && (status === 'assigned' || status === 'paused');
+
+  if (takeoverBlock === 'owned_by_other' || lostToAnotherAgent) {
+    const who = assignedAgentLabel?.trim() || 'otro agente';
+    return (
+      <Box sx={{ flexShrink: 0 }}>
+        <CompactNotice tone="info">
+          {`Bot pausado. La conversación la está atendiendo ${who}.`}
+        </CompactNotice>
+        {actionError && (
+          <Alert severity="error" sx={{ m: 1, py: 0.25 }}>
+            {actionError}
+          </Alert>
+        )}
+      </Box>
     );
   }
 
@@ -101,14 +158,27 @@ export const ConversationComposer: React.FC<Props> = ({
     setText('');
   };
 
+  const exclusiveAttention = takeoverBlock != null && takeoverBlock !== 'disabled';
+  const pausedNotice = exclusiveAttention && (status === 'assigned' || status === 'paused')
+    ? assignedAgentLabel
+      ? `Bot pausado. Atiende ${assignedAgentLabel}.`
+      : 'Bot pausado. Estás atendiendo esta conversación.'
+    : null;
+  const showComposer = !canTakeover || status === 'assigned' || status === 'paused';
+
   return (
     <Box sx={{ p: compact ? 1 : 1.25, flexShrink: 0 }}>
-      {status === 'waiting_human' && (
+      {pausedNotice && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+          {pausedNotice}
+        </Typography>
+      )}
+      {(canTakeover || status === 'waiting_human') && (
         <Button
           variant="outlined"
           fullWidth
           size="small"
-          onClick={() => onClaim?.()}
+          onClick={() => void (canTakeover ? onTakeover?.() : onClaim?.())}
           disabled={claiming}
           sx={{ mb: 0.75, minHeight: conversationUiDensity.controlHeight }}
         >
@@ -125,6 +195,7 @@ export const ConversationComposer: React.FC<Props> = ({
           {actionError}
         </Alert>
       )}
+      {showComposer && (
       <Stack direction="row" spacing={1} alignItems="flex-end">
         <TextField
           fullWidth
@@ -157,6 +228,7 @@ export const ConversationComposer: React.FC<Props> = ({
           {sending ? '…' : 'Enviar'}
         </Button>
       </Stack>
+      )}
     </Box>
   );
 };

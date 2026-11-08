@@ -43,3 +43,20 @@ export function canAccessConversations(role) {
 export function canAccessFlowManagement(role) {
   return isAdminRole(role);
 }
+
+/**
+ * Tomar una conversación atendida por el bot, en cola o en reentrada.
+ * Admin y operador de conversaciones. Un rol desconocido no hereda el permiso.
+ * @param {unknown} role
+ */
+export function canTakeoverConversation(role) {
+  return role === ROLES.ADMIN || role === ROLES.CONVERSATIONS_ONLY;
+}
+
+/**
+ * Reasignar una conversación que ya tiene dueño. Operación distinta de la toma.
+ * @param {unknown} role
+ */
+export function canReassignConversation(role) {
+  return role === ROLES.ADMIN;
+}

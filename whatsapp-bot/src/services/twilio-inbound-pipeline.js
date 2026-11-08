@@ -7,8 +7,41 @@ import conversationService from './conversation.service.js';
 import { withInboundUserLock } from '../utils/inbound-user-lock.js';
 import { nowMs, roundMs } from '../utils/perf-timer.js';
 
+const PERSISTED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function humanSkip(conversation) {
+  return {
+    kind: 'human_mode_skip',
+    conversation: conversation || null,
+    result: null,
+    reply: null,
+    shouldSendTwiml: false,
+  };
+}
+
+function indeterminate(conversation, reason) {
+  return {
+    kind: 'reply_indeterminate',
+    conversation: conversation || null,
+    result: null,
+    reply: null,
+    shouldSendTwiml: false,
+    reason: reason || 'indeterminate',
+  };
+}
+
+function classifyOutbound(outbound, conversation) {
+  if (outbound?.decision === 'SUPPRESS') return humanSkip(outbound.conversation || conversation);
+  if (outbound?.decision === 'INDETERMINATE') {
+    return indeterminate(outbound.conversation || conversation, outbound.reason);
+  }
+  return null;
+}
+
 /**
  * Persistencia + motor + outbound, serializado por userId en este proceso.
+ * La autorización de la respuesta automática y su persistencia ocurren en la
+ * misma transacción. TwiML se arma después de ese commit.
  */
 export async function processCanonicalTwilioInbound(
   event,
@@ -26,6 +59,12 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
     { required: true },
   );
 
+  const statusVersionAtStart = conversationContext?.conversation?.statusVersion ?? null;
+
+  if (conversationContext?.decision === 'INDETERMINATE') {
+    return indeterminate(conversationContext.conversation, conversationContext.reason);
+  }
+
   if (conversationContext?.skipFlowEngine) {
     if (conversationContext.reentryReply) {
       return {
@@ -34,15 +73,10 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
         result: null,
         reply: conversationContext.reentryReply,
         shouldSendTwiml: true,
+        replyAuthorized: true,
       };
     }
-    return {
-      kind: 'human_mode_skip',
-      conversation: conversationContext.conversation,
-      result: null,
-      reply: null,
-      shouldSendTwiml: false,
-    };
+    return humanSkip(conversationContext.conversation);
   }
 
   const existingSession = sessionService.getSession(event.userId, perfContext);
@@ -81,13 +115,7 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
       event.text || '',
     );
     if (superseded?.action === 'human_skip') {
-      return {
-        kind: 'human_mode_skip',
-        conversation: superseded.conversation,
-        result: null,
-        reply: null,
-        shouldSendTwiml: false,
-      };
+      return humanSkip(superseded.conversation);
     }
     if (superseded?.action === 'present_entry' || superseded?.action === 'legacy_cleared') {
       await conversationReentryService.resetRuntime(superseded.conversation);
@@ -100,25 +128,35 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
         perfContext,
         conversationContext: superseded.conversation,
       });
-      await messagePersistence.safeRun(
+      const outbound = await messagePersistence.safeRun(
         'handleOutbound',
         () => messagePersistence.handleOutbound(
           { conversation: superseded.conversation, dbSession: null },
           presented,
           event,
+          statusVersionAtStart,
         ),
         { required: true },
       );
+      const blocked = classifyOutbound(outbound, superseded.conversation);
+      if (blocked) return blocked;
       return {
         kind: 'bot',
         conversation: superseded.conversation,
         result: presented,
         reply: presented.reply,
         shouldSendTwiml: true,
+        replyAuthorized: true,
       };
     }
     if (superseded?.reply) {
-      const finished = await messagePersistence.finishReentry(superseded);
+      const finished = await messagePersistence.finishReentry(superseded, statusVersionAtStart);
+      if (finished?.decision === 'INDETERMINATE') {
+        return indeterminate(finished.conversation || superseded.conversation, finished.reason);
+      }
+      if (finished?.suppressedByTakeover || finished?.decision === 'SUPPRESS') {
+        return humanSkip(finished.conversation || superseded.conversation);
+      }
       if (!finished?.reentryReply) {
         throw new Error('reentry outbound was not persisted');
       }
@@ -131,26 +169,42 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
         result: null,
         reply: finished.reentryReply,
         shouldSendTwiml: true,
+        replyAuthorized: true,
       };
     }
   }
 
   if (isHandoff) {
-    const handoffPersist = await messagePersistence.safeRun('handleHumanHandoff', () =>
-      messagePersistence.handleHumanHandoff(conversationContext, result, event),
+    const handoffPersist = await messagePersistence.safeRun(
+      'handleHumanHandoff',
+      () => messagePersistence.handleHumanHandoff(conversationContext, result, event),
+      { required: true },
     );
+    if (handoffPersist?.shouldSendTwiml === false) {
+      return humanSkip(conversationContext?.conversation);
+    }
     return {
       kind: 'human_handoff',
       conversation: conversationContext?.conversation ?? null,
       result,
       reply: handoffPersist?.reply || result.reply,
       shouldSendTwiml: handoffPersist?.shouldSendTwiml !== false,
+      replyAuthorized: Boolean(handoffPersist?.shouldSendTwiml),
     };
   }
 
-  await messagePersistence.safeRun('handleOutbound', () =>
-    messagePersistence.handleOutbound(conversationContext, result, event),
+  const outbound = await messagePersistence.safeRun(
+    'handleOutbound',
+    () => messagePersistence.handleOutbound(
+      conversationContext,
+      result,
+      event,
+      statusVersionAtStart,
+    ),
+    { required: true },
   );
+  const blocked = classifyOutbound(outbound, conversationContext?.conversation);
+  if (blocked) return blocked;
 
   return {
     kind: 'bot',
@@ -158,5 +212,10 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
     result,
     reply: result.reply,
     shouldSendTwiml: true,
+    replyAuthorized: conversationContext?.conversation?.id
+      ? PERSISTED_ID.test(String(conversationContext.conversation.id))
+        ? outbound?.decision === 'ALLOW'
+        : true
+      : true,
   };
 }

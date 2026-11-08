@@ -178,6 +178,19 @@ class ConversationSessionRepository {
     );
   }
 
+  /** La toma manual pausa la sesión de flujo. No la borra: el regreso al bot todavía puede leerla. */
+  async pauseAllOpenForConversation(conversationId, { transaction } = {}) {
+    const { rows } = await query(
+      `UPDATE dbo.conversation_sessions
+       SET status = N'paused', updated_at = SYSUTCDATETIME()
+       OUTPUT INSERTED.id
+       WHERE conversation_id = $1 AND status = N'active'`,
+      [conversationId],
+      { transaction },
+    );
+    return rows.length;
+  }
+
   /** Finaliza sesiones abiertas (active o paused). Idempotente. */
   async endAllOpenForConversation(conversationId, endedAt = new Date(), { transaction } = {}) {
     const { rows } = await query(

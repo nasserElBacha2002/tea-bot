@@ -26,6 +26,58 @@ function upsertListItem(
   return next;
 }
 
+function liveAttentionPatch(
+  existing: {
+    canTakeover?: boolean;
+    assignedAgentId?: string | null;
+    assignedAgentLabel?: string | null;
+    takeoverBlock?: string | null;
+  } | undefined,
+  conv: Pick<
+    InboxConversationItem,
+    'status' | 'canTakeover' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
+  >,
+): Partial<InboxConversationItem> {
+  const patch: Partial<InboxConversationItem> = {};
+  if (conv.canTakeover != null) patch.canTakeover = conv.canTakeover;
+  else if (
+    existing?.canTakeover
+    && (conv.status === 'assigned' || conv.status === 'closed' || conv.status === 'paused')
+  ) {
+    patch.canTakeover = false;
+  }
+  if (
+    (conv.status === 'assigned' || conv.status === 'paused')
+    && conv.takeoverBlock == null
+  ) {
+    patch.canTakeover = false;
+    patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
+  }
+  if (conv.botPaused != null) patch.botPaused = conv.botPaused;
+  else if (patch.canTakeover === false && conv.status !== 'closed') patch.botPaused = true;
+  const assigneeChanged = Boolean(
+    conv.assignedAgentId
+    && existing?.assignedAgentId
+    && conv.assignedAgentId !== existing.assignedAgentId,
+  );
+  if (conv.assignedAgentLabel != null && !assigneeChanged) {
+    patch.assignedAgentLabel = conv.assignedAgentLabel;
+  } else if (assigneeChanged) {
+    patch.assignedAgentLabel = conv.assignedAgentLabel ?? null;
+  }
+  if (conv.statusVersion != null) patch.statusVersion = conv.statusVersion;
+  if (conv.takeoverBlock != null) patch.takeoverBlock = conv.takeoverBlock;
+  return patch;
+}
+
+export function liveEventNeedsDetailRefresh(
+  conv: Pick<InboxConversationItem, 'status' | 'takeoverBlock' | 'assignedAgentLabel'> | undefined,
+): boolean {
+  if (!conv) return false;
+  if (conv.status !== 'assigned' && conv.status !== 'paused') return false;
+  return conv.takeoverBlock == null || conv.assignedAgentLabel == null;
+}
+
 function mergeInboxListItem(
   existing: InboxConversationItem | undefined,
   conv: InboxConversationItem,
@@ -40,6 +92,7 @@ function mergeInboxListItem(
     contactEmail: conv.contactEmail ?? existing?.contactEmail ?? null,
     lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
     humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
+    ...liveAttentionPatch(existing, conv),
   };
 }
 
@@ -133,10 +186,15 @@ export function applyConversationLiveEvent(
             conv.assignedAgentId !== undefined
               ? conv.assignedAgentId
               : prevDetail.conversation.assignedAgentId,
+          ...liveAttentionPatch(prevDetail.conversation, conv),
         },
         humanHandoff: humanHandoff ?? prevDetail.humanHandoff,
       });
     } else if (selectedId === event.conversationId && isWaitingHumanHandoff(conv)) {
+      void queryClient.invalidateQueries({ queryKey: detailKey });
+    }
+
+    if (liveEventNeedsDetailRefresh(conv)) {
       void queryClient.invalidateQueries({ queryKey: detailKey });
     }
 

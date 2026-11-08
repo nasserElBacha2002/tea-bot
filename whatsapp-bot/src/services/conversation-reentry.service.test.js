@@ -585,6 +585,7 @@ test('rollback legacy con reentrada pendiente presenta el flujo y no el fallback
 test('handleInbound no crea una sesión de welcome para el primer texto de reentrada', async () => {
   const world = createWorld();
   await closeHumanCase(world);
+  world.conversation.id = 'conv-reentry-inbound';
   let sessionCreated = false;
   const previousConsume = conversationReentryService.consumeInbound;
   conversationReentryService.consumeInbound = (conversation, text) => world.reentry.consumeInbound(conversation, text);

@@ -7,6 +7,7 @@ import conversationBotLifecycleService from './conversation-bot-lifecycle.servic
 import sessionService from './session.service.js';
 import twilioWhatsAppService from './twilio-whatsapp.service.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
+import { withTransaction } from '../db/index.js';
 import {
   mapConversationPublic,
   mapHumanHandoffPublic,
@@ -21,11 +22,17 @@ import {
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
 import { validateContactName } from '../utils/contact-name.js';
+import { agentsMatch, labelForAssignedAgent } from '../utils/agent-identity.js';
 import { CONVERSATION_CHANNELS } from '../constants/conversation-channels.js';
 import {
   RETURN_TO_BOT_BODY,
   RETURN_TO_BOT_EVENT,
 } from '../utils/conversation-reentry-policy.js';
+import conversationTakeoverService, {
+  actorFromAdminUser,
+  describeTakeoverAccess,
+  isManualTakeoverEnabled,
+} from './conversation-takeover.service.js';
 
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
 const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
@@ -61,13 +68,23 @@ function parseListFilters(query = {}) {
   return filters;
 }
 
-function appError(code, message, httpStatus = 400) {
+function appError(code, message, httpStatus = 400, details) {
   const err = new Error(message);
   err.code = code;
   err.httpStatus = httpStatus;
   err.apiError = code;
   err.apiMessage = message;
+  if (details) err.details = details;
   return err;
+}
+
+function withAttention(row, actor) {
+  const access = describeTakeoverAccess(row, actor);
+  return {
+    ...mapConversationPublic(row),
+    ...access,
+    assignedAgentLabel: null,
+  };
 }
 
 export class ConversationInboxService {
@@ -75,9 +92,10 @@ export class ConversationInboxService {
     await ensureConversationDbReady();
   }
 
-  async listInboxConversations(query = {}) {
+  async listInboxConversations(query = {}, actor = null) {
     await this.ensureReady();
     const filters = parseListFilters(query);
+    const viewer = actor?.agentId ? actor : actorFromAdminUser(actor);
 
     const [items, total] = await Promise.all([
       conversationRepository.listConversations(filters),
@@ -98,7 +116,7 @@ export class ConversationInboxService {
         const lastMsg = lastMessages.get(row.id);
         const handoff = handoffs.get(row.id);
         return {
-          ...mapConversationPublic(row),
+          ...withAttention(row, viewer),
           lastMessage: mapLastMessagePublic(lastMsg),
           humanHandoff: mapHumanHandoffPublic(handoff),
         };
@@ -109,20 +127,26 @@ export class ConversationInboxService {
     };
   }
 
-  async getConversationDetail(conversationId) {
+  async getConversationDetail(conversationId, actor = null) {
     await this.ensureReady();
     const conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
+    const viewer = actor?.agentId ? actor : actorFromAdminUser(actor);
 
     const [activeSession, humanHandoff] = await Promise.all([
       conversationSessionRepository.findLatestOpenByConversationId(conversationId),
       humanHandoffRepository.findLatestByConversationId(conversationId),
     ]);
 
+    const assignedAgentLabel = labelForAssignedAgent(conversation.assignedAgentId);
+
     return {
-      conversation: mapConversationPublic(conversation),
+      conversation: {
+        ...withAttention(conversation, viewer),
+        assignedAgentLabel,
+      },
       activeSession: mapSessionPublic(activeSession),
       humanHandoff: mapHumanHandoffPublic(humanHandoff),
     };
@@ -153,8 +177,18 @@ export class ConversationInboxService {
     };
   }
 
-  async claimConversation(conversationId, agentId) {
+  async claimConversation(conversationId, agentId, actor = null) {
     await this.ensureReady();
+    if (isManualTakeoverEnabled()) {
+      const viewer = actorFromAdminUser(actor);
+      if (!viewer) {
+        throw appError('FORBIDDEN', 'No tenés permiso para tomar conversaciones.', 403);
+      }
+      return conversationTakeoverService.takeover({
+        conversationId,
+        actor: viewer,
+      });
+    }
     const conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
@@ -212,7 +246,151 @@ export class ConversationInboxService {
     return updated;
   }
 
-  async sendAgentMessage(conversationId, body, agentId) {
+  async sendAgentMessage(conversationId, body, agentId, actor = null) {
+    if (isManualTakeoverEnabled()) {
+      return this._sendOwnedAgentMessage(conversationId, body, actor);
+    }
+    return this._sendSharedAgentMessage(conversationId, body, agentId);
+  }
+
+  async _sendOwnedAgentMessage(conversationId, body, actor) {
+    await this.ensureReady();
+    const viewer = actorFromAdminUser(actor);
+    if (!viewer) {
+      throw appError('FORBIDDEN', 'No tenés permiso para responder esta conversación.', 403);
+    }
+    const trimmed = String(body || '').trim();
+    if (!trimmed) {
+      throw appError('EMPTY_BODY', 'El mensaje no puede estar vacío', 400);
+    }
+
+    let conversation = await conversationRepository.getConversationById(conversationId);
+    if (!conversation) throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
+    if (conversation.status === 'closed') {
+      throw appError('CONVERSATION_CLOSED', 'No se puede responder una conversación cerrada', 409);
+    }
+    if (conversation.status === 'bot') {
+      throw appError(
+        'CONVERSATION_BOT_ACTIVE',
+        'Para responder, primero tomá la conversación o derivá al equipo humano',
+        409,
+      );
+    }
+    if (conversation.status === 'waiting_human') {
+      await conversationTakeoverService.takeover({ conversationId, actor: viewer });
+      conversation = await conversationRepository.getConversationById(conversationId);
+    }
+
+    const authorized = await withTransaction(async (transaction) => {
+      const locked = await conversationRepository.findByIdForUpdate(conversationId, { transaction });
+      if (!locked) throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
+      const owns = agentsMatch(locked.assignedAgentId, viewer.agentId)
+        && (locked.status === 'assigned' || locked.status === 'paused');
+      if (!owns) {
+        throw appError(
+          'CONVERSATION_OWNED',
+          'La conversación ya está asignada a otro agente.',
+          409,
+          { assignedAgentId: locked.assignedAgentId },
+        );
+      }
+      return locked;
+    });
+
+    let providerMessageId = null;
+    const isSeedConversation = await this._isSeedConversation(authorized.id);
+    if (
+      authorized.channel === 'whatsapp'
+      && authorized.provider === 'twilio'
+      && !isSeedConversation
+    ) {
+      if (!authorized.phoneNumber) {
+        throw appError(
+          'MISSING_PHONE',
+          'La conversación no tiene número de teléfono para enviar por WhatsApp',
+          400,
+        );
+      }
+      providerMessageId = await this._deliverWhatsApp(authorized.phoneNumber, trimmed);
+    }
+
+    const settled = await withTransaction(async (transaction) => {
+      const locked = await conversationRepository.findByIdForUpdate(conversationId, { transaction });
+      const stillOwner = Boolean(locked)
+        && agentsMatch(locked.assignedAgentId, viewer.agentId)
+        && (locked.status === 'assigned' || locked.status === 'paused');
+      if (!stillOwner && !providerMessageId) {
+        throw appError(
+          'CONVERSATION_OWNED',
+          'La conversación cambió de dueño antes del envío.',
+          409,
+          { assignedAgentId: locked?.assignedAgentId || null },
+        );
+      }
+      const message = await conversationMessageRepository.createMessage({
+        conversationId,
+        direction: 'outbound',
+        senderType: 'agent',
+        body: trimmed,
+        provider: authorized.provider,
+        providerMessageId,
+        metadataJson: {
+          generatedBy: 'agent_inbox',
+          agentId: viewer.agentId,
+          providerAccepted: Boolean(providerMessageId),
+          ownershipLostBeforePersist: !stillOwner,
+        },
+      }, { transaction });
+      const updatedConversation = await conversationRepository.updateConversation(
+        conversationId,
+        stillOwner
+          ? { status: 'assigned', assignedAgentId: locked.assignedAgentId, lastMessageAt: new Date() }
+          : { lastMessageAt: new Date() },
+        { transaction },
+      );
+      return { message, conversation: updatedConversation || locked, ownershipLost: !stillOwner };
+    });
+
+    notifyConversationMessageCreated(settled.conversation, settled.message);
+    if (settled.ownershipLost) {
+      throw appError(
+        'CONVERSATION_OWNED',
+        'Twilio aceptó el mensaje, pero la conversación cambió de dueño antes de registrarlo. El envío quedó trazado y no se reasigna.',
+        409,
+        { providerMessageId, providerAccepted: true },
+      );
+    }
+    return {
+      message: mapMessagePublic(settled.message),
+      conversation: mapConversationPublic(settled.conversation),
+    };
+  }
+
+  async _deliverWhatsApp(phoneNumber, body) {
+    try {
+      twilioWhatsAppService.assertConfigured();
+      const sent = await twilioWhatsAppService.sendWhatsAppMessage({ to: phoneNumber, body });
+      return sent.sid;
+    } catch (error) {
+      if (error.code === 'TWILIO_NOT_CONFIGURED') {
+        throw appError(
+          'TWILIO_NOT_CONFIGURED',
+          'Twilio no está configurado. Verificá TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_FROM.',
+          503,
+        );
+      }
+      if (error.code === 'TWILIO_SEND_FAILED') {
+        throw appError(
+          'TWILIO_SEND_FAILED',
+          'No se pudo enviar el mensaje por Twilio. Verificá la configuración o intentá nuevamente.',
+          502,
+        );
+      }
+      throw error;
+    }
+  }
+
+  async _sendSharedAgentMessage(conversationId, body, agentId) {
     await this.ensureReady();
     const trimmed = String(body || '').trim();
     if (!trimmed) {
@@ -239,7 +417,7 @@ export class ConversationInboxService {
     }
 
     if (conversation.status === 'waiting_human') {
-      const claimed = await this.claimConversation(conversationId, agentId);
+      const claimed = await this.claimConversation(conversationId, agentId, null);
       conversation = await conversationRepository.getConversationById(claimed.conversation.id);
     }
 

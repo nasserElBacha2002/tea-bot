@@ -13,6 +13,7 @@ import {
   useConversationMessages,
   useRefreshConversations,
   useClaimConversation,
+  useTakeoverConversation,
   useSendAgentMessage,
   useCloseConversation,
   useUpdateContact,
@@ -58,6 +59,7 @@ export const ConversationsPage: React.FC = () => {
   const messagesQuery = useConversationMessages(selectedId);
   const refresh = useRefreshConversations();
   const claimMutation = useClaimConversation(filters);
+  const takeoverMutation = useTakeoverConversation(filters);
   const sendMutation = useSendAgentMessage(filters);
   const closeMutation = useCloseConversation(filters);
   const updateContactMutation = useUpdateContact(filters);
@@ -466,6 +468,7 @@ export const ConversationsPage: React.FC = () => {
         >
           <ConversationDetail
             detail={detailQuery.data}
+            currentAgentId={currentAgentId}
             messages={messagesQuery.data?.items ?? []}
             conversationId={selectedId}
             readAt={selectedReadAt}
@@ -476,7 +479,7 @@ export const ConversationsPage: React.FC = () => {
             detailError={detailError}
             messagesError={messagesError}
             sending={sendMutation.isPending}
-            claiming={claimMutation.isPending}
+            claiming={claimMutation.isPending || takeoverMutation.isPending}
             closing={closeMutation.isPending}
             savingContact={updateContactMutation.isPending}
             contactError={
@@ -496,6 +499,16 @@ export const ConversationsPage: React.FC = () => {
               runAction(
                 () => claimMutation.mutateAsync(selectedId!),
                 'Conversación tomada correctamente.',
+              )
+            }
+            onTakeover={() =>
+              runAction(
+                () => takeoverMutation.mutateAsync({
+                  conversationId: selectedId!,
+                  expectedVersion: detailQuery.data?.conversation.statusVersion,
+                  clientRequestId: crypto.randomUUID(),
+                }),
+                'Conversación tomada. El bot quedó pausado.',
               )
             }
             onClose={() =>

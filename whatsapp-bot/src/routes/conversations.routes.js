@@ -5,6 +5,8 @@ import {
   getConversation,
   getConversationMessages,
   claimConversation,
+  takeoverConversation,
+  transferConversation,
   sendAgentMessage,
   closeConversation,
   updateConversationContact,
@@ -17,6 +19,8 @@ router.use(requireAuth);
 
 router.get('/', listConversations);
 router.post('/:conversationId/claim', claimConversation);
+router.post('/:conversationId/takeover', takeoverConversation);
+router.post('/:conversationId/transfer', transferConversation);
 router.post('/:conversationId/close', closeConversation);
 router.patch('/:conversationId/contact', updateConversationContact);
 router.post('/:conversationId/return-to-bot', returnConversationToBot);

@@ -16,6 +16,13 @@ const ERROR_MESSAGES: Record<string, string> = {
   CONVERSATION_CLOSED: 'No se puede responder una conversación cerrada.',
   CONVERSATION_BOT_ACTIVE:
     'El bot está activo. Para responder, primero tomá la conversación.',
+  CONVERSATION_OWNED: 'La conversación ya está asignada a otro agente.',
+  TAKEOVER_DISABLED: 'La toma manual no está habilitada.',
+  STATUS_VERSION_CONFLICT: 'La conversación cambió. Actualizá e intentá de nuevo.',
+  IDEMPOTENCY_CONFLICT: 'Esa solicitud ya fue usada con otros datos.',
+  IDEMPOTENCY_STALE: 'La solicitud ya se confirmó y la conversación cambió. Actualizá el inbox.',
+  TARGET_AGENT_NOT_FOUND: 'El agente destino no existe o no está habilitado.',
+  TAKEOVER_SCHEMA_REQUIRED: 'Falta aplicar la migración de toma manual en esta base.',
   EMPTY_BODY: 'Escribí un mensaje antes de enviar.',
   REQUEST_FAILED: 'No se pudo completar la solicitud. Intentá nuevamente.',
   NOT_FOUND: 'Recurso no encontrado.',

@@ -107,6 +107,17 @@ export const receiveTwilioMessage = async (req, res) => {
 
     const processed = await processCanonicalTwilioInbound(event, { perfContext });
 
+    if (processed.kind === 'reply_indeterminate') {
+      console.error(
+        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} action=reply_indeterminate reason=${processed.reason || 'unknown'}`,
+      );
+      perfContext.add('replyIndeterminate', processed.reason || true);
+      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+      logPerf('twilio_webhook', perfContext.toJSON());
+      await markHandled();
+      return sendTwiml(res, buildEmptyTwimlResponse());
+    }
+
     if (processed.kind === 'human_mode_skip') {
       console.log(
         `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_mode_skip_engine status=${processed.conversation?.status}`,
@@ -115,6 +126,11 @@ export const receiveTwilioMessage = async (req, res) => {
       perfContext.add('conversationStatus', processed.conversation?.status || null);
       perfContext.add('totalMs', roundMs(nowMs() - requestStart));
       logPerf('twilio_webhook', perfContext.toJSON());
+      await markHandled();
+      return sendTwiml(res, buildEmptyTwimlResponse());
+    }
+
+    if (processed.replyAuthorized === false) {
       await markHandled();
       return sendTwiml(res, buildEmptyTwimlResponse());
     }
@@ -170,6 +186,9 @@ export const receiveTwilioMessage = async (req, res) => {
       totalMs: roundMs(nowMs() - requestStart),
       error: error.message,
     }, { force: true });
+    if (error?.code === 'TAKEOVER_SCHEMA_REQUIRED') {
+      return sendTwiml(res, buildEmptyTwimlResponse());
+    }
     return sendTwiml(
       res,
       buildTwimlMessage(

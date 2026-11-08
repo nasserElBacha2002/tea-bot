@@ -1,5 +1,6 @@
 import { query, isConversationDbEnabled, parseJsonColumn } from '../db/index.js';
 import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
+import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 
 function mapRow(row) {
   if (!row) return null;
@@ -17,6 +18,7 @@ function mapRow(row) {
     currentNodeKey: row.current_node_key,
     reentryJson: parseJsonColumn(row.reentry_json, null),
     assignedAgentId: row.assigned_agent_id,
+    statusVersion: row.status_version == null ? null : Number(row.status_version),
     lastMessageAt: row.last_message_at,
     startedAt: row.started_at,
     closedAt: row.closed_at,
@@ -171,6 +173,17 @@ class ConversationRepository {
       values.push(patch.reentryJson == null ? null : JSON.stringify(patch.reentryJson));
     }
 
+    if (patch.incrementStatusVersion) {
+      if (await this.hasStatusVersionColumn()) {
+        fields.push('status_version = status_version + 1');
+      } else if (isManualTakeoverEnabled()) {
+        const error = new Error('La migración 009 es obligatoria mientras la toma manual está activa.');
+        error.code = 'TAKEOVER_SCHEMA_REQUIRED';
+        error.httpStatus = 503;
+        throw error;
+      }
+    }
+
     if (fields.length === 0) {
       return this.findById(id);
     }
@@ -186,6 +199,54 @@ class ConversationRepository {
       { transaction },
     );
     return mapRow(rows[0]);
+  }
+
+  /**
+   * Un resultado positivo se cachea. Un resultado negativo no:
+   * aplicar 009 sin reiniciar el proceso debe verse en el próximo intento.
+   * Con la toma apagada, la ausencia de la columna no bloquea el bot.
+   */
+  async describeStatusVersionColumn() {
+    const { rows } = await query(
+      `SELECT TYPE_NAME(c.user_type_id) AS type_name, c.is_nullable
+       FROM sys.columns c
+       WHERE c.object_id = OBJECT_ID(N'dbo.conversations')
+         AND c.name = N'status_version'`,
+    );
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      typeName: String(row.type_name || '').toLowerCase(),
+      nullable: row.is_nullable === true || row.is_nullable === 1,
+    };
+  }
+
+  async hasStatusVersionColumn() {
+    if (this._statusVersionColumn === true) return true;
+    const column = await this.describeStatusVersionColumn();
+    const ready = Boolean(column && column.typeName === 'int' && !column.nullable);
+    if (ready) this._statusVersionColumn = true;
+    return ready;
+  }
+
+  async assertTakeoverSchema() {
+    const column = await this.describeStatusVersionColumn();
+    if (!column || column.typeName !== 'int' || column.nullable) {
+      const error = new Error('La migración 009 no está aplicada: status_version debe ser INT NOT NULL.');
+      error.code = 'TAKEOVER_SCHEMA_REQUIRED';
+      error.httpStatus = 503;
+      throw error;
+    }
+    const { rows } = await query(
+      `SELECT OBJECT_ID(N'dbo.conversation_operation_requests', N'U') AS object_id`,
+    );
+    if (!rows[0]?.object_id) {
+      const error = new Error('La migración 009 no está aplicada: falta conversation_operation_requests.');
+      error.code = 'TAKEOVER_SCHEMA_REQUIRED';
+      error.httpStatus = 503;
+      throw error;
+    }
+    this._statusVersionColumn = true;
   }
 
   async touchLastMessage(id, date = new Date()) {

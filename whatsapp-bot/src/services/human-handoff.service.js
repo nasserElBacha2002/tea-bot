@@ -77,10 +77,17 @@ export class HumanHandoffService {
       || conversation.currentFlowVersion
       || null;
 
-    const wasBot = String(conversation.status || 'bot') === 'bot';
-
     const run = async (transaction) => {
-      await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
+      const locked = await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
+      if (!locked || locked.status !== 'bot') {
+        return {
+          aborted: true,
+          handoff: null,
+          created: false,
+          conversation: locked || conversation,
+          session: dbSession,
+        };
+      }
 
       const { handoff, created } = await this.handoffRepo.ensurePendingHandoffAtomic(
         conversation.id,
@@ -97,6 +104,7 @@ export class HumanHandoffService {
         currentNodeKey: nodeKey,
         currentFlowId: flowId,
         currentFlowVersion: flowVersion,
+        incrementStatusVersion: true,
       };
       if (params.clearReentry) conversationPatch.reentryJson = null;
 
@@ -136,12 +144,31 @@ export class HumanHandoffService {
         }
       }
 
-      return { handoff, created, conversation: updatedConversation, session: pausedSession };
+      if (typeof params.persistInside === 'function') {
+        await params.persistInside(transaction, updatedConversation);
+      }
+
+      return { aborted: false, handoff, created, conversation: updatedConversation, session: pausedSession };
     };
 
     const txResult = params.transaction
       ? await run(params.transaction)
       : await this.runTransaction(run);
+
+    if (txResult.aborted) {
+      return {
+        aborted: true,
+        handoff: null,
+        created: false,
+        conversation: txResult.conversation,
+        session: txResult.session,
+        confirmationMessage: null,
+        shouldSendConfirmation: false,
+        nodeKey,
+        flowId,
+        flowVersion,
+      };
+    }
 
     if (!params.deferNotify) {
       notifyConversationUpdated(txResult.conversation, {
@@ -160,7 +187,7 @@ export class HumanHandoffService {
       conversation: txResult.conversation,
       session: txResult.session,
       confirmationMessage,
-      shouldSendConfirmation: wasBot,
+      shouldSendConfirmation: true,
       nodeKey,
       flowId,
       flowVersion,
@@ -179,6 +206,7 @@ export class HumanHandoffService {
       dbSession,
       event,
       memorySession: options.memorySession,
+      persistInside: options.persistInside,
     });
   }
 
