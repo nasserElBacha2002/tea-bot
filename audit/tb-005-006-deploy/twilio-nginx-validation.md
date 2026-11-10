@@ -1,31 +1,33 @@
-# Twilio y Nginx — no verificados
+# Twilio y Nginx
 
-Fecha: 2026-11-10. No se modificó Twilio Console ni Nginx.
+Nginx de Tea Bot no se modificó. `bot.dinamiceducation.com` escucha 443 y hace `proxy_pass http://127.0.0.1:3000` en `location /`. La ruta pública se conserva. No hay prefijo que quitar. `TWILIO_PUBLIC_PATH_PREFIX` quedó ausente.
 
-## Bloqueo
+## URL real del inbound
 
-TB-005 reconstruye la URL firmada así:
+El sender de WhatsApp que está `ONLINE` tiene:
 
-- origen y, como máximo, un prefijo, desde `APP_BASE_URL` y `TWILIO_PUBLIC_PATH_PREFIX`;
-- ruta y query desde lo que Express recibe;
-- sin `X-Forwarded-*`.
+`webhook.callback_url=https://bot.dinamiceducation.com/webhooks/twilio/main-menu`
 
-El callback de estado usa esa misma URL y exige firma en todos los modos. Si `APP_BASE_URL` no es el origen público real, o el prefijo está en los dos lugares, `log` no arranca. Si el prefijo no coincide con lo que Nginx quita o conserva, las firmas válidas se registran como inválidas.
+Esa URL es el origen configurado más la ruta que Express recibe. Hay otro sender `OFFLINE` con un callback de demostración en `twil.io`. No es el canal en uso.
 
-No hay evidencia de:
+## Status callback
 
-- `server_name`, `listen 443 ssl` ni certificados del VPS;
-- `location` del webhook, `proxy_pass` y si el prefijo se elimina o se conserva;
-- la URL inbound de WhatsApp en Twilio;
-- la URL del status callback en Twilio;
-- presencia de `TWILIO_AUTH_TOKEN` en el entorno productivo, sin imprimir su valor.
+En el sender en línea, `status_callback_url` está vacío. El servicio de mensajería tampoco tiene `status_callback` ni `inbound_request_url`. El envío del bot no agrega `StatusCallback`. Twilio no tiene una URL de estado configurada para este canal.
 
-`frontend/nginx.conf` del repositorio no es ese proxy. Las pruebas locales firmaron contra `https://bot.example`.
+El código nuevo exige firma en `POST /webhooks/twilio/:flowId/status` en todos los modos. Con `APP_BASE_URL=https://bot.dinamiceducation.com` y sin prefijo, una firma de `https://bot.dinamiceducation.com/webhooks/twilio/main-menu/status` reconstruye la misma URL.
 
-## Preflight de firma
+Prueba sintética, sin `MessageSid` y con monitoreo apagado, para no escribir una entrega:
 
-`node scripts/twilio-signature-preflight.js` no se corrió contra la configuración productiva. En el `.env` local, el mismo día, el modo efectivo era `off`, sin token y sin `APP_BASE_URL`, con exit 2. Esa corrida no autoriza `log` en producción.
+- Firma correcta directo al puerto 3000: 200.
+- La misma firma a través de Nginx: 200.
+- Firma inválida: 403.
 
-## Condición para continuar
+No hubo un callback de estado emitido por Twilio. No se trata esa prueba como tráfico legítimo de estado.
 
-Hace falta la URL pública real del inbound y del status, la ruta que Express ve, y un solo lugar para el prefijo. Con eso, el preflight productivo tiene que devolver `mode: log`, `ready: true`, `logReady: true`, `configurationState: observing` y exit 0. `enforce` queda fuera de este despliegue.
+## Preflight antes del reinicio
+
+Con el token productivo ya cargado y las variables que iba a recibir el contenedor:
+
+`mode=log`, `ready=true`, `logReady=true`, `configurationState=observing`, `enforceReady=false`, `productionUrlVerified=false`, exit 0.
+
+El arranque del contenedor nuevo repitió ese informe y no se detuvo.

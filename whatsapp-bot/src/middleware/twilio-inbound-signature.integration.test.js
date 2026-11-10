@@ -212,7 +212,7 @@ async function inboundCount(ids) {
 }
 
 describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
-  test('la base conectada es tea-bot y 010 ya esta aplicada', async (t) => {
+  test('la base conectada es tea-bot y 009 y 010 ya estan aplicadas', async (t) => {
     if (!await prepare(t)) return;
     const { rows } = await query(
       `SELECT filename, success
@@ -227,8 +227,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     const applied = new Map(rows.map((row) => [row.filename, row.success === true || row.success === 1]));
     assert.equal(applied.get('007_monitoring.sql'), true);
     assert.equal(applied.get('008_conversation_reentry.sql'), true);
+    assert.equal(applied.get('009_conversation_status_version.sql'), true);
     assert.equal(applied.get('010_webhook_response_body.sql'), true);
-    assert.equal(applied.has('009_conversation_status_version.sql'), false);
   });
 
   test('T02 y T03 una firma invalida o ausente no escribe eventos ni mensajes', async (t) => {

@@ -13,6 +13,12 @@ export function conversationStatusLabel(status: string): string {
   return CONVERSATION_STATUS_LABELS[status as ConversationStatus] ?? status;
 }
 
+/** Etiqueta de una conversación. Los filtros conservan el plural. */
+export function conversationRecordStatusLabel(status: string): string {
+  if (status === 'assigned' || status === 'paused') return 'Atención humana';
+  return conversationStatusLabel(status);
+}
+
 export const CHANNEL_FILTER_LABELS = {
   all: 'Todos',
   whatsapp: 'WhatsApp',

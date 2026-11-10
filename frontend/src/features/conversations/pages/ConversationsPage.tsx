@@ -274,7 +274,16 @@ export const ConversationsPage: React.FC = () => {
       setSuccessMessage(success);
       await handleRefresh();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : 'Error en la operación');
+      const info = extractApiError(e);
+      setActionError(info.message);
+      if (
+        info.status === 409
+        || info.code === 'CONVERSATION_OWNED'
+        || info.code === 'STATUS_VERSION_CONFLICT'
+        || info.code === 'IDEMPOTENCY_STALE'
+      ) {
+        await handleRefresh();
+      }
     }
   };
 

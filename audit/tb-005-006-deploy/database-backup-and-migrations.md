@@ -1,38 +1,36 @@
-# Backup y migraciones — no ejecutados
+# Backup y migraciones
 
-Fecha: 2026-11-10.
+Base: `tea_bot` en `dinamicsystems`, SQL Server Developer 16.0.4255.1. Sin linked servers. 123 GB libres en `/`.
 
-No se aplicó ninguna migración y no se creó backup. La base productiva no está identificada. El nombre local `tea-bot` no se usa como nombre de producción.
+## Backup
 
-## Lo que se sabe solo del entorno local
+`/var/opt/mssql/backup/tea_bot_predeploy_20261110T174200Z.bak`
 
-La corrida de TB-005 contra SQL local, el mismo día, vio:
+- 23298560 bytes, 2026-11-10 17:38:17 UTC.
+- `BACKUP DATABASE [tea_bot] WITH COPY_ONLY, CHECKSUM, COMPRESSION`.
+- `RESTORE VERIFYONLY WITH CHECKSUM` sin error, repetido antes de aplicar la 010.
 
-- `DB_NAME()` = `tea-bot`
-- servidor `localhost:1433`
-- instancia `c60449e5dbda`
-- migraciones 007, 008 y 010 presentes en esa base local
-- migración 009 ausente
-- `MANUAL_TAKEOVER_ENABLED` no habilitado
+## Historial previo
 
-Eso no describe el SQL del VPS. Edición, versión, historial y conectividad productivos siguen sin verificar.
+001 a 008 con `success=1`. 009 ausente. 010 ausente. Sin cambios de esquema concurrentes. `provider_webhook_events` tenía el índice único y las columnas de 007, sin `response_body` y sin check constraints.
 
-## Pendiente antes de cualquier migración
+## Aplicación de la 010
 
-1. Confirmar servidor, instancia y nombre de la base productiva.
-2. Leer el historial de 007, 008, 009 y 010 en esa base.
-3. Crear un backup nuevo, sin pisar uno anterior.
-4. Verificarlo con `RESTORE VERIFYONLY WITH CHECKSUM`.
-5. Registrar ruta, tamaño, fecha y espacio de restauración.
-6. Aplicar solo 007, 008 si hace falta, y 010, con el runner oficial y en orden.
-7. No aplicar 009.
-8. Correr `node scripts/tb006-preflight.js --execute` y exigir `ready: true`, `twimlAccepted: true`, `probeLeft: 0`.
+`migrations/010_webhook_response_body.sql` solo agrega `response_body NVARCHAR(MAX) NULL` si no existe. No tiene `DROP`, `DELETE`, `TRUNCATE`, `UPDATE` ni `INSERT`.
 
-Si el preflight falla, el bot nuevo no se reinicia.
+El runner general también aplicaría la 009. No se usó. La 010 se aplicó con `scripts/tb006-preflight.js --apply-010`, en la misma transacción que el `INSERT` de `dbo.schema_migrations` y el checksum del archivo. La autorización fue `TB006_PRODUCTION_CONFIRM=tea_bot` y `TB006_APPLY_010=010_webhook_response_body.sql`. `tea_bot` no se agregó a la allowlist de SQL TEST. `--execute` sigue rechazando ese servidor.
 
-## Esta sesión
+Resultado: `applied: true`. Columna `nvarchar`, `max_length=-1`. 009 sigue ausente. 010 registrada con `success=1`.
 
-- Backup: no creado.
-- `RESTORE VERIFYONLY`: no ejecutado.
-- Migraciones productivas: no leídas y no aplicadas.
-- Preflight TB-006 en producción: no ejecutado.
+## Sonda
+
+Después de la columna, `--probe` insertó solo `TB006-PROBE-8426681c-3aa4-479e-bdda-e3a26eec806b`, leyó el TwiML y borró esa fila.
+
+- `twimlAccepted: true`
+- `removed: 1`
+- `probeLeft: 0`
+- `cleanupFailed: false`
+- `protectedUntouched: true` para conversaciones, mensajes, sesiones, handoffs y versiones de flujo
+- `ready: true`, exit 0
+
+El flujo publicado sigue siendo `main-menu` v62. El draft v63 no se publicó.

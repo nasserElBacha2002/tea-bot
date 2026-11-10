@@ -17,10 +17,12 @@ test('isEngineHumanHandoffResult detecta requiresHuman y terminalReason', () => 
   assert.equal(isEngineHumanHandoffResult({ currentNodeId: 'welcome' }), false);
 });
 
-test('isConversationInHumanMode reconoce waiting_human y assigned', () => {
+test('isConversationInHumanMode reconoce waiting_human, assigned y paused', () => {
   assert.equal(isConversationInHumanMode({ status: 'waiting_human' }), true);
   assert.equal(isConversationInHumanMode({ status: 'assigned' }), true);
+  assert.equal(isConversationInHumanMode({ status: 'paused' }), true);
   assert.equal(isConversationInHumanMode({ status: 'bot' }), false);
+  assert.equal(isConversationInHumanMode({ status: 'closed' }), false);
 });
 
 test('resolveHandoffConfirmationMessage prioriza reply del motor', () => {

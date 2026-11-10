@@ -46,7 +46,7 @@ export function evaluateLegacyNormalizationCandidate({
  */
 export function shouldBlockBotFlow(conversation, activeHandoff = null) {
   const status = String(conversation?.status || '').trim();
-  if (status === 'waiting_human' || status === 'assigned') {
+  if (status === 'waiting_human' || status === 'assigned' || status === 'paused') {
     return true;
   }
   return Boolean(activeHandoff);

@@ -105,6 +105,7 @@ export class ConversationBotLifecycleService {
         && (existingReentry.status === 'pending' || existingReentry.status === 'awaiting_choice');
       const returningFromHuman = locked.status === 'waiting_human'
         || locked.status === 'assigned'
+        || locked.status === 'paused'
         || isHandoffTerminalNode(locked.currentNodeKey)
         || resolvedHandoffIds.length > 0;
 

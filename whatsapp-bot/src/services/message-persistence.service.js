@@ -15,6 +15,9 @@ function inboundSkipMetadata(conversation, activeHandoff = null) {
   if (conversation.status === 'assigned') {
     return { botSkipped: true, skipReason: 'conversation_assigned' };
   }
+  if (conversation.status === 'paused') {
+    return { botSkipped: true, skipReason: 'conversation_paused' };
+  }
   if (conversation.status === 'waiting_human') {
     return { botSkipped: true, skipReason: 'conversation_waiting_human' };
   }

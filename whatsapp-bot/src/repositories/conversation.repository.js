@@ -3,6 +3,12 @@ import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-leas
 import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 
+function canonicalAgentId(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text ? text.toLowerCase() : null;
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -18,7 +24,7 @@ function mapRow(row) {
     currentFlowVersion: row.current_flow_version,
     currentNodeKey: row.current_node_key,
     reentryJson: parseJsonColumn(row.reentry_json, null),
-    assignedAgentId: row.assigned_agent_id,
+    assignedAgentId: canonicalAgentId(row.assigned_agent_id),
     statusVersion: row.status_version == null ? null : Number(row.status_version),
     lastMessageAt: row.last_message_at,
     startedAt: row.started_at,

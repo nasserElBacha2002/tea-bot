@@ -1,5 +1,11 @@
 import { query } from '../db/index.js';
 
+function canonicalAgentId(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text ? text.toLowerCase() : null;
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -8,7 +14,7 @@ function mapRow(row) {
     requestedBy: row.requested_by,
     reason: row.reason,
     status: row.status,
-    assignedAgentId: row.assigned_agent_id,
+    assignedAgentId: canonicalAgentId(row.assigned_agent_id),
     requestedAt: row.requested_at,
     assignedAt: row.assigned_at,
     resolvedAt: row.resolved_at,

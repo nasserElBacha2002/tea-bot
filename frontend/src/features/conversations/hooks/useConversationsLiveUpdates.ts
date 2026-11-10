@@ -32,6 +32,7 @@ export interface ConversationLiveCallbacks {
 export interface UseConversationsLiveUpdatesOptions {
   enabled: boolean;
   selectedConversationId: string | null;
+  viewerAgentId?: string | null;
   onUnread?: (conversationId: string) => void;
   onNewConversation?: (conversationId: string) => void;
   onHandoffWaiting?: (conversationId: string) => void;
@@ -41,6 +42,7 @@ export interface UseConversationsLiveUpdatesOptions {
 export function useConversationsLiveUpdates({
   enabled,
   selectedConversationId,
+  viewerAgentId = null,
   onUnread,
   onNewConversation,
   onHandoffWaiting,
@@ -56,6 +58,7 @@ export function useConversationsLiveUpdates({
   const intentionalCloseRef = useRef(false);
   const connectRef = useRef<() => void>(() => {});
   const selectedIdRef = useRef(selectedConversationId);
+  const viewerAgentIdRef = useRef(viewerAgentId);
   const lastHeartbeatAtRef = useRef(0);
   const reconnectAttemptRef = useRef(0);
   const callbacksRef = useRef<ConversationLiveCallbacks>({});
@@ -65,6 +68,10 @@ export function useConversationsLiveUpdates({
   useEffect(() => {
     selectedIdRef.current = selectedConversationId;
   }, [selectedConversationId]);
+
+  useEffect(() => {
+    viewerAgentIdRef.current = viewerAgentId;
+  }, [viewerAgentId]);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -137,7 +144,12 @@ export function useConversationsLiveUpdates({
       }
 
       const { unreadConversationId, newConversationId, handoffConversationId } =
-        applyConversationLiveEvent(queryClient, event, selectedIdRef.current);
+        applyConversationLiveEvent(
+          queryClient,
+          event,
+          selectedIdRef.current,
+          viewerAgentIdRef.current,
+        );
 
       const cb = callbacksRef.current;
       if (unreadConversationId) cb.onUnread?.(unreadConversationId);

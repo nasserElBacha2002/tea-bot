@@ -54,6 +54,7 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
     onUnread: (id) => handlersRef.current.onUnread?.(id),
     onNewConversation: (id) => handlersRef.current.onNewConversation?.(id),
     onHandoffWaiting: (id) => handlersRef.current.onHandoffWaiting?.(id),
+    viewerAgentId: userContext.currentAgentId,
     onLiveEvent: (event) => void onLiveEventRef.current(event),
   });
 

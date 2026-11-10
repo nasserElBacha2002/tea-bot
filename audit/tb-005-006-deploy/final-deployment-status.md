@@ -1,32 +1,26 @@
-BLOCKED_PREDEPLOY
+# DEPLOYED_LOG_VALIDATED
 
-Fecha: 2026-11-10. No se desplegó TB-005 ni TB-006.
+Fecha: 2026-11-10. TB-005, TB-006 y el motor de navegación están en el backend productivo. `TWILIO_SIGNATURE_MODE=log`. `enforce` no se activó. Takeover queda en `false`. La migración 009 no se aplicó.
 
-El VPS no tiene host, usuario ni directorio verificables. No hay SSH config ni acceso autorizado a Tea Bot. Las claves SSH existentes son de otros proyectos y no se usaron. Docker solo tiene contextos locales. No se infirió un destino.
+## SHA
 
-Por ese corte no se hizo backup, no se leyeron migraciones productivas, no se aplicó 007, 008 ni 010, y no se aplicó 009. No se configuró `TWILIO_SIGNATURE_MODE=log`. No se activó `enforce` ni takeover. No se tocó Nginx ni Twilio Console. No hubo commit ni push.
+| Lugar | SHA o digest |
+| --- | --- |
+| Checkout productivo | `2ccaeb6e7b5b2d904c4b3c5063b7d6433f64c937` |
+| Imagen en ejecución | `sha256:2e22dea94b8f1c458782be366a4464f43ab16103de91cfc40fe36ebbc47cdec6` |
+| Imagen de rollback | `sha256:8a95d51f9fe842b1eecf2c28fc940285413b5a3039e7ae1a77e29251c03977ec` |
+| SHA anterior | `9b2ff0be71058a11713b97146a20f683b631eda5` |
 
-Git local, confirmado con `git fetch`:
+## Qué quedó verificado en vivo
 
-- rama `main`;
-- `origin/main` `ac7e69960f133cb32add5a140972329074cbf9fa`;
-- local `b0d606b7c120edd7cc75f555d326cd89fefd01d7`, 1 adelante y 0 atrás;
-- correcciones TB-005 todavía sin commit;
-- sin workflow de deploy dentro del repositorio;
-- API de GitHub no autenticada, así que un webhook externo no quedó descartado.
+Siete ingresos reales de WhatsApp llegaron con `twilio_signature_valid` contra `https://bot.dinamiceducation.com/webhooks/twilio/main-menu`. Los siete se adquirieron una vez, terminaron `PROCESSED` y guardaron `response_body`. No hubo duplicados ni errores de SQL. `/health` responde 200. El contenedor está healthy.
 
-`origin/main` no contiene TB-005 ni el cierre TB-006. El SHA productivo sigue sin conocerse.
+## Qué no es tráfico de Twilio
 
-Para salir de este estado hace falta, antes de publicar `main`:
+El status callback del sender en línea no tiene URL. Una firma sintética de `https://bot.dinamiceducation.com/webhooks/twilio/main-menu/status` respondió 200 por Nginx y por el puerto 3000. Una firma inválida respondió 403. No llegó un callback de estado emitido por Twilio.
 
-1. Acceso SSH ya autorizado, con host y usuario explícitos del VPS de Tea Bot.
-2. Directorio, Compose, SHA e imagen actuales.
-3. Identidad de SQL Server productivo, distinta de la base local `tea-bot`.
-4. Backup nuevo verificado con `RESTORE VERIFYONLY WITH CHECKSUM`.
-5. 007, 008 si corresponde, y 010 aplicadas solo si faltan. 009 fuera.
-6. `node scripts/tb006-preflight.js --execute` con `ready: true`.
-7. URL pública real de inbound y status, y la ruta que Express recibe, sin prefijo duplicado.
-8. Preflight de firma en esa configuración: `mode: log`, `ready: true`, exit 0.
-9. Recién entonces commit de las correcciones, push a `origin/main` y recreación del backend.
+Las opciones `Dirección de estudios`, `Menú` y `Atrás` no se identificaron en esta ventana. El barrido de v62 ya las alineaba con su número, y v62 sigue publicado.
 
-Hasta que eso exista, el modo productivo no es `log` y la validación en vivo no está hecha.
+## Herramienta local no desplegada
+
+La separación de `--inspect`, `--probe` y `--apply-010` está en el working tree local y se usó desde una copia temporal en el VPS. La imagen en ejecución es el árbol de `2ccaeb6`, no ese diff local.

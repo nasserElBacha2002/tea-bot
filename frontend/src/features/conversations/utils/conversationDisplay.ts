@@ -1,5 +1,5 @@
 import type { ConversationChannel, ConversationProvider } from '../types/conversation.types';
-import { conversationStatusLabel } from './conversationUiLabels';
+import { conversationRecordStatusLabel } from './conversationUiLabels';
 import { CHANNEL_LABELS } from '../constants/conversationChannels';
 
 export function channelLabel(channel: ConversationChannel): string {
@@ -22,7 +22,7 @@ export function formatDetailSubtitle(
   lastMessageAt: string | null,
 ): string {
   const time = formatShortDateTime(lastMessageAt);
-  return `${channelLabel(channel)} · ${providerLabel(provider)} · ${conversationStatusLabel(status)}${time ? ` · ${time}` : ''}`;
+  return `${channelLabel(channel)} · ${providerLabel(provider)} · ${conversationRecordStatusLabel(status)}${time ? ` · ${time}` : ''}`;
 }
 
 /** Metadata secundaria del header (sin repetir el badge de estado). */

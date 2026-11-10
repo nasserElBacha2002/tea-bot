@@ -1,0 +1,44 @@
+Backend
+comando:
+  cd whatsapp-bot
+  TB_SQL_TEST_CONFIRM=tea-bot \
+  GOOGLE_SHEETS_ENABLED=false \
+  CONVERSATION_CLASSIFICATION_SHEET_UPDATE_ENABLED=false \
+  node --test --test-concurrency=1 $(find src migrations -name '*.test.js' | sort)
+resultado: tests 428, pass 428, fail 0, skipped 0, todo 0
+duración: 169822 ms
+base: tea-bot en localhost, instancia c60449e5dbda
+identidad SQL registrada por el runner: database tea-bot
+
+Las dos integraciones que antes hacían skip corrieron y pasaron:
+  integration: toma manual exclusiva en SQL TEST
+  integration: dos agentes en paralelo sobre SQL real
+
+También pasaron, contra la misma base, las integraciones de reentrada,
+cierre, rollback, handoff concurrente, firma TB-005 y el turno asignado
+que no ejecuta el menú. Ninguna quedó skipped.
+
+Primera corrida de la suite: 427 pass, 1 fail.
+Fallo: twilio-inbound-signature.integration.test.js exigía que 009 no
+estuviera aplicada. Se actualizó la aserción al estado real (009 y 010
+aplicadas con success). La segunda corrida es la que queda como evidencia.
+
+Frontend
+  npm test     -> 53 files, 239 tests, pass, fail 0
+  npm run build -> tsc -b && vite build, exit 0
+  npm run lint  -> exit 1, 4 errors y 4 warnings preexistentes
+    AuthContext.tsx react-refresh/only-export-components
+    ContactNameEditor.tsx react-hooks/set-state-in-effect
+    ConversationMessageTimeline.tsx react-hooks/set-state-in-effect
+    ConversationLiveProvider.tsx react-hooks/refs
+    ConversationsPage.tsx warnings de dependencias
+  Ninguno de esos hallazgos está en el diff de esta entrega, salvo que
+  ConversationLiveProvider ya escribía el ref durante el render antes de
+  pasarle el id del agente.
+
+Datos locales después de la suite
+  conversations 15, messages 44, handoffs 3, sessions 6
+  conversation_operation_requests 0
+  status_version NOT NULL, sin nulos, histórico en 0
+  grupos de handoffs activos duplicados: 0
+  Esos conteos coinciden con el snapshot previo a la migración.

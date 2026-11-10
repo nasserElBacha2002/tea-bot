@@ -6,7 +6,7 @@ import conversationRepository from '../repositories/conversation.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import conversationTakeoverService from './conversation-takeover.service.js';
-import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
+import { agentsMatch, resolveAgentIdFromUsername } from '../utils/agent-identity.js';
 
 async function skipReason() {
   const isolated = isolatedTestDatabaseReason();
@@ -104,7 +104,7 @@ test('integration: toma manual exclusiva en SQL TEST', async (t) => {
 
     const stored = await conversationRepository.findById(created.id);
     assert.equal(stored.status, 'assigned');
-    assert.equal(stored.assignedAgentId, ana.agentId);
+    assert.equal(agentsMatch(stored.assignedAgentId, ana.agentId), true);
     assert.equal(stored.reentryJson, null);
     assert.ok(Number(stored.statusVersion) >= 1);
 
@@ -173,7 +173,11 @@ test('integration: dos agentes en paralelo sobre SQL real', async (t) => {
     assert.equal(denied[0].reason.code, 'CONVERSATION_OWNED');
     const stored = await conversationRepository.findById(created.id);
     assert.equal(stored.status, 'assigned');
-    assert.ok(stored.assignedAgentId === ana.agentId || stored.assignedAgentId === luis.agentId);
+    assert.equal(
+      agentsMatch(stored.assignedAgentId, ana.agentId)
+        || agentsMatch(stored.assignedAgentId, luis.agentId),
+      true,
+    );
   } finally {
     if (previous === undefined) delete process.env.MANUAL_TAKEOVER_ENABLED;
     else process.env.MANUAL_TAKEOVER_ENABLED = previous;

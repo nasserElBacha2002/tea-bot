@@ -83,7 +83,7 @@ function withAttention(row, actor) {
   return {
     ...mapConversationPublic(row),
     ...access,
-    assignedAgentLabel: null,
+    assignedAgentLabel: labelForAssignedAgent(row?.assignedAgentId),
   };
 }
 
@@ -140,13 +140,8 @@ export class ConversationInboxService {
       humanHandoffRepository.findLatestByConversationId(conversationId),
     ]);
 
-    const assignedAgentLabel = labelForAssignedAgent(conversation.assignedAgentId);
-
     return {
-      conversation: {
-        ...withAttention(conversation, viewer),
-        assignedAgentLabel,
-      },
+      conversation: withAttention(conversation, viewer),
       activeSession: mapSessionPublic(activeSession),
       humanHandoff: mapHumanHandoffPublic(humanHandoff),
     };

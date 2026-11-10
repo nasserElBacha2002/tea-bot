@@ -2,8 +2,21 @@ import conversationInboxService from '../services/conversation-inbox.service.js'
 import conversationTakeoverService, {
   actorFromAdminUser,
 } from '../services/conversation-takeover.service.js';
-import { resolveAgentIdFromRequest } from '../utils/agent-identity.js';
+import { canTakeoverConversation } from '../auth/roles.js';
 import { sendSuccess, sendApiError, HTTP_STATUS } from '../utils/http-errors.js';
+
+function requireConversationOperator(req) {
+  const actor = actorFromAdminUser(req.adminUser);
+  if (!actor || !canTakeoverConversation(actor.role)) {
+    const error = new Error('No tenés permiso para operar esta conversación.');
+    error.code = 'FORBIDDEN';
+    error.httpStatus = 403;
+    error.apiError = 'FORBIDDEN';
+    error.apiMessage = error.message;
+    throw error;
+  }
+  return actor;
+}
 
 function handleServiceError(res, error) {
   if (error.code === 'CONVERSATION_PERSISTENCE_UNAVAILABLE') {
@@ -68,10 +81,10 @@ export const getConversationMessages = async (req, res) => {
 
 export const claimConversation = async (req, res) => {
   try {
-    const agentId = resolveAgentIdFromRequest(req);
+    const actor = requireConversationOperator(req);
     const data = await conversationInboxService.claimConversation(
       req.params.conversationId,
-      agentId,
+      actor.agentId,
       req.adminUser,
     );
     return sendSuccess(res, data);
@@ -82,11 +95,11 @@ export const claimConversation = async (req, res) => {
 
 export const sendAgentMessage = async (req, res) => {
   try {
-    const agentId = resolveAgentIdFromRequest(req);
+    const actor = requireConversationOperator(req);
     const data = await conversationInboxService.sendAgentMessage(
       req.params.conversationId,
       req.body?.body,
-      agentId,
+      actor.agentId,
       req.adminUser,
     );
     return sendSuccess(res, data, HTTP_STATUS.CREATED);
@@ -97,6 +110,7 @@ export const sendAgentMessage = async (req, res) => {
 
 export const closeConversation = async (req, res) => {
   try {
+    requireConversationOperator(req);
     const data = await conversationInboxService.closeConversation(
       req.params.conversationId,
       req.body?.resolutionNote,
@@ -152,6 +166,7 @@ export const transferConversation = async (req, res) => {
 
 export const returnConversationToBot = async (req, res) => {
   try {
+    requireConversationOperator(req);
     const data = await conversationInboxService.returnConversationToBot(
       req.params.conversationId,
     );

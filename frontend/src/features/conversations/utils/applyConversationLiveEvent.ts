@@ -26,6 +26,12 @@ function upsertListItem(
   return next;
 }
 
+function sameAgent(left?: string | null, right?: string | null) {
+  const a = left?.trim().toLowerCase();
+  const b = right?.trim().toLowerCase();
+  return Boolean(a && b && a === b);
+}
+
 function liveAttentionPatch(
   existing: {
     canTakeover?: boolean;
@@ -37,6 +43,7 @@ function liveAttentionPatch(
     InboxConversationItem,
     'status' | 'canTakeover' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
   >,
+  viewerAgentId?: string | null,
 ): Partial<InboxConversationItem> {
   const patch: Partial<InboxConversationItem> = {};
   if (conv.canTakeover != null) patch.canTakeover = conv.canTakeover;
@@ -51,7 +58,15 @@ function liveAttentionPatch(
     && conv.takeoverBlock == null
   ) {
     patch.canTakeover = false;
-    patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
+    if (existing?.takeoverBlock === 'disabled') {
+      patch.takeoverBlock = 'disabled';
+    } else if (sameAgent(viewerAgentId, conv.assignedAgentId)) {
+      patch.takeoverBlock = 'already_owner';
+    } else if (viewerAgentId && conv.assignedAgentId) {
+      patch.takeoverBlock = 'owned_by_other';
+    } else {
+      patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
+    }
   }
   if (conv.botPaused != null) patch.botPaused = conv.botPaused;
   else if (patch.canTakeover === false && conv.status !== 'closed') patch.botPaused = true;
@@ -83,6 +98,7 @@ function mergeInboxListItem(
   conv: InboxConversationItem,
   lastMessage: InboxConversationItem['lastMessage'] | undefined,
   humanHandoff: InboxConversationItem['humanHandoff'] | undefined,
+  viewerAgentId?: string | null,
 ): InboxConversationItem {
   return {
     ...(existing ?? {}),
@@ -92,7 +108,7 @@ function mergeInboxListItem(
     contactEmail: conv.contactEmail ?? existing?.contactEmail ?? null,
     lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
     humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
-    ...liveAttentionPatch(existing, conv),
+    ...liveAttentionPatch(existing, conv, viewerAgentId),
   };
 }
 
@@ -117,6 +133,7 @@ export function applyConversationLiveEvent(
   queryClient: QueryClient,
   event: ConversationLiveEvent,
   selectedId: string | null,
+  viewerAgentId: string | null = null,
 ): {
   unreadConversationId?: string;
   newConversationId?: string;
@@ -162,7 +179,7 @@ export function applyConversationLiveEvent(
   if (conv && event.conversationId) {
     patchListQueries(queryClient, (data) => {
       const existing = data.items.find((i) => i.id === conv.id);
-      const listItem = mergeInboxListItem(existing, conv, lastMessage, humanHandoff);
+      const listItem = mergeInboxListItem(existing, conv, lastMessage, humanHandoff, viewerAgentId);
       return {
         ...data,
         items: upsertListItem(data.items, listItem),
@@ -186,7 +203,7 @@ export function applyConversationLiveEvent(
             conv.assignedAgentId !== undefined
               ? conv.assignedAgentId
               : prevDetail.conversation.assignedAgentId,
-          ...liveAttentionPatch(prevDetail.conversation, conv),
+          ...liveAttentionPatch(prevDetail.conversation, conv, viewerAgentId),
         },
         humanHandoff: humanHandoff ?? prevDetail.humanHandoff,
       });

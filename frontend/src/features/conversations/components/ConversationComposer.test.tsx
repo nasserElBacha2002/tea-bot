@@ -114,13 +114,13 @@ describe('ConversationComposer', () => {
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
+    expect(screen.getByText(/atención humana/i)).toBeInTheDocument();
     expect(screen.getByText(/Ana/)).toBeInTheDocument();
     expect(screen.getByText(/otro agente/i)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
   });
 
-  it('asignada al agente muestra bot pausado y el composer', () => {
+  it('asignada al agente muestra atención humana y el composer', () => {
     render(
       <ThemeProvider theme={createTheme()}>
         <ConversationComposer
@@ -130,7 +130,7 @@ describe('ConversationComposer', () => {
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
+    expect(screen.getByText(/atención humana/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 });

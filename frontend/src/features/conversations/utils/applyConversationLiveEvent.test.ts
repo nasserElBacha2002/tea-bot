@@ -359,4 +359,113 @@ describe('applyConversationLiveEvent', () => {
     expect(list?.items.filter((i) => i.id === 'c-dup')).toHaveLength(1);
     expect(list?.items[0]?.status).toBe('waiting_human');
   });
+
+  it('reconoce al agente actual cuando el evento no trae takeoverBlock', () => {
+    const qc = new QueryClient();
+    const detailKey = conversationKeys.detail('c1');
+    qc.setQueryData<ConversationDetailResponse>(detailKey, {
+      conversation: {
+        ...baseListItem,
+        canTakeover: true,
+        takeoverBlock: null,
+      },
+      activeSession: null,
+      humanHandoff: null,
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.assigned',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          conversation: {
+            ...baseListItem,
+            status: 'assigned',
+            assignedAgentId: 'AGENT-1',
+            assignedAgentLabel: 'Ana',
+            canTakeover: undefined,
+          },
+        },
+      },
+      'c1',
+      'agent-1',
+    );
+
+    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
+    expect(detail?.conversation.takeoverBlock).toBe('already_owner');
+    expect(detail?.conversation.assignedAgentLabel).toBe('Ana');
+  });
+
+  it('marca owned_by_other si otro agente tomó la conversación', () => {
+    const qc = new QueryClient();
+    const detailKey = conversationKeys.detail('c1');
+    qc.setQueryData<ConversationDetailResponse>(detailKey, {
+      conversation: {
+        ...baseListItem,
+        canTakeover: true,
+      },
+      activeSession: null,
+      humanHandoff: null,
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.assigned',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          conversation: {
+            ...baseListItem,
+            status: 'assigned',
+            assignedAgentId: 'agent-2',
+            assignedAgentLabel: 'Luis',
+          },
+        },
+      },
+      'c1',
+      'agent-1',
+    );
+
+    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
+    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
+  });
+
+  it('conserva el inbox compartido si la toma está deshabilitada', () => {
+    const qc = new QueryClient();
+    const detailKey = conversationKeys.detail('c1');
+    qc.setQueryData<ConversationDetailResponse>(detailKey, {
+      conversation: {
+        ...baseListItem,
+        status: 'assigned',
+        takeoverBlock: 'disabled',
+        canTakeover: false,
+      },
+      activeSession: null,
+      humanHandoff: null,
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.updated',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          conversation: {
+            ...baseListItem,
+            status: 'assigned',
+            assignedAgentId: 'agent-2',
+          },
+        },
+      },
+      'c1',
+      'agent-1',
+    );
+
+    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
+    expect(detail?.conversation.takeoverBlock).toBe('disabled');
+  });
 });

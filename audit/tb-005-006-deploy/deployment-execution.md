@@ -1,28 +1,37 @@
-# Ejecución — no realizada
+# Ejecución del despliegue
 
-Fecha: 2026-11-10.
+Fecha: 2026-11-10. El backend productivo se recreó. SQL Server, Nginx y el frontend no se reiniciaron.
 
-No se publicó código, no se construyó imagen y no se reinició ningún servicio productivo.
+## Antes de sustituir la imagen
 
-## Por qué
+- Checkout del VPS limpio en `9b2ff0be71058a11713b97146a20f683b631eda5`.
+- `git fetch origin` trajo `2ccaeb6e7b5b2d904c4b3c5063b7d6433f64c937`. Fast-forward, sin cambios locales que perder.
+- Imagen anterior conservada como `tea-whatsapp-bot:rollback-9b2ff0be7105`, digest `sha256:8a95d51f9fe842b1eecf2c28fc940285413b5a3039e7ae1a77e29251c03977ec`.
+- Backup `tea_bot_predeploy_20261110T174200Z.bak` vuelto a verificar con `RESTORE VERIFYONLY WITH CHECKSUM`.
+- Migración 010 aplicada y sonda TB-006 con `ready: true` antes del build.
+- Preflight de firma, con el token ya presente en el contenedor y las variables nuevas, salió 0.
 
-La fase 0 no pudo identificar el VPS. Las fases 1 a 6 dependen de esa identidad, del esquema SQL y de la URL que Twilio firma. El criterio de aborto “identidad de VPS o base no verificada” y “callback de estado no compatible” se cumplió antes de operar.
+## Cambio de entorno
 
-## Acciones que no ocurrieron
+En `/home/nasser/tea-bot/whatsapp-bot/.env`, con copia previa en `.env.before-tb005-log`:
 
-- Commit de las correcciones TB-005.
-- Push a `origin/main`.
-- Backup SQL.
-- Migraciones 007, 008 o 010 en producción.
-- Migración 009. Sigue excluida.
-- `TWILIO_SIGNATURE_MODE=log` en el entorno productivo.
-- `TWILIO_SIGNATURE_MODE=enforce`. No autorizado y no aplicado.
-- Cambio de `MANUAL_TAKEOVER_ENABLED`.
-- Rebuild o restart de Docker, frontend, Nginx o SQL Server.
-- `docker compose down -v`, `docker volume prune`, `docker system prune`.
+- `APP_BASE_URL=https://bot.dinamiceducation.com`
+- `TWILIO_SIGNATURE_MODE=log`
+- `MANUAL_TAKEOVER_ENABLED=false`
+- `TWILIO_PUBLIC_PATH_PREFIX` ausente
 
-## SHA
+No se copió el `.env` local. No se imprimieron secretos.
 
-- Último SHA conocido en `origin/main`: `ac7e69960f133cb32add5a140972329074cbf9fa`.
-- SHA local no publicado: `b0d606b7c120edd7cc75f555d326cd89fefd01d7`.
-- SHA desplegado en el VPS: desconocido. No hay imagen ni digest productivo que registrar.
+## Build y recreación
+
+Directorio `/home/nasser/tea-bot`, Compose del proyecto `tea-bot`.
+
+- `docker compose build whatsapp-bot`
+- Tag `tea-whatsapp-bot:2ccaeb6e7b5b`, digest `sha256:2e22dea94b8f1c458782be366a4464f43ab16103de91cfc40fe36ebbc47cdec6`
+- `docker compose up -d --no-deps --force-recreate whatsapp-bot`
+
+No se usó `docker compose down -v`. No se borraron volúmenes. El frontend sigue creado el 2026-11-05T17:09:38Z.
+
+## Resultado
+
+Contenedor `tea-whatsapp-bot` creado 2026-11-10T17:55:32Z, healthy, 0 reinicios. El checkout del host quedó en `2ccaeb6e7b5b2d904c4b3c5063b7d6433f64c937`. El proceso arrancó con `mode=log`, `ready=true`, `configurationState=observing` y `enforceReady=false`.

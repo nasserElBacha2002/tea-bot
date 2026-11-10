@@ -95,12 +95,17 @@ export const ConversationComposer: React.FC<Props> = ({
   }
 
   if (status === 'bot') {
+    if (!canTakeover) {
+      return (
+        <CompactNotice tone="warning">
+          Bot activo · La respuesta manual se habilitará al derivar a humano.
+        </CompactNotice>
+      );
+    }
     return (
       <Box sx={{ flexShrink: 0 }}>
-        <CompactNotice tone="warning">
-          {canTakeover
-            ? 'Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.'
-            : 'Bot activo · La respuesta manual se habilitará al derivar a humano.'}
+        <CompactNotice tone="info">
+          Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.
         </CompactNotice>
         {canTakeover && (
           <Box sx={{ p: compact ? 1 : 1.25 }}>
@@ -125,10 +130,12 @@ export const ConversationComposer: React.FC<Props> = ({
     );
   }
 
+  const viewerId = currentAgentId?.trim().toLowerCase() || '';
+  const ownerId = assignedAgentId?.trim().toLowerCase() || '';
   const lostToAnotherAgent = takeoverBlock !== 'disabled'
-    && Boolean(currentAgentId)
-    && Boolean(assignedAgentId)
-    && currentAgentId !== assignedAgentId
+    && viewerId.length > 0
+    && ownerId.length > 0
+    && viewerId !== ownerId
     && (status === 'assigned' || status === 'paused');
 
   if (takeoverBlock === 'owned_by_other' || lostToAnotherAgent) {
@@ -136,7 +143,7 @@ export const ConversationComposer: React.FC<Props> = ({
     return (
       <Box sx={{ flexShrink: 0 }}>
         <CompactNotice tone="info">
-          {`Bot pausado. La conversación la está atendiendo ${who}.`}
+          {`Atención humana. La conversación la está atendiendo ${who}.`}
         </CompactNotice>
         {actionError && (
           <Alert severity="error" sx={{ m: 1, py: 0.25 }}>
@@ -161,8 +168,8 @@ export const ConversationComposer: React.FC<Props> = ({
   const exclusiveAttention = takeoverBlock != null && takeoverBlock !== 'disabled';
   const pausedNotice = exclusiveAttention && (status === 'assigned' || status === 'paused')
     ? assignedAgentLabel
-      ? `Bot pausado. Atiende ${assignedAgentLabel}.`
-      : 'Bot pausado. Estás atendiendo esta conversación.'
+      ? `Atención humana. Atiende ${assignedAgentLabel}.`
+      : 'Atención humana. Estás atendiendo esta conversación.'
     : null;
   const showComposer = !canTakeover || status === 'assigned' || status === 'paused';
 

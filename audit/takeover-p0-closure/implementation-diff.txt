@@ -1,0 +1,921 @@
+diff --git a/frontend/src/features/conversations/components/ConversationComposer.test.tsx b/frontend/src/features/conversations/components/ConversationComposer.test.tsx
+index 139ac59..3d3b871 100644
+--- a/frontend/src/features/conversations/components/ConversationComposer.test.tsx
++++ b/frontend/src/features/conversations/components/ConversationComposer.test.tsx
+@@ -114,13 +114,13 @@ describe('ConversationComposer', () => {
+         />
+       </ThemeProvider>,
+     );
+-    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
++    expect(screen.getByText(/atención humana/i)).toBeInTheDocument();
+     expect(screen.getByText(/Ana/)).toBeInTheDocument();
+     expect(screen.getByText(/otro agente/i)).toBeInTheDocument();
+     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+   });
+ 
+-  it('asignada al agente muestra bot pausado y el composer', () => {
++  it('asignada al agente muestra atención humana y el composer', () => {
+     render(
+       <ThemeProvider theme={createTheme()}>
+         <ConversationComposer
+@@ -130,7 +130,7 @@ describe('ConversationComposer', () => {
+         />
+       </ThemeProvider>,
+     );
+-    expect(screen.getByText(/bot pausado/i)).toBeInTheDocument();
++    expect(screen.getByText(/atención humana/i)).toBeInTheDocument();
+     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
+   });
+ });
+diff --git a/frontend/src/features/conversations/components/ConversationComposer.tsx b/frontend/src/features/conversations/components/ConversationComposer.tsx
+index 7c369fe..42192c2 100644
+--- a/frontend/src/features/conversations/components/ConversationComposer.tsx
++++ b/frontend/src/features/conversations/components/ConversationComposer.tsx
+@@ -95,12 +95,17 @@ export const ConversationComposer: React.FC<Props> = ({
+   }
+ 
+   if (status === 'bot') {
++    if (!canTakeover) {
++      return (
++        <CompactNotice tone="warning">
++          Bot activo · La respuesta manual se habilitará al derivar a humano.
++        </CompactNotice>
++      );
++    }
+     return (
+       <Box sx={{ flexShrink: 0 }}>
+-        <CompactNotice tone="warning">
+-          {canTakeover
+-            ? 'Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.'
+-            : 'Bot activo · La respuesta manual se habilitará al derivar a humano.'}
++        <CompactNotice tone="info">
++          Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.
+         </CompactNotice>
+         {canTakeover && (
+           <Box sx={{ p: compact ? 1 : 1.25 }}>
+@@ -125,10 +130,12 @@ export const ConversationComposer: React.FC<Props> = ({
+     );
+   }
+ 
++  const viewerId = currentAgentId?.trim().toLowerCase() || '';
++  const ownerId = assignedAgentId?.trim().toLowerCase() || '';
+   const lostToAnotherAgent = takeoverBlock !== 'disabled'
+-    && Boolean(currentAgentId)
+-    && Boolean(assignedAgentId)
+-    && currentAgentId !== assignedAgentId
++    && viewerId.length > 0
++    && ownerId.length > 0
++    && viewerId !== ownerId
+     && (status === 'assigned' || status === 'paused');
+ 
+   if (takeoverBlock === 'owned_by_other' || lostToAnotherAgent) {
+@@ -136,7 +143,7 @@ export const ConversationComposer: React.FC<Props> = ({
+     return (
+       <Box sx={{ flexShrink: 0 }}>
+         <CompactNotice tone="info">
+-          {`Bot pausado. La conversación la está atendiendo ${who}.`}
++          {`Atención humana. La conversación la está atendiendo ${who}.`}
+         </CompactNotice>
+         {actionError && (
+           <Alert severity="error" sx={{ m: 1, py: 0.25 }}>
+@@ -161,8 +168,8 @@ export const ConversationComposer: React.FC<Props> = ({
+   const exclusiveAttention = takeoverBlock != null && takeoverBlock !== 'disabled';
+   const pausedNotice = exclusiveAttention && (status === 'assigned' || status === 'paused')
+     ? assignedAgentLabel
+-      ? `Bot pausado. Atiende ${assignedAgentLabel}.`
+-      : 'Bot pausado. Estás atendiendo esta conversación.'
++      ? `Atención humana. Atiende ${assignedAgentLabel}.`
++      : 'Atención humana. Estás atendiendo esta conversación.'
+     : null;
+   const showComposer = !canTakeover || status === 'assigned' || status === 'paused';
+ 
+diff --git a/frontend/src/features/conversations/components/ConversationDetail.tsx b/frontend/src/features/conversations/components/ConversationDetail.tsx
+index 309890e..bc05cfd 100644
+--- a/frontend/src/features/conversations/components/ConversationDetail.tsx
++++ b/frontend/src/features/conversations/components/ConversationDetail.tsx
+@@ -130,7 +130,9 @@ export const ConversationDetail: React.FC<Props> = ({
+       ? 'Esperando que un operador tome la conversación.'
+       : null);
+ 
+-  const canClose = conversation.status !== 'closed';
++  const canReturnToBot = conversation.status === 'waiting_human'
++    || conversation.status === 'assigned'
++    || conversation.status === 'paused';
+   const showTakeover = Boolean(conversation.canTakeover);
+   const showClaimInHeader = showTakeover || conversation.status === 'waiting_human';
+ 
+@@ -170,7 +172,7 @@ export const ConversationDetail: React.FC<Props> = ({
+           {claiming ? '…' : 'Tomar conversación'}
+         </Button>
+       )}
+-      {canClose && (
++      {canReturnToBot && (
+         <Button
+           size="small"
+           variant={closeConfirm ? 'contained' : 'outlined'}
+diff --git a/frontend/src/features/conversations/components/ConversationStatusBadge.tsx b/frontend/src/features/conversations/components/ConversationStatusBadge.tsx
+index 910df06..26a11ee 100644
+--- a/frontend/src/features/conversations/components/ConversationStatusBadge.tsx
++++ b/frontend/src/features/conversations/components/ConversationStatusBadge.tsx
+@@ -1,7 +1,7 @@
+ import React from 'react';
+ import { Chip } from '@mui/material';
+ import type { ConversationStatus } from '../types/conversation.types';
+-import { conversationStatusLabel } from '../utils/conversationUiLabels';
++import { conversationRecordStatusLabel } from '../utils/conversationUiLabels';
+ 
+ const STATUS_COLORS: Record<
+   ConversationStatus,
+@@ -23,7 +23,7 @@ export const ConversationStatusBadge: React.FC<Props> = ({ status, size = 'small
+   const color = STATUS_COLORS[status as ConversationStatus] ?? 'default';
+   return (
+     <Chip
+-      label={conversationStatusLabel(status)}
++      label={conversationRecordStatusLabel(status)}
+       color={color}
+       size={size}
+       variant="outlined"
+diff --git a/frontend/src/features/conversations/context/ConversationLiveProvider.tsx b/frontend/src/features/conversations/context/ConversationLiveProvider.tsx
+index 0b3e097..9b4ba5d 100644
+--- a/frontend/src/features/conversations/context/ConversationLiveProvider.tsx
++++ b/frontend/src/features/conversations/context/ConversationLiveProvider.tsx
+@@ -54,6 +54,7 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
+     onUnread: (id) => handlersRef.current.onUnread?.(id),
+     onNewConversation: (id) => handlersRef.current.onNewConversation?.(id),
+     onHandoffWaiting: (id) => handlersRef.current.onHandoffWaiting?.(id),
++    viewerAgentId: userContext.currentAgentId,
+     onLiveEvent: (event) => void onLiveEventRef.current(event),
+   });
+ 
+diff --git a/frontend/src/features/conversations/hooks/useConversationsLiveUpdates.ts b/frontend/src/features/conversations/hooks/useConversationsLiveUpdates.ts
+index 13c5458..004066c 100644
+--- a/frontend/src/features/conversations/hooks/useConversationsLiveUpdates.ts
++++ b/frontend/src/features/conversations/hooks/useConversationsLiveUpdates.ts
+@@ -32,6 +32,7 @@ export interface ConversationLiveCallbacks {
+ export interface UseConversationsLiveUpdatesOptions {
+   enabled: boolean;
+   selectedConversationId: string | null;
++  viewerAgentId?: string | null;
+   onUnread?: (conversationId: string) => void;
+   onNewConversation?: (conversationId: string) => void;
+   onHandoffWaiting?: (conversationId: string) => void;
+@@ -41,6 +42,7 @@ export interface UseConversationsLiveUpdatesOptions {
+ export function useConversationsLiveUpdates({
+   enabled,
+   selectedConversationId,
++  viewerAgentId = null,
+   onUnread,
+   onNewConversation,
+   onHandoffWaiting,
+@@ -56,6 +58,7 @@ export function useConversationsLiveUpdates({
+   const intentionalCloseRef = useRef(false);
+   const connectRef = useRef<() => void>(() => {});
+   const selectedIdRef = useRef(selectedConversationId);
++  const viewerAgentIdRef = useRef(viewerAgentId);
+   const lastHeartbeatAtRef = useRef(0);
+   const reconnectAttemptRef = useRef(0);
+   const callbacksRef = useRef<ConversationLiveCallbacks>({});
+@@ -66,6 +69,10 @@ export function useConversationsLiveUpdates({
+     selectedIdRef.current = selectedConversationId;
+   }, [selectedConversationId]);
+ 
++  useEffect(() => {
++    viewerAgentIdRef.current = viewerAgentId;
++  }, [viewerAgentId]);
++
+   const clearReconnectTimer = useCallback(() => {
+     if (reconnectTimerRef.current) {
+       clearTimeout(reconnectTimerRef.current);
+@@ -137,7 +144,12 @@ export function useConversationsLiveUpdates({
+       }
+ 
+       const { unreadConversationId, newConversationId, handoffConversationId } =
+-        applyConversationLiveEvent(queryClient, event, selectedIdRef.current);
++        applyConversationLiveEvent(
++          queryClient,
++          event,
++          selectedIdRef.current,
++          viewerAgentIdRef.current,
++        );
+ 
+       const cb = callbacksRef.current;
+       if (unreadConversationId) cb.onUnread?.(unreadConversationId);
+diff --git a/frontend/src/features/conversations/pages/ConversationsPage.tsx b/frontend/src/features/conversations/pages/ConversationsPage.tsx
+index 0f85cfa..2f5c6ed 100644
+--- a/frontend/src/features/conversations/pages/ConversationsPage.tsx
++++ b/frontend/src/features/conversations/pages/ConversationsPage.tsx
+@@ -274,7 +274,16 @@ export const ConversationsPage: React.FC = () => {
+       setSuccessMessage(success);
+       await handleRefresh();
+     } catch (e) {
+-      setActionError(e instanceof Error ? e.message : 'Error en la operación');
++      const info = extractApiError(e);
++      setActionError(info.message);
++      if (
++        info.status === 409
++        || info.code === 'CONVERSATION_OWNED'
++        || info.code === 'STATUS_VERSION_CONFLICT'
++        || info.code === 'IDEMPOTENCY_STALE'
++      ) {
++        await handleRefresh();
++      }
+     }
+   };
+ 
+diff --git a/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts b/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
+index 5a922b1..cc0a993 100644
+--- a/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
++++ b/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
+@@ -359,4 +359,113 @@ describe('applyConversationLiveEvent', () => {
+     expect(list?.items.filter((i) => i.id === 'c-dup')).toHaveLength(1);
+     expect(list?.items[0]?.status).toBe('waiting_human');
+   });
++
++  it('reconoce al agente actual cuando el evento no trae takeoverBlock', () => {
++    const qc = new QueryClient();
++    const detailKey = conversationKeys.detail('c1');
++    qc.setQueryData<ConversationDetailResponse>(detailKey, {
++      conversation: {
++        ...baseListItem,
++        canTakeover: true,
++        takeoverBlock: null,
++      },
++      activeSession: null,
++      humanHandoff: null,
++    });
++
++    applyConversationLiveEvent(
++      qc,
++      {
++        type: 'conversation.assigned',
++        conversationId: 'c1',
++        occurredAt: new Date().toISOString(),
++        data: {
++          conversation: {
++            ...baseListItem,
++            status: 'assigned',
++            assignedAgentId: 'AGENT-1',
++            assignedAgentLabel: 'Ana',
++            canTakeover: undefined,
++          },
++        },
++      },
++      'c1',
++      'agent-1',
++    );
++
++    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
++    expect(detail?.conversation.takeoverBlock).toBe('already_owner');
++    expect(detail?.conversation.assignedAgentLabel).toBe('Ana');
++  });
++
++  it('marca owned_by_other si otro agente tomó la conversación', () => {
++    const qc = new QueryClient();
++    const detailKey = conversationKeys.detail('c1');
++    qc.setQueryData<ConversationDetailResponse>(detailKey, {
++      conversation: {
++        ...baseListItem,
++        canTakeover: true,
++      },
++      activeSession: null,
++      humanHandoff: null,
++    });
++
++    applyConversationLiveEvent(
++      qc,
++      {
++        type: 'conversation.assigned',
++        conversationId: 'c1',
++        occurredAt: new Date().toISOString(),
++        data: {
++          conversation: {
++            ...baseListItem,
++            status: 'assigned',
++            assignedAgentId: 'agent-2',
++            assignedAgentLabel: 'Luis',
++          },
++        },
++      },
++      'c1',
++      'agent-1',
++    );
++
++    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
++    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
++  });
++
++  it('conserva el inbox compartido si la toma está deshabilitada', () => {
++    const qc = new QueryClient();
++    const detailKey = conversationKeys.detail('c1');
++    qc.setQueryData<ConversationDetailResponse>(detailKey, {
++      conversation: {
++        ...baseListItem,
++        status: 'assigned',
++        takeoverBlock: 'disabled',
++        canTakeover: false,
++      },
++      activeSession: null,
++      humanHandoff: null,
++    });
++
++    applyConversationLiveEvent(
++      qc,
++      {
++        type: 'conversation.updated',
++        conversationId: 'c1',
++        occurredAt: new Date().toISOString(),
++        data: {
++          conversation: {
++            ...baseListItem,
++            status: 'assigned',
++            assignedAgentId: 'agent-2',
++          },
++        },
++      },
++      'c1',
++      'agent-1',
++    );
++
++    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
++    expect(detail?.conversation.takeoverBlock).toBe('disabled');
++  });
+ });
+diff --git a/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts b/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
+index fdd6a35..029e1cf 100644
+--- a/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
++++ b/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
+@@ -26,6 +26,12 @@ function upsertListItem(
+   return next;
+ }
+ 
++function sameAgent(left?: string | null, right?: string | null) {
++  const a = left?.trim().toLowerCase();
++  const b = right?.trim().toLowerCase();
++  return Boolean(a && b && a === b);
++}
++
+ function liveAttentionPatch(
+   existing: {
+     canTakeover?: boolean;
+@@ -37,6 +43,7 @@ function liveAttentionPatch(
+     InboxConversationItem,
+     'status' | 'canTakeover' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
+   >,
++  viewerAgentId?: string | null,
+ ): Partial<InboxConversationItem> {
+   const patch: Partial<InboxConversationItem> = {};
+   if (conv.canTakeover != null) patch.canTakeover = conv.canTakeover;
+@@ -51,7 +58,15 @@ function liveAttentionPatch(
+     && conv.takeoverBlock == null
+   ) {
+     patch.canTakeover = false;
+-    patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
++    if (existing?.takeoverBlock === 'disabled') {
++      patch.takeoverBlock = 'disabled';
++    } else if (sameAgent(viewerAgentId, conv.assignedAgentId)) {
++      patch.takeoverBlock = 'already_owner';
++    } else if (viewerAgentId && conv.assignedAgentId) {
++      patch.takeoverBlock = 'owned_by_other';
++    } else {
++      patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
++    }
+   }
+   if (conv.botPaused != null) patch.botPaused = conv.botPaused;
+   else if (patch.canTakeover === false && conv.status !== 'closed') patch.botPaused = true;
+@@ -83,6 +98,7 @@ function mergeInboxListItem(
+   conv: InboxConversationItem,
+   lastMessage: InboxConversationItem['lastMessage'] | undefined,
+   humanHandoff: InboxConversationItem['humanHandoff'] | undefined,
++  viewerAgentId?: string | null,
+ ): InboxConversationItem {
+   return {
+     ...(existing ?? {}),
+@@ -92,7 +108,7 @@ function mergeInboxListItem(
+     contactEmail: conv.contactEmail ?? existing?.contactEmail ?? null,
+     lastMessage: lastMessage ?? conv.lastMessage ?? existing?.lastMessage ?? null,
+     humanHandoff: humanHandoff ?? conv.humanHandoff ?? existing?.humanHandoff ?? null,
+-    ...liveAttentionPatch(existing, conv),
++    ...liveAttentionPatch(existing, conv, viewerAgentId),
+   };
+ }
+ 
+@@ -117,6 +133,7 @@ export function applyConversationLiveEvent(
+   queryClient: QueryClient,
+   event: ConversationLiveEvent,
+   selectedId: string | null,
++  viewerAgentId: string | null = null,
+ ): {
+   unreadConversationId?: string;
+   newConversationId?: string;
+@@ -162,7 +179,7 @@ export function applyConversationLiveEvent(
+   if (conv && event.conversationId) {
+     patchListQueries(queryClient, (data) => {
+       const existing = data.items.find((i) => i.id === conv.id);
+-      const listItem = mergeInboxListItem(existing, conv, lastMessage, humanHandoff);
++      const listItem = mergeInboxListItem(existing, conv, lastMessage, humanHandoff, viewerAgentId);
+       return {
+         ...data,
+         items: upsertListItem(data.items, listItem),
+@@ -186,7 +203,7 @@ export function applyConversationLiveEvent(
+             conv.assignedAgentId !== undefined
+               ? conv.assignedAgentId
+               : prevDetail.conversation.assignedAgentId,
+-          ...liveAttentionPatch(prevDetail.conversation, conv),
++          ...liveAttentionPatch(prevDetail.conversation, conv, viewerAgentId),
+         },
+         humanHandoff: humanHandoff ?? prevDetail.humanHandoff,
+       });
+diff --git a/frontend/src/features/conversations/utils/conversationDisplay.ts b/frontend/src/features/conversations/utils/conversationDisplay.ts
+index c33251a..603d257 100644
+--- a/frontend/src/features/conversations/utils/conversationDisplay.ts
++++ b/frontend/src/features/conversations/utils/conversationDisplay.ts
+@@ -1,5 +1,5 @@
+ import type { ConversationChannel, ConversationProvider } from '../types/conversation.types';
+-import { conversationStatusLabel } from './conversationUiLabels';
++import { conversationRecordStatusLabel } from './conversationUiLabels';
+ import { CHANNEL_LABELS } from '../constants/conversationChannels';
+ 
+ export function channelLabel(channel: ConversationChannel): string {
+@@ -22,7 +22,7 @@ export function formatDetailSubtitle(
+   lastMessageAt: string | null,
+ ): string {
+   const time = formatShortDateTime(lastMessageAt);
+-  return `${channelLabel(channel)} · ${providerLabel(provider)} · ${conversationStatusLabel(status)}${time ? ` · ${time}` : ''}`;
++  return `${channelLabel(channel)} · ${providerLabel(provider)} · ${conversationRecordStatusLabel(status)}${time ? ` · ${time}` : ''}`;
+ }
+ 
+ /** Metadata secundaria del header (sin repetir el badge de estado). */
+diff --git a/frontend/src/features/conversations/utils/conversationUiLabels.ts b/frontend/src/features/conversations/utils/conversationUiLabels.ts
+index fe93c15..a0ed430 100644
+--- a/frontend/src/features/conversations/utils/conversationUiLabels.ts
++++ b/frontend/src/features/conversations/utils/conversationUiLabels.ts
+@@ -13,6 +13,12 @@ export function conversationStatusLabel(status: string): string {
+   return CONVERSATION_STATUS_LABELS[status as ConversationStatus] ?? status;
+ }
+ 
++/** Etiqueta de una conversación. Los filtros conservan el plural. */
++export function conversationRecordStatusLabel(status: string): string {
++  if (status === 'assigned' || status === 'paused') return 'Atención humana';
++  return conversationStatusLabel(status);
++}
++
+ export const CHANNEL_FILTER_LABELS = {
+   all: 'Todos',
+   whatsapp: 'WhatsApp',
+diff --git a/whatsapp-bot/src/controllers/conversations.controller.js b/whatsapp-bot/src/controllers/conversations.controller.js
+index 1b8799c..8688f1f 100644
+--- a/whatsapp-bot/src/controllers/conversations.controller.js
++++ b/whatsapp-bot/src/controllers/conversations.controller.js
+@@ -2,9 +2,22 @@ import conversationInboxService from '../services/conversation-inbox.service.js'
+ import conversationTakeoverService, {
+   actorFromAdminUser,
+ } from '../services/conversation-takeover.service.js';
+-import { resolveAgentIdFromRequest } from '../utils/agent-identity.js';
++import { canTakeoverConversation } from '../auth/roles.js';
+ import { sendSuccess, sendApiError, HTTP_STATUS } from '../utils/http-errors.js';
+ 
++function requireConversationOperator(req) {
++  const actor = actorFromAdminUser(req.adminUser);
++  if (!actor || !canTakeoverConversation(actor.role)) {
++    const error = new Error('No tenés permiso para operar esta conversación.');
++    error.code = 'FORBIDDEN';
++    error.httpStatus = 403;
++    error.apiError = 'FORBIDDEN';
++    error.apiMessage = error.message;
++    throw error;
++  }
++  return actor;
++}
++
+ function handleServiceError(res, error) {
+   if (error.code === 'CONVERSATION_PERSISTENCE_UNAVAILABLE') {
+     return sendApiError(res, {
+@@ -68,10 +81,10 @@ export const getConversationMessages = async (req, res) => {
+ 
+ export const claimConversation = async (req, res) => {
+   try {
+-    const agentId = resolveAgentIdFromRequest(req);
++    const actor = requireConversationOperator(req);
+     const data = await conversationInboxService.claimConversation(
+       req.params.conversationId,
+-      agentId,
++      actor.agentId,
+       req.adminUser,
+     );
+     return sendSuccess(res, data);
+@@ -82,11 +95,11 @@ export const claimConversation = async (req, res) => {
+ 
+ export const sendAgentMessage = async (req, res) => {
+   try {
+-    const agentId = resolveAgentIdFromRequest(req);
++    const actor = requireConversationOperator(req);
+     const data = await conversationInboxService.sendAgentMessage(
+       req.params.conversationId,
+       req.body?.body,
+-      agentId,
++      actor.agentId,
+       req.adminUser,
+     );
+     return sendSuccess(res, data, HTTP_STATUS.CREATED);
+@@ -97,6 +110,7 @@ export const sendAgentMessage = async (req, res) => {
+ 
+ export const closeConversation = async (req, res) => {
+   try {
++    requireConversationOperator(req);
+     const data = await conversationInboxService.closeConversation(
+       req.params.conversationId,
+       req.body?.resolutionNote,
+@@ -152,6 +166,7 @@ export const transferConversation = async (req, res) => {
+ 
+ export const returnConversationToBot = async (req, res) => {
+   try {
++    requireConversationOperator(req);
+     const data = await conversationInboxService.returnConversationToBot(
+       req.params.conversationId,
+     );
+diff --git a/whatsapp-bot/src/middleware/twilio-inbound-signature.integration.test.js b/whatsapp-bot/src/middleware/twilio-inbound-signature.integration.test.js
+index 1c608c0..00d8f40 100644
+--- a/whatsapp-bot/src/middleware/twilio-inbound-signature.integration.test.js
++++ b/whatsapp-bot/src/middleware/twilio-inbound-signature.integration.test.js
+@@ -212,7 +212,7 @@ async function inboundCount(ids) {
+ }
+ 
+ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
+-  test('la base conectada es tea-bot y 010 ya esta aplicada', async (t) => {
++  test('la base conectada es tea-bot y 009 y 010 ya estan aplicadas', async (t) => {
+     if (!await prepare(t)) return;
+     const { rows } = await query(
+       `SELECT filename, success
+@@ -227,8 +227,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
+     const applied = new Map(rows.map((row) => [row.filename, row.success === true || row.success === 1]));
+     assert.equal(applied.get('007_monitoring.sql'), true);
+     assert.equal(applied.get('008_conversation_reentry.sql'), true);
++    assert.equal(applied.get('009_conversation_status_version.sql'), true);
+     assert.equal(applied.get('010_webhook_response_body.sql'), true);
+-    assert.equal(applied.has('009_conversation_status_version.sql'), false);
+   });
+ 
+   test('T02 y T03 una firma invalida o ausente no escribe eventos ni mensajes', async (t) => {
+diff --git a/whatsapp-bot/src/realtime/conversation-live.notify.js b/whatsapp-bot/src/realtime/conversation-live.notify.js
+index 50fa031..2875846 100644
+--- a/whatsapp-bot/src/realtime/conversation-live.notify.js
++++ b/whatsapp-bot/src/realtime/conversation-live.notify.js
+@@ -4,6 +4,7 @@ import {
+   mapLastMessagePublic,
+   mapMessagePublic,
+ } from '../utils/conversation-inbox.mapper.js';
++import { labelForAssignedAgent } from '../utils/agent-identity.js';
+ import {
+   publishConversationAssigned,
+   publishConversationClosed,
+@@ -13,16 +14,25 @@ import {
+   publishConversationUpdated,
+ } from './conversation-live.broadcaster.js';
+ 
++function conversationPayload(conversation) {
++  const mapped = mapConversationPublic(conversation);
++  if (!mapped) return mapped;
++  return {
++    ...mapped,
++    assignedAgentLabel: labelForAssignedAgent(mapped.assignedAgentId),
++  };
++}
++
+ export function notifyConversationCreated(conversation, extras = {}) {
+   publishConversationCreated(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+     ...extras,
+   });
+ }
+ 
+ export function notifyConversationUpdated(conversation, extras = {}) {
+   publishConversationUpdated(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+     ...extras,
+   });
+ }
+@@ -31,36 +41,36 @@ export function notifyConversationMessageCreated(conversation, message, extras =
+   publishConversationMessageCreated(conversation.id, {
+     message: mapMessagePublic(message),
+     lastMessage: mapLastMessagePublic(message),
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+     ...extras,
+   });
+ }
+ 
+ export function notifyConversationAssigned(conversation, handoff = null) {
+   publishConversationAssigned(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+     humanHandoff: mapHumanHandoffPublic(handoff),
+   });
+   publishConversationUpdated(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+     humanHandoff: mapHumanHandoffPublic(handoff),
+   });
+ }
+ 
+ export function notifyConversationClosed(conversation) {
+   publishConversationClosed(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+   });
+   publishConversationUpdated(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+   });
+ }
+ 
+ export function notifyConversationReturnedToBot(conversation) {
+   publishConversationReturnedToBot(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+   });
+   publishConversationUpdated(conversation.id, {
+-    conversation: mapConversationPublic(conversation),
++    conversation: conversationPayload(conversation),
+   });
+ }
+diff --git a/whatsapp-bot/src/repositories/conversation.repository.js b/whatsapp-bot/src/repositories/conversation.repository.js
+index 8cf9e75..44d47fb 100644
+--- a/whatsapp-bot/src/repositories/conversation.repository.js
++++ b/whatsapp-bot/src/repositories/conversation.repository.js
+@@ -3,6 +3,12 @@ import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-leas
+ import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
+ import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
+ 
++function canonicalAgentId(value) {
++  if (value == null) return null;
++  const text = String(value).trim();
++  return text ? text.toLowerCase() : null;
++}
++
+ function mapRow(row) {
+   if (!row) return null;
+   return {
+@@ -18,7 +24,7 @@ function mapRow(row) {
+     currentFlowVersion: row.current_flow_version,
+     currentNodeKey: row.current_node_key,
+     reentryJson: parseJsonColumn(row.reentry_json, null),
+-    assignedAgentId: row.assigned_agent_id,
++    assignedAgentId: canonicalAgentId(row.assigned_agent_id),
+     statusVersion: row.status_version == null ? null : Number(row.status_version),
+     lastMessageAt: row.last_message_at,
+     startedAt: row.started_at,
+diff --git a/whatsapp-bot/src/repositories/human-handoff.repository.js b/whatsapp-bot/src/repositories/human-handoff.repository.js
+index 609fead..d03888b 100644
+--- a/whatsapp-bot/src/repositories/human-handoff.repository.js
++++ b/whatsapp-bot/src/repositories/human-handoff.repository.js
+@@ -1,5 +1,11 @@
+ import { query } from '../db/index.js';
+ 
++function canonicalAgentId(value) {
++  if (value == null) return null;
++  const text = String(value).trim();
++  return text ? text.toLowerCase() : null;
++}
++
+ function mapRow(row) {
+   if (!row) return null;
+   return {
+@@ -8,7 +14,7 @@ function mapRow(row) {
+     requestedBy: row.requested_by,
+     reason: row.reason,
+     status: row.status,
+-    assignedAgentId: row.assigned_agent_id,
++    assignedAgentId: canonicalAgentId(row.assigned_agent_id),
+     requestedAt: row.requested_at,
+     assignedAt: row.assigned_at,
+     resolvedAt: row.resolved_at,
+diff --git a/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js b/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
+index a871797..a6365c2 100644
+--- a/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
++++ b/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
+@@ -105,6 +105,7 @@ export class ConversationBotLifecycleService {
+         && (existingReentry.status === 'pending' || existingReentry.status === 'awaiting_choice');
+       const returningFromHuman = locked.status === 'waiting_human'
+         || locked.status === 'assigned'
++        || locked.status === 'paused'
+         || isHandoffTerminalNode(locked.currentNodeKey)
+         || resolvedHandoffIds.length > 0;
+ 
+diff --git a/whatsapp-bot/src/services/conversation-inbox.service.js b/whatsapp-bot/src/services/conversation-inbox.service.js
+index 216c3c8..62dce5e 100644
+--- a/whatsapp-bot/src/services/conversation-inbox.service.js
++++ b/whatsapp-bot/src/services/conversation-inbox.service.js
+@@ -83,7 +83,7 @@ function withAttention(row, actor) {
+   return {
+     ...mapConversationPublic(row),
+     ...access,
+-    assignedAgentLabel: null,
++    assignedAgentLabel: labelForAssignedAgent(row?.assignedAgentId),
+   };
+ }
+ 
+@@ -140,13 +140,8 @@ export class ConversationInboxService {
+       humanHandoffRepository.findLatestByConversationId(conversationId),
+     ]);
+ 
+-    const assignedAgentLabel = labelForAssignedAgent(conversation.assignedAgentId);
+-
+     return {
+-      conversation: {
+-        ...withAttention(conversation, viewer),
+-        assignedAgentLabel,
+-      },
++      conversation: withAttention(conversation, viewer),
+       activeSession: mapSessionPublic(activeSession),
+       humanHandoff: mapHumanHandoffPublic(humanHandoff),
+     };
+diff --git a/whatsapp-bot/src/services/conversation-takeover.integration.test.js b/whatsapp-bot/src/services/conversation-takeover.integration.test.js
+index 36916e7..8ad77d5 100644
+--- a/whatsapp-bot/src/services/conversation-takeover.integration.test.js
++++ b/whatsapp-bot/src/services/conversation-takeover.integration.test.js
+@@ -6,7 +6,7 @@ import conversationRepository from '../repositories/conversation.repository.js';
+ import humanHandoffRepository from '../repositories/human-handoff.repository.js';
+ import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+ import conversationTakeoverService from './conversation-takeover.service.js';
+-import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
++import { agentsMatch, resolveAgentIdFromUsername } from '../utils/agent-identity.js';
+ 
+ async function skipReason() {
+   const isolated = isolatedTestDatabaseReason();
+@@ -104,7 +104,7 @@ test('integration: toma manual exclusiva en SQL TEST', async (t) => {
+ 
+     const stored = await conversationRepository.findById(created.id);
+     assert.equal(stored.status, 'assigned');
+-    assert.equal(stored.assignedAgentId, ana.agentId);
++    assert.equal(agentsMatch(stored.assignedAgentId, ana.agentId), true);
+     assert.equal(stored.reentryJson, null);
+     assert.ok(Number(stored.statusVersion) >= 1);
+ 
+@@ -173,7 +173,11 @@ test('integration: dos agentes en paralelo sobre SQL real', async (t) => {
+     assert.equal(denied[0].reason.code, 'CONVERSATION_OWNED');
+     const stored = await conversationRepository.findById(created.id);
+     assert.equal(stored.status, 'assigned');
+-    assert.ok(stored.assignedAgentId === ana.agentId || stored.assignedAgentId === luis.agentId);
++    assert.equal(
++      agentsMatch(stored.assignedAgentId, ana.agentId)
++        || agentsMatch(stored.assignedAgentId, luis.agentId),
++      true,
++    );
+   } finally {
+     if (previous === undefined) delete process.env.MANUAL_TAKEOVER_ENABLED;
+     else process.env.MANUAL_TAKEOVER_ENABLED = previous;
+diff --git a/whatsapp-bot/src/services/message-persistence.service.js b/whatsapp-bot/src/services/message-persistence.service.js
+index 25da01f..46d8588 100644
+--- a/whatsapp-bot/src/services/message-persistence.service.js
++++ b/whatsapp-bot/src/services/message-persistence.service.js
+@@ -15,6 +15,9 @@ function inboundSkipMetadata(conversation, activeHandoff = null) {
+   if (conversation.status === 'assigned') {
+     return { botSkipped: true, skipReason: 'conversation_assigned' };
+   }
++  if (conversation.status === 'paused') {
++    return { botSkipped: true, skipReason: 'conversation_paused' };
++  }
+   if (conversation.status === 'waiting_human') {
+     return { botSkipped: true, skipReason: 'conversation_waiting_human' };
+   }
+diff --git a/whatsapp-bot/src/utils/conversation-handoff-policy.js b/whatsapp-bot/src/utils/conversation-handoff-policy.js
+index bc5e0dd..b33e6ad 100644
+--- a/whatsapp-bot/src/utils/conversation-handoff-policy.js
++++ b/whatsapp-bot/src/utils/conversation-handoff-policy.js
+@@ -46,7 +46,7 @@ export function evaluateLegacyNormalizationCandidate({
+  */
+ export function shouldBlockBotFlow(conversation, activeHandoff = null) {
+   const status = String(conversation?.status || '').trim();
+-  if (status === 'waiting_human' || status === 'assigned') {
++  if (status === 'waiting_human' || status === 'assigned' || status === 'paused') {
+     return true;
+   }
+   return Boolean(activeHandoff);
+diff --git a/whatsapp-bot/src/utils/handoff-detection.js b/whatsapp-bot/src/utils/handoff-detection.js
+index dca81de..ba02844 100644
+--- a/whatsapp-bot/src/utils/handoff-detection.js
++++ b/whatsapp-bot/src/utils/handoff-detection.js
+@@ -28,7 +28,7 @@ export function isEngineHumanHandoffResult(engineResult) {
+  */
+ export function isConversationInHumanMode(conversation) {
+   const status = String(conversation?.status || '').trim();
+-  return status === 'waiting_human' || status === 'assigned';
++  return status === 'waiting_human' || status === 'assigned' || status === 'paused';
+ }
+ 
+ /**
+diff --git a/whatsapp-bot/src/utils/handoff-detection.test.js b/whatsapp-bot/src/utils/handoff-detection.test.js
+index dedd1d3..830de7d 100644
+--- a/whatsapp-bot/src/utils/handoff-detection.test.js
++++ b/whatsapp-bot/src/utils/handoff-detection.test.js
+@@ -17,10 +17,12 @@ test('isEngineHumanHandoffResult detecta requiresHuman y terminalReason', () =>
+   assert.equal(isEngineHumanHandoffResult({ currentNodeId: 'welcome' }), false);
+ });
+ 
+-test('isConversationInHumanMode reconoce waiting_human y assigned', () => {
++test('isConversationInHumanMode reconoce waiting_human, assigned y paused', () => {
+   assert.equal(isConversationInHumanMode({ status: 'waiting_human' }), true);
+   assert.equal(isConversationInHumanMode({ status: 'assigned' }), true);
++  assert.equal(isConversationInHumanMode({ status: 'paused' }), true);
+   assert.equal(isConversationInHumanMode({ status: 'bot' }), false);
++  assert.equal(isConversationInHumanMode({ status: 'closed' }), false);
+ });
+ 
+ test('resolveHandoffConfirmationMessage prioriza reply del motor', () => {
+diff --git a/frontend/src/features/conversations/components/ConversationDetail.test.tsx b/frontend/src/features/conversations/components/ConversationDetail.test.tsx
+new file mode 100644
+index 0000000..937edf8
+--- /dev/null
++++ b/frontend/src/features/conversations/components/ConversationDetail.test.tsx
+@@ -0,0 +1,89 @@
++// @vitest-environment jsdom
++import { describe, expect, it, vi } from 'vitest';
++import { render, screen } from '@testing-library/react';
++import { ThemeProvider, createTheme } from '@mui/material/styles';
++import { ConversationDetail } from './ConversationDetail';
++import type { ConversationDetailResponse } from '../types/conversation.types';
++
++if (typeof window.matchMedia !== 'function') {
++  Object.defineProperty(window, 'matchMedia', {
++    writable: true,
++    value: (query: string) => ({
++      matches: false,
++      media: query,
++      onchange: null,
++      addListener: () => {},
++      removeListener: () => {},
++      addEventListener: () => {},
++      removeEventListener: () => {},
++      dispatchEvent: () => false,
++    }),
++  });
++}
++
++function detail(patch: Partial<ConversationDetailResponse['conversation']>): ConversationDetailResponse {
++  return {
++    conversation: {
++      id: 'c1',
++      channel: 'whatsapp',
++      provider: 'twilio',
++      phoneNumber: '+5491111111111',
++      displayName: 'Ana',
++      status: 'bot',
++      assignedAgentId: null,
++      currentFlowId: 'main-menu',
++      currentFlowVersion: 'v62',
++      currentNodeKey: 'welcome',
++      lastMessageAt: '2026-11-10T15:00:00.000Z',
++      startedAt: '2026-11-10T14:00:00.000Z',
++      closedAt: null,
++      ...patch,
++    },
++    activeSession: null,
++    humanHandoff: null,
++  };
++}
++
++function renderDetail(data: ConversationDetailResponse) {
++  return render(
++    <ThemeProvider theme={createTheme()}>
++      <ConversationDetail
++        detail={data}
++        messages={[]}
++        onSend={vi.fn()}
++        onClaim={vi.fn()}
++        onTakeover={vi.fn()}
++        onClose={vi.fn()}
++        onUpdateContact={vi.fn()}
++      />
++    </ThemeProvider>,
++  );
++}
++
++describe('ConversationDetail takeover', () => {
++  it('con el bot activo y permiso muestra Tomar y no el cierre', () => {
++    renderDetail(detail({ status: 'bot', canTakeover: true }));
++    expect(screen.getByText('Bot activo')).toBeInTheDocument();
++    expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThan(0);
++    expect(screen.queryByRole('button', { name: /cerrar y devolver al bot/i })).not.toBeInTheDocument();
++  });
++
++  it('durante la atención humana muestra el agente y la devolución al bot', () => {
++    renderDetail(detail({
++      status: 'assigned',
++      assignedAgentId: 'agent-1',
++      assignedAgentLabel: 'Ana',
++      takeoverBlock: 'already_owner',
++      canTakeover: false,
++    }));
++    expect(screen.getByText('Atención humana')).toBeInTheDocument();
++    expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
++    expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
++  });
++
++  it('una conversación en espera también puede devolverse al bot', () => {
++    renderDetail(detail({ status: 'waiting_human', canTakeover: false }));
++    expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
++    expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThan(0);
++  });
++});

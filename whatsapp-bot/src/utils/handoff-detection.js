@@ -28,7 +28,7 @@ export function isEngineHumanHandoffResult(engineResult) {
  */
 export function isConversationInHumanMode(conversation) {
   const status = String(conversation?.status || '').trim();
-  return status === 'waiting_human' || status === 'assigned';
+  return status === 'waiting_human' || status === 'assigned' || status === 'paused';
 }
 
 /**
