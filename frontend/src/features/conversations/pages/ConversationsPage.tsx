@@ -29,6 +29,7 @@ import { isConversationDerivedUnread } from '../utils/conversationUnread';
 import { conversationUiDensity } from '../constants/conversationUiDensity';
 import { useResizableSidebarWidth } from '../hooks/useResizableSidebarWidth';
 import { ConversationSidebarResizeHandle } from '../components/ConversationSidebarResizeHandle';
+import { clientRequestIdFor, completeClientRequest, takeoverRequestKey } from '../utils/clientRequestId';
 
 export const ConversationsPage: React.FC = () => {
   const theme = useTheme();
@@ -510,16 +511,23 @@ export const ConversationsPage: React.FC = () => {
                 'Conversación tomada correctamente.',
               )
             }
-            onTakeover={() =>
-              runAction(
-                () => takeoverMutation.mutateAsync({
-                  conversationId: selectedId!,
-                  expectedVersion: detailQuery.data?.conversation.statusVersion,
-                  clientRequestId: crypto.randomUUID(),
-                }),
+            onTakeover={() => {
+              const requestKey = takeoverRequestKey(
+                selectedId!,
+                detailQuery.data?.conversation.statusVersion,
+              );
+              return runAction(
+                async () => {
+                  await takeoverMutation.mutateAsync({
+                    conversationId: selectedId!,
+                    expectedVersion: detailQuery.data?.conversation.statusVersion,
+                    clientRequestId: clientRequestIdFor(requestKey),
+                  });
+                  completeClientRequest(requestKey);
+                },
                 'Conversación tomada. El bot quedó pausado.',
-              )
-            }
+              );
+            }}
             onClose={() =>
               runAction(
                 () => closeMutation.mutateAsync({ conversationId: selectedId! }),
