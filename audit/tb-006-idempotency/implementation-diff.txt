@@ -1,0 +1,1518 @@
+# TB-006 implementation diff
+# Working tree vs HEAD 06f26d8. Not committed.
+# Tracked diff plus untracked files via git diff --no-index.
+# Excludes audit/current-status (previous audit, not this change).
+
+===== TRACKED: git diff -- whatsapp-bot =====
+diff --git a/whatsapp-bot/.env.example b/whatsapp-bot/.env.example
+index 7d71937..ff4cb21 100644
+--- a/whatsapp-bot/.env.example
++++ b/whatsapp-bot/.env.example
+@@ -149,8 +149,12 @@ CONVERSATION_RETENTION_BATCH_SIZE=100
+ # Keep false to log only final outcomes and avoid duplicate rows.
+ CONVERSATION_EXPORT_INFO_PROVIDED_EVENTS=false
+ 
+-# Operational monitoring. A missing variable stays off (no Twilio calls).
++# Operational monitoring. A missing variable stays off (no Twilio balance calls).
++# It does not gate inbound idempotency. provider_webhook_events is always the
++# authority for a Twilio MessageSid, including when this flag is false.
+ # Values below are the recommended settings after migration 007 is applied.
++# Migration 010 stores the TwiML used to replay a retry. Idempotency works
++# without it; the replay then comes back empty.
+ # Intervals are clamped to a minimum of 5 minutes.
+ MONITORING_ENABLED=true
+ MONITORING_TWILIO_ENABLED=true
+diff --git a/whatsapp-bot/src/controllers/twilio-webhook.controller.js b/whatsapp-bot/src/controllers/twilio-webhook.controller.js
+index a90b570..1e642c3 100644
+--- a/whatsapp-bot/src/controllers/twilio-webhook.controller.js
++++ b/whatsapp-bot/src/controllers/twilio-webhook.controller.js
+@@ -1,5 +1,3 @@
+-import { config } from '../config.js';
+-import webhookDedupe from '../services/webhook-dedupe.service.js';
+ import { processCanonicalTwilioInbound } from '../services/twilio-inbound-pipeline.js';
+ import { toCanonicalTwilioInboundEvent } from '../adapters/twilio/twilio-inbound.adapter.js';
+ import {
+@@ -8,192 +6,158 @@ import {
+ } from '../adapters/twilio/twilio-outbound.adapter.js';
+ import { createPerfContext, logPerf, maskId, nowMs, roundMs } from '../utils/perf-timer.js';
+ import { noteActivity } from '../monitoring/activity-store.js';
+-import { beginInboundEvent, finishInboundEvent } from '../monitoring/webhook-events.service.js';
+-
+-function sendTwiml(res, twiml) {
+-  return res.status(200).type('text/xml').send(twiml);
+-}
+-
+-async function openMonitoringGate(event, body) {
+-  if (!config.monitoringEnabled) return { action: 'process', tracked: false };
+-  try {
+-    return await beginInboundEvent({ event, payload: body });
+-  } catch (error) {
+-    console.error(`[Monitoring] webhook persist failed: ${error.message}`);
+-    return { action: 'process', tracked: false };
++import {
++  beginInboundEvent,
++  finishInboundEvent,
++  logInbound,
++} from '../monitoring/webhook-events.service.js';
++
++/**
++ * Idempotencia del inbound Twilio. SQL es la autoridad, con o sin monitoreo.
++ * PROCESSED significa que los efectos internos de ese intento quedaron
++ * comprometidos y que el TwiML guardado puede repetirse. No significa que
++ * Twilio haya aceptado el HTTP ni que WhatsApp haya entregado el mensaje.
++ *
++ * Un PROCESSING vigente responde 503 para que Twilio reintente. Un 200 en
++ * ese caso cerraría el único reintento mientras el dueño todavía puede fallar.
++ * Un fallo de adquisición no cae al archivo local ni ejecuta el turno.
++ */
++
++function twimlForTurn(processed) {
++  if (!processed) return buildEmptyTwimlResponse();
++  if (processed.kind === 'reply_indeterminate' || processed.kind === 'human_mode_skip') {
++    return buildEmptyTwimlResponse();
++  }
++  if (processed.replyAuthorized === false) return buildEmptyTwimlResponse();
++  if (processed.kind === 'human_handoff' && processed.shouldSendTwiml === false) {
++    return buildEmptyTwimlResponse();
+   }
++  if (processed.reply == null || processed.reply === '') return buildEmptyTwimlResponse();
++  return buildTwimlMessage(processed.reply);
+ }
+ 
+-async function closeMonitoringGate(gate, error) {
+-  if (!gate?.tracked) return;
+-  try {
+-    await finishInboundEvent(gate, error || null);
+-  } catch (err) {
+-    console.error(`[Monitoring] webhook status update failed: ${err.message}`);
++function skippedResponse(gate) {
++  if (gate.reason === 'in_flight') {
++    return { httpStatus: 503, twiml: buildEmptyTwimlResponse() };
++  }
++  if (gate.reason === 'processed') {
++    return {
++      httpStatus: 200,
++      twiml: gate.responseBody || buildEmptyTwimlResponse(),
++    };
+   }
++  return { httpStatus: 200, twiml: buildEmptyTwimlResponse() };
+ }
+ 
+-export const receiveTwilioMessage = async (req, res) => {
+-  const flowId = req.params.flowId;
++export async function settleTwilioInbound({
++  flowId,
++  body,
++  processInbound = processCanonicalTwilioInbound,
++  begin = beginInboundEvent,
++  finish = (gate, error, responseBody) => finishInboundEvent(gate, error, undefined, responseBody),
++} = {}) {
+   const requestStart = nowMs();
+-  let gate = { action: 'process', tracked: false };
+-
++  const event = toCanonicalTwilioInboundEvent({ body, flowId });
++  noteActivity('lastInboundAt');
++  const perfContext = createPerfContext({
++    channel: 'twilio',
++    flowId: event.flowId,
++    userIdMasked: maskId(event.userId),
++    messageIdMasked: maskId(event.messageId),
++    inboundLength: event.text?.length || 0,
++  });
++
++  let gate;
+   try {
+-    const adapterStart = nowMs();
+-    const event = toCanonicalTwilioInboundEvent({ body: req.body, flowId });
+-    noteActivity('lastInboundAt');
+-    console.log('Twilio From:', req.body?.From);
+-    console.log('Normalized phone:', event.phone);
+-    const perfContext = createPerfContext({
+-      channel: 'twilio',
++    gate = await begin({ event, payload: body });
++  } catch (error) {
++    noteActivity('lastErrorAt', error.message);
++    logInbound('inbound_acquire_error', {
++      provider: event.provider,
++      messageId: event.messageId || null,
+       flowId: event.flowId,
+-      userIdMasked: maskId(event.userId),
+-      messageIdMasked: maskId(event.messageId),
+-      inboundLength: event.text?.length || 0,
++      reason: 'sql_error',
++      httpStatus: 503,
+     });
+-    perfContext.add('adapterMs', roundMs(nowMs() - adapterStart));
+-    const dedupeKey = webhookDedupe.buildProviderMessageKey(event.provider, event.messageId);
+-    gate = await openMonitoringGate(event, req.body);
+-
+-    if (gate.action === 'skip') {
+-      console.log(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
+-      );
+-      perfContext.add('duplicate', true);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      return sendTwiml(res, buildEmptyTwimlResponse());
+-    }
+-
+-    if (!gate.tracked) {
+-      if (dedupeKey && (await webhookDedupe.isDuplicate(dedupeKey, perfContext))) {
+-        console.log(
+-          `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
+-        );
+-        perfContext.add('duplicate', true);
+-        perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-        logPerf('twilio_webhook', perfContext.toJSON());
+-        return sendTwiml(res, buildEmptyTwimlResponse());
+-      }
+-
+-      if (dedupeKey) {
+-        await webhookDedupe.markProcessed(dedupeKey, perfContext);
+-      }
+-    }
+-
+-    const markHandled = async ({ flow = false } = {}) => {
+-      noteActivity('lastProcessedAt');
+-      if (flow) noteActivity('lastSuccessfulFlowAt');
+-      if (gate.tracked && dedupeKey) {
+-        try {
+-          await webhookDedupe.markProcessed(dedupeKey, perfContext);
+-        } catch (error) {
+-          console.error(`[Monitoring] dedupe mark failed: ${error.message}`);
+-        }
+-      }
+-      await closeMonitoringGate(gate, null);
+-    };
+-
+-    if (!event.text) {
+-      console.log(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=empty_text`,
+-      );
+-      perfContext.add('duplicate', false);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      await markHandled();
+-      return sendTwiml(res, buildEmptyTwimlResponse());
+-    }
+-
+-    const processed = await processCanonicalTwilioInbound(event, { perfContext });
+-
+-    if (processed.kind === 'reply_indeterminate') {
+-      console.error(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} action=reply_indeterminate reason=${processed.reason || 'unknown'}`,
+-      );
+-      perfContext.add('replyIndeterminate', processed.reason || true);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      await markHandled();
+-      return sendTwiml(res, buildEmptyTwimlResponse());
+-    }
++    logPerf('twilio_webhook_error', {
++      flowId,
++      totalMs: roundMs(nowMs() - requestStart),
++      error: error.message,
++    }, { force: true });
++    return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate: null };
++  }
+ 
+-    if (processed.kind === 'human_mode_skip') {
+-      console.log(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_mode_skip_engine status=${processed.conversation?.status}`,
+-      );
+-      perfContext.add('humanModeSkip', true);
+-      perfContext.add('conversationStatus', processed.conversation?.status || null);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      await markHandled();
+-      return sendTwiml(res, buildEmptyTwimlResponse());
+-    }
++  if (gate.action === 'reject') {
++    return { httpStatus: 400, twiml: buildEmptyTwimlResponse(), gate };
++  }
++  if (gate.action !== 'process') {
++    perfContext.add('duplicate', true);
++    perfContext.add('totalMs', roundMs(nowMs() - requestStart));
++    logPerf('twilio_webhook', perfContext.toJSON());
++    return { ...skippedResponse(gate), gate };
++  }
+ 
+-    if (processed.replyAuthorized === false) {
+-      await markHandled();
+-      return sendTwiml(res, buildEmptyTwimlResponse());
++  try {
++    let processed = null;
++    if (event.text) {
++      processed = await processInbound(event, { perfContext });
+     }
+-
+-    if (processed.kind === 'reentry') {
+-      console.log(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=reentry`,
+-      );
+-      perfContext.add('reentry', true);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      await markHandled({ flow: true });
+-      return sendTwiml(res, buildTwimlMessage(processed.reply));
++    const twiml = event.text ? twimlForTurn(processed) : buildEmptyTwimlResponse();
++    const finished = await finish(gate, null, twiml);
++    if (finished?.owned === false) {
++      return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate };
+     }
+-
+-    if (processed.kind === 'human_handoff') {
+-      console.log(
+-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_handoff node=${processed.result?.currentNodeId}`,
+-      );
+-      perfContext.add('humanHandoff', true);
+-      perfContext.add('nodeId', processed.result?.currentNodeId || null);
+-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+-      logPerf('twilio_webhook', perfContext.toJSON());
+-      await markHandled({ flow: true });
+-      if (processed.shouldSendTwiml === false) {
+-        return sendTwiml(res, buildEmptyTwimlResponse());
+-      }
+-      return sendTwiml(res, buildTwimlMessage(processed.reply));
++    noteActivity('lastProcessedAt');
++    if (processed && processed.kind !== 'human_mode_skip' && processed.replyAuthorized !== false) {
++      noteActivity('lastSuccessfulFlowAt');
+     }
+-
+-    console.log(
+-      `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false node=${processed.result?.currentNodeId}`,
+-    );
+-
+-    const twimlStart = nowMs();
+-    const twiml = buildTwimlMessage(processed.reply);
+-    perfContext.add('twimlBuildMs', roundMs(nowMs() - twimlStart));
+-    perfContext.add('replyLength', processed.reply?.length || 0);
+-    perfContext.add('nodeId', processed.result?.currentNodeId || null);
+     perfContext.add('duplicate', false);
+     perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+     logPerf('twilio_webhook', perfContext.toJSON());
+-    await markHandled({ flow: true });
+-    return sendTwiml(res, twiml);
++    return { httpStatus: 200, twiml, gate };
+   } catch (error) {
+     noteActivity('lastErrorAt', error.message);
+-    await closeMonitoringGate(gate, error);
+-    console.error(
+-      `[TwilioWebhook] provider=twilio flowId=${flowId} error=${error.message}`,
+-    );
+     logPerf('twilio_webhook_error', {
+       flowId,
+       totalMs: roundMs(nowMs() - requestStart),
+       error: error.message,
+     }, { force: true });
+     if (error?.code === 'TAKEOVER_SCHEMA_REQUIRED') {
+-      return sendTwiml(res, buildEmptyTwimlResponse());
++      try {
++        const finished = await finish(gate, null, buildEmptyTwimlResponse());
++        if (finished?.owned !== false) {
++          return { httpStatus: 200, twiml: buildEmptyTwimlResponse(), gate };
++        }
++      } catch (finishError) {
++        logInbound('inbound_acquire_error', {
++          provider: event.provider,
++          messageId: event.messageId || null,
++          flowId: event.flowId,
++          reason: 'complete_failed',
++          httpStatus: 503,
++        });
++      }
++      return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate };
++    }
++    try {
++      await finish(gate, error, null);
++    } catch (finishError) {
++      logInbound('inbound_acquire_error', {
++        provider: event.provider,
++        messageId: event.messageId || null,
++        flowId: event.flowId,
++        reason: 'fail_record_failed',
++        httpStatus: 503,
++      });
+     }
+-    return sendTwiml(
+-      res,
+-      buildTwimlMessage(
+-        'No pudimos procesar tu mensaje en este momento. Intenta nuevamente en unos segundos.',
+-      ),
+-    );
++    return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate };
+   }
++}
++
++export const receiveTwilioMessage = async (req, res) => {
++  const result = await settleTwilioInbound({
++    flowId: req.params.flowId,
++    body: req.body,
++  });
++  return res.status(result.httpStatus).type('text/xml').send(result.twiml);
+ };
+diff --git a/whatsapp-bot/src/monitoring/monitoring.repository.js b/whatsapp-bot/src/monitoring/monitoring.repository.js
+index 0d31134..c080ad0 100644
+--- a/whatsapp-bot/src/monitoring/monitoring.repository.js
++++ b/whatsapp-bot/src/monitoring/monitoring.repository.js
+@@ -19,9 +19,25 @@ function mapWebhook(row) {
+     errorCode: row.error_code,
+     errorMessage: row.error_message,
+     updatedAt: row.updated_at,
++    responseBody: row.response_body == null ? null : String(row.response_body),
+   };
+ }
+ 
++let responseBodyColumnReady = false;
++
++/** Un positivo se cachea. Un negativo no: aplicar 010 sin reiniciar debe verse. */
++export async function hasResponseBodyColumn() {
++  if (responseBodyColumnReady) return true;
++  const { rows } = await query(
++    `SELECT COL_LENGTH(N'dbo.provider_webhook_events', N'response_body') AS column_length`,
++  );
++  if (Number(rows[0]?.column_length) > 0) {
++    responseBodyColumnReady = true;
++    return true;
++  }
++  return false;
++}
++
+ export async function findWebhookEvent(provider, eventType, providerMessageId) {
+   const { rows } = await query(
+     `SELECT TOP (1) * FROM dbo.provider_webhook_events
+@@ -91,7 +107,7 @@ export async function acquireInboundProcessing({
+          updated_at = SYSUTCDATETIME(),
+          error_code = NULL,
+          error_message = NULL
+-     OUTPUT INSERTED.*
++     OUTPUT INSERTED.*, DELETED.status AS previous_status
+      WHERE provider = $1
+        AND event_type = $2
+        AND provider_message_id = $3
+@@ -103,7 +119,11 @@ export async function acquireInboundProcessing({
+     [provider, eventType, providerMessageId, maxAttempts, staleBefore],
+   );
+   if (claimed.rows[0]) {
+-    return { acquired: true, row: mapWebhook(claimed.rows[0]), reason: 'acquired' };
++    const previousStatus = claimed.rows[0].previous_status;
++    let reason = 'acquired';
++    if (previousStatus === 'PROCESSING') reason = 'reclaimed';
++    else if (previousStatus === 'FAILED') reason = 'retry';
++    return { acquired: true, row: mapWebhook(claimed.rows[0]), reason };
+   }
+ 
+   const exhausted = await query(
+@@ -133,24 +153,52 @@ export async function acquireInboundProcessing({
+   return { acquired: false, row, reason };
+ }
+ 
+-export async function markWebhookProcessed(id) {
+-  await query(
++/**
++ * Solo el dueño del lease cierra la fila. attempts es la generación:
++ * un worker reclamado deja de coincidir y no pisa el resultado del nuevo dueño.
++ * response_body (migración 010) guarda el TwiML para replay. Si la columna
++ * no está, el cierre igual ocurre y el replay queda vacío.
++ */
++export async function markWebhookProcessed(id, { attempts, responseBody = null } = {}) {
++  const storeResponse = await hasResponseBodyColumn();
++  const params = [id, Number(attempts)];
++  let responseSql = '';
++  if (storeResponse) {
++    responseSql = ', response_body = $3';
++    params.push(responseBody);
++  }
++  const { rows } = await query(
+     `UPDATE dbo.provider_webhook_events
+-     SET status = N'PROCESSED', processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+-         error_code = NULL, error_message = NULL
+-     WHERE id = $1`,
+-    [id],
++     SET status = N'PROCESSED',
++         processed_at = SYSUTCDATETIME(),
++         updated_at = SYSUTCDATETIME(),
++         error_code = NULL,
++         error_message = NULL
++         ${responseSql}
++     OUTPUT INSERTED.id
++     WHERE id = $1
++       AND status = N'PROCESSING'
++       AND attempts = $2`,
++    params,
+   );
++  return { owned: Boolean(rows[0]), replayStored: storeResponse };
+ }
+ 
+-export async function markWebhookFailed(id, { status, errorCode, errorMessage }) {
+-  await query(
++export async function markWebhookFailed(id, { status, errorCode, errorMessage, attempts }) {
++  const { rows } = await query(
+     `UPDATE dbo.provider_webhook_events
+-     SET status = $2, processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
+-         error_code = $3, error_message = $4
+-     WHERE id = $1`,
+-    [id, status, errorCode, errorMessage],
++     SET status = $2,
++         processed_at = SYSUTCDATETIME(),
++         updated_at = SYSUTCDATETIME(),
++         error_code = $3,
++         error_message = $4
++     OUTPUT INSERTED.id
++     WHERE id = $1
++       AND status = N'PROCESSING'
++       AND attempts = $5`,
++    [id, status, errorCode, errorMessage, Number(attempts)],
+   );
++  return { owned: Boolean(rows[0]) };
+ }
+ 
+ export async function listFailedWebhookEvents(limit = 50) {
+diff --git a/whatsapp-bot/src/monitoring/webhook-acquire.integration.test.js b/whatsapp-bot/src/monitoring/webhook-acquire.integration.test.js
+index 8af3741..983c4df 100644
+--- a/whatsapp-bot/src/monitoring/webhook-acquire.integration.test.js
++++ b/whatsapp-bot/src/monitoring/webhook-acquire.integration.test.js
+@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
+ import { randomUUID } from 'crypto';
+ import '../config.js';
+ import { isConversationDbEnabled, pingDatabase, query } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
+ import conversationRepository from '../repositories/conversation.repository.js';
+ import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+ import { resetActivityForTests } from './activity-store.js';
+@@ -10,13 +11,16 @@ import monitoringService from './monitoring.service.js';
+ import { beginInboundEvent } from './webhook-events.service.js';
+ 
+ async function dbUnavailable() {
+-  if (!isConversationDbEnabled()) return true;
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
++  if (!isConversationDbEnabled()) return 'Conversation DB disabled';
+   try {
+     const ping = await pingDatabase();
+-    return !ping.ok;
+-  } catch {
+-    return true;
++    if (!ping.ok) return 'Conversation DB unavailable';
++  } catch (error) {
++    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
+   }
++  return null;
+ }
+ 
+ async function deleteEvent(providerMessageId) {
+@@ -27,8 +31,9 @@ async function deleteEvent(providerMessageId) {
+ }
+ 
+ test('dos adquisiciones concurrentes del mismo MessageSid dejan un solo process', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const messageId = `SM-ACQ-${randomUUID()}`;
+@@ -53,8 +58,9 @@ test('dos adquisiciones concurrentes del mismo MessageSid dejan un solo process'
+ });
+ 
+ test('PROCESSING reciente no se vuelve a adquirir', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const messageId = `SM-PROC-${randomUUID()}`;
+@@ -76,8 +82,9 @@ test('PROCESSING reciente no se vuelve a adquirir', async (t) => {
+ });
+ 
+ test('FAILED bajo el maximo lo adquiere un solo worker', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const messageId = `SM-FAIL-${randomUUID()}`;
+@@ -106,8 +113,9 @@ test('FAILED bajo el maximo lo adquiere un solo worker', async (t) => {
+ });
+ 
+ test('FAILED en el maximo pasa a DEAD_LETTER y no procesa', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const messageId = `SM-DEAD-${randomUUID()}`;
+@@ -134,8 +142,9 @@ test('FAILED en el maximo pasa a DEAD_LETTER y no procesa', async (t) => {
+ });
+ 
+ test('PROCESSING stale se reclama de forma atomica', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const messageId = `SM-STALE-${randomUUID()}`;
+@@ -158,8 +167,9 @@ test('PROCESSING stale se reclama de forma atomica', async (t) => {
+ });
+ 
+ test('migracion 007 aplicada: tablas, indice unico, indice de actividad y constraints', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const tables = await query(
+@@ -212,8 +222,9 @@ test('migracion 007 aplicada: tablas, indice unico, indice de actividad y constr
+ });
+ 
+ test('health recupera last inbound desde DB con el store vacio', async (t) => {
+-  if (await dbUnavailable()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await dbUnavailable();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+   const conversation = await conversationRepository.createConversation({
+diff --git a/whatsapp-bot/src/monitoring/webhook-events.service.js b/whatsapp-bot/src/monitoring/webhook-events.service.js
+index 7d95548..3373540 100644
+--- a/whatsapp-bot/src/monitoring/webhook-events.service.js
++++ b/whatsapp-bot/src/monitoring/webhook-events.service.js
+@@ -1,8 +1,8 @@
+ import { config } from '../config.js';
+-import { sanitizeWebhookPayload } from './sanitize.js';
+ import * as repository from './monitoring.repository.js';
+ 
+ const MAX_ATTEMPTS_FALLBACK = 3;
++const MESSAGE_ID = /^[A-Za-z0-9_-]{1,128}$/;
+ 
+ function maxAttempts() {
+   const value = Number(config.webhookMaxProcessingAttempts);
+@@ -16,35 +16,80 @@ function staleBeforeDate() {
+ }
+ 
+ /**
+- * DB ownership is the only process decision when monitoring persistence works.
+- * The historical file dedupe is not consulted for a tracked event.
++ * Identificador que puede ser la clave única de provider_webhook_events.
++ * No se inventa uno cuando falta.
++ */
++export function isReliableProviderMessageId(value) {
++  return typeof value === 'string' && MESSAGE_ID.test(value);
++}
++
++function storedPayload(payload) {
++  if (!payload || typeof payload !== 'object') return null;
++  const stored = {};
++  if (payload.MessageSid) stored.MessageSid = String(payload.MessageSid).slice(0, 128);
++  if (payload.NumMedia != null && String(payload.NumMedia).trim() !== '') {
++    stored.NumMedia = String(payload.NumMedia).slice(0, 8);
++  }
++  return stored;
++}
++
++export function logInbound(event, fields = {}) {
++  console.log(JSON.stringify({
++    event,
++    provider: fields.provider || null,
++    messageId: fields.messageId || null,
++    flowId: fields.flowId || null,
++    reason: fields.reason || null,
++    attempts: fields.attempts ?? null,
++    httpStatus: fields.httpStatus ?? null,
++  }));
++}
++
++function gateFrom(result, event) {
++  return {
++    action: result.acquired ? 'process' : 'skip',
++    reason: result.reason,
++    tracked: true,
++    id: result.row?.id || null,
++    attempts: result.row?.attempts || 0,
++    responseBody: result.row?.responseBody ?? null,
++    provider: event?.provider || 'twilio',
++    messageId: event?.messageId || null,
++    flowId: event?.flowId || null,
++  };
++}
++
++/**
++ * Adquiere el inbound en SQL. No consulta MONITORING_ENABLED ni el archivo local.
++ * Un SID ausente o inválido se rechaza sin insertar una fila.
+  *
+- * @param {{ event: { provider?: string, messageId?: string }, payload: object }} input
++ * @param {{ event: { provider?: string, messageId?: string, flowId?: string }, payload?: object }} input
+  * @param {typeof repository} [repo]
+  */
+ export async function beginInboundEvent(input, repo = repository) {
+-  const provider = input.event?.provider || 'twilio';
+-  const providerMessageId = input.event?.messageId || null;
+-  const payloadJson = JSON.stringify(sanitizeWebhookPayload(input.payload));
++  const event = input.event || {};
++  const provider = event.provider || 'twilio';
++  const providerMessageId = typeof event.messageId === 'string' ? event.messageId.trim() : '';
++  const base = {
++    provider,
++    messageId: providerMessageId || null,
++    flowId: event.flowId || null,
++  };
+ 
+-  if (!providerMessageId) {
+-    const inserted = await repo.insertWebhookEvent({
+-      provider,
+-      eventType: 'inbound',
+-      providerMessageId: null,
+-      status: 'PROCESSING',
+-      attempts: 1,
+-      payloadJson,
+-    });
++  if (!isReliableProviderMessageId(providerMessageId)) {
++    logInbound('inbound_acquire_error', { ...base, reason: 'unidentified' });
+     return {
+-      action: 'process',
+-      reason: 'acquired',
+-      tracked: Boolean(inserted.row?.id),
+-      id: inserted.row?.id || null,
+-      attempts: inserted.row?.attempts || 1,
++      action: 'reject',
++      reason: 'unidentified',
++      tracked: false,
++      id: null,
++      attempts: 0,
++      responseBody: null,
++      ...base,
+     };
+   }
+ 
++  const payloadJson = JSON.stringify(storedPayload(input.payload));
+   const result = await repo.acquireInboundProcessing({
+     provider,
+     eventType: 'inbound',
+@@ -53,25 +98,53 @@ export async function beginInboundEvent(input, repo = repository) {
+     maxAttempts: maxAttempts(),
+     staleBefore: staleBeforeDate(),
+   });
+-  return {
+-    action: result.acquired ? 'process' : 'skip',
+-    reason: result.reason,
+-    tracked: true,
+-    id: result.row?.id || null,
+-    attempts: result.row?.attempts || 0,
+-  };
++  const gate = gateFrom(result, { ...event, provider, messageId: providerMessageId });
++  if (gate.action === 'process' && gate.reason === 'reclaimed') {
++    logInbound('inbound_reclaimed', gate);
++  } else if (gate.action === 'process') {
++    logInbound('inbound_acquired', gate);
++  } else if (gate.reason === 'processed') {
++    logInbound('inbound_duplicate_completed', gate);
++  } else if (gate.reason === 'in_flight') {
++    logInbound('inbound_already_processing', gate);
++  } else {
++    logInbound('inbound_failed', gate);
++  }
++  return gate;
+ }
+ 
+-export async function finishInboundEvent(gate, error, repo = repository) {
+-  if (!gate?.tracked || !gate.id) return;
++/**
++ * Cierra el lease. El tercer argumento sigue siendo el repositorio para los
++ * tests existentes. responseBody es el TwiML que un retry puede reproducir.
++ * El estado persistido de un turno terminado es PROCESSED, no un nombre nuevo.
++ */
++export async function finishInboundEvent(gate, error, repo = repository, responseBody = null) {
++  if (!gate?.tracked || !gate.id) return { owned: false, replayStored: false };
+   if (!error) {
+-    await repo.markWebhookProcessed(gate.id);
+-    return;
++    const result = await repo.markWebhookProcessed(gate.id, {
++      attempts: gate.attempts,
++      responseBody,
++    });
++    if (result?.owned !== false) {
++      logInbound('inbound_completed', gate);
++    } else {
++      logInbound('inbound_failed', { ...gate, reason: 'lease_lost' });
++    }
++    return {
++      owned: result?.owned !== false,
++      replayStored: Boolean(result?.replayStored),
++    };
+   }
+   const attempts = Number(gate.attempts || 1);
+-  await repo.markWebhookFailed(gate.id, {
++  const failed = await repo.markWebhookFailed(gate.id, {
+     status: attempts >= maxAttempts() ? 'DEAD_LETTER' : 'FAILED',
+     errorCode: error.code ? String(error.code).slice(0, 64) : null,
+     errorMessage: String(error.message || error).slice(0, 400),
++    attempts,
++  });
++  logInbound('inbound_failed', {
++    ...gate,
++    reason: failed?.owned === false ? 'lease_lost' : 'processing_error',
+   });
++  return { owned: failed?.owned !== false, replayStored: false };
+ }
+diff --git a/whatsapp-bot/src/monitoring/webhook-events.service.test.js b/whatsapp-bot/src/monitoring/webhook-events.service.test.js
+index 76af3e9..e81db60 100644
+--- a/whatsapp-bot/src/monitoring/webhook-events.service.test.js
++++ b/whatsapp-bot/src/monitoring/webhook-events.service.test.js
+@@ -41,10 +41,11 @@ function createRepo() {
+       const canFail = match.status === 'FAILED' && match.attempts < input.maxAttempts;
+       const canStale = stale && match.attempts < input.maxAttempts;
+       if (canReceive || canFail || canStale) {
++        const reason = canStale ? 'reclaimed' : (canFail ? 'retry' : 'acquired');
+         if (!canReceive) match.attempts += 1;
+         match.status = 'PROCESSING';
+         match.updatedAt = now;
+-        return { acquired: true, row: { ...match }, reason: 'acquired' };
++        return { acquired: true, row: { ...match }, reason };
+       }
+       const exhausted = match.attempts >= input.maxAttempts && (
+         match.status === 'FAILED' || match.status === 'RECEIVED' || stale
+@@ -60,18 +61,29 @@ function createRepo() {
+       else if (match.status === 'DEAD_LETTER') reason = 'dead_letter';
+       return { acquired: false, row: { ...match }, reason };
+     },
+-    async markWebhookProcessed(id) {
++    async markWebhookProcessed(id, options = {}) {
+       const row = rows.get(id);
++      if (!row || row.status !== 'PROCESSING') return { owned: false, replayStored: false };
++      if (options.attempts != null && Number(row.attempts) !== Number(options.attempts)) {
++        return { owned: false, replayStored: false };
++      }
+       row.status = 'PROCESSED';
++      row.responseBody = options.responseBody ?? null;
+       row.processedAt = new Date().toISOString();
+       row.updatedAt = row.processedAt;
++      return { owned: true, replayStored: true };
+     },
+     async markWebhookFailed(id, patch) {
+       const row = rows.get(id);
++      if (!row || row.status !== 'PROCESSING') return { owned: false };
++      if (patch.attempts != null && Number(row.attempts) !== Number(patch.attempts)) {
++        return { owned: false };
++      }
+       row.status = patch.status;
+       row.errorCode = patch.errorCode;
+       row.errorMessage = patch.errorMessage;
+       row.updatedAt = new Date().toISOString();
++      return { owned: true };
+     },
+   };
+ }
+@@ -139,6 +151,26 @@ test('fallo de procesamiento marca FAILED y el tercer intento queda DEAD_LETTER'
+   assert.equal(fourth.reason, 'dead_letter');
+ });
+ 
++test('el worker anterior no cierra un evento ya reclamado', async () => {
++  const repo = createRepo();
++  const first = await beginInboundEvent({ event, payload: { MessageSid: 'SM100' } }, repo);
++  repo.rows.get(first.id).updatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
++  const second = await beginInboundEvent({ event, payload: { MessageSid: 'SM100' } }, repo);
++  assert.equal(second.reason, 'reclaimed');
++  assert.equal(second.attempts, 2);
++  const staleFinish = await finishInboundEvent(first, null, repo, '<Response>viejo</Response>');
++  assert.equal(staleFinish.owned, false);
++  assert.equal(repo.rows.get(first.id).status, 'PROCESSING');
++  const ownedFinish = await finishInboundEvent(second, null, repo, '<Response>nuevo</Response>');
++  assert.equal(ownedFinish.owned, true);
++  assert.equal(repo.rows.get(first.id).status, 'PROCESSED');
++  assert.equal(repo.rows.get(first.id).responseBody, '<Response>nuevo</Response>');
++  const replay = await beginInboundEvent({ event, payload: { MessageSid: 'SM100', Body: 'otro' } }, repo);
++  assert.equal(replay.action, 'skip');
++  assert.equal(replay.reason, 'processed');
++  assert.equal(replay.responseBody, '<Response>nuevo</Response>');
++});
++
+ test('FAILED en el maximo de intentos queda DEAD_LETTER y no procesa', async () => {
+   const repo = createRepo();
+   repo.rows.set('id-x', {
+diff --git a/whatsapp-bot/src/services/conversation-bot-lifecycle.integration.test.js b/whatsapp-bot/src/services/conversation-bot-lifecycle.integration.test.js
+index 7a149f5..b04fe48 100644
+--- a/whatsapp-bot/src/services/conversation-bot-lifecycle.integration.test.js
++++ b/whatsapp-bot/src/services/conversation-bot-lifecycle.integration.test.js
+@@ -1,6 +1,7 @@
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
+ import conversationRepository from '../repositories/conversation.repository.js';
+ import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+ import humanHandoffRepository from '../repositories/human-handoff.repository.js';
+@@ -14,9 +15,16 @@ import { WELCOME_NODE_ID } from '../constants/contact-email-flow.js';
+ const integrationEnabled = isConversationDbEnabled();
+ 
+ async function skipIfNoDb() {
+-  if (!integrationEnabled) return true;
+-  const ping = await pingDatabase();
+-  return !ping.ok;
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
++  if (!integrationEnabled) return 'Conversation DB disabled';
++  try {
++    const ping = await pingDatabase();
++    if (!ping.ok) return 'Conversation DB unavailable';
++  } catch (error) {
++    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
++  }
++  return null;
+ }
+ 
+ async function createFixture() {
+@@ -60,8 +68,9 @@ async function cleanupFixture(conversationId) {
+ }
+ 
+ test('integration: returnConversationToBot deja estado coherente', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -90,8 +99,9 @@ test('integration: returnConversationToBot deja estado coherente', async (t) =>
+ });
+ 
+ test('integration: rollback mantiene handoff activo si falla antes del commit', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -120,8 +130,9 @@ test('integration: rollback mantiene handoff activo si falla antes del commit',
+ });
+ 
+ test('integration: ensurePendingHandoff concurrente crea un solo handoff activo', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -157,8 +168,9 @@ test('integration: ensurePendingHandoff concurrente crea un solo handoff activo'
+ });
+ 
+ test('integration: double close es idempotente', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -183,8 +195,9 @@ test('integration: double close es idempotente', async (t) => {
+ });
+ 
+ test('integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene coherencia', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -240,8 +253,9 @@ test('integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene c
+ });
+ 
+ test('integration: requestHumanHandoff hace rollback completo si falla antes del commit', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -303,8 +317,9 @@ test('integration: requestHumanHandoff hace rollback completo si falla antes del
+ });
+ 
+ test('integration: estado inconsistente bot + handoff pending no normaliza', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+@@ -345,8 +360,9 @@ test('integration: estado inconsistente bot + handoff pending no normaliza', asy
+ });
+ 
+ test('integration: reopen assigned preserva assignedAgentId', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('Conversation DB unavailable');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+diff --git a/whatsapp-bot/src/services/conversation-reentry.integration.test.js b/whatsapp-bot/src/services/conversation-reentry.integration.test.js
+index 3fd8037..751e706 100644
+--- a/whatsapp-bot/src/services/conversation-reentry.integration.test.js
++++ b/whatsapp-bot/src/services/conversation-reentry.integration.test.js
+@@ -1,6 +1,7 @@
+ import test, { after } from 'node:test';
+ import assert from 'node:assert/strict';
+ import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
+ import conversationRepository from '../repositories/conversation.repository.js';
+ import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+ import humanHandoffRepository from '../repositories/human-handoff.repository.js';
+@@ -15,6 +16,8 @@ import { ConversationReentryService, REENTRY_PROMPT } from './conversation-reent
+ const integrationEnabled = isConversationDbEnabled();
+ 
+ async function skipReason() {
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
+   if (!integrationEnabled) return 'Conversation DB disabled';
+   try {
+     const ping = await pingDatabase();
+diff --git a/whatsapp-bot/src/services/conversation-reentry.service.test.js b/whatsapp-bot/src/services/conversation-reentry.service.test.js
+index ef74f20..05d8d74 100644
+--- a/whatsapp-bot/src/services/conversation-reentry.service.test.js
++++ b/whatsapp-bot/src/services/conversation-reentry.service.test.js
+@@ -9,7 +9,8 @@ import conversationService from './conversation.service.js';
+ import conversationReentryService, { REENTRY_PROMPT } from './conversation-reentry.service.js';
+ import humanHandoffRepository from '../repositories/human-handoff.repository.js';
+ import sessionService from './session.service.js';
+-import webhookDedupe from './webhook-dedupe.service.js';
++import { settleTwilioInbound } from '../controllers/twilio-webhook.controller.js';
++import { beginInboundEvent, finishInboundEvent } from '../monitoring/webhook-events.service.js';
+ import {
+   classifyReentryInput,
+   hasFlowProgressAfterReturn,
+@@ -492,22 +493,61 @@ test('dos webhooks simultáneos dejan una sola transición a awaiting_choice', a
+ test('reentrega del mismo MessageSid no vuelve a consumir la reentrada', async () => {
+   const world = createWorld({ id: `case-${Date.now()}` });
+   await closeHumanCase(world);
+-  const messageId = `SM-reentry-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
++  const messageId = `SMreentry${Date.now()}`;
+   let consumes = 0;
++  const rows = new Map();
++  const repo = {
++    async acquireInboundProcessing(input) {
++      const match = [...rows.values()].find((row) => row.providerMessageId === input.providerMessageId);
++      if (!match) {
++        const stored = {
++          id: 'reentry-gate',
++          status: 'PROCESSING',
++          attempts: 1,
++          providerMessageId: input.providerMessageId,
++          responseBody: null,
++        };
++        rows.set(stored.id, stored);
++        return { acquired: true, row: { ...stored }, reason: 'acquired' };
++      }
++      return {
++        acquired: false,
++        row: { ...match },
++        reason: match.status === 'PROCESSED' ? 'processed' : 'in_flight',
++      };
++    },
++    async markWebhookProcessed(id, options = {}) {
++      const row = rows.get(id);
++      if (!row || Number(row.attempts) !== Number(options.attempts)) return { owned: false };
++      row.status = 'PROCESSED';
++      row.responseBody = options.responseBody ?? null;
++      return { owned: true, replayStored: true };
++    },
++    async markWebhookFailed() {
++      return { owned: true };
++    },
++  };
+ 
+   async function deliver() {
+-    const key = webhookDedupe.buildProviderMessageKey('twilio', messageId);
+-    if (await webhookDedupe.isDuplicate(key)) return { duplicate: true };
+-    await webhookDedupe.markProcessed(key);
+-    consumes += 1;
+-    return world.reentry.consumeInbound(world.conversation, FREE_TEXT);
++    return settleTwilioInbound({
++      flowId: 'main-menu',
++      body: { MessageSid: messageId, Body: FREE_TEXT, From: 'whatsapp:+5491100000099' },
++      begin: (input) => beginInboundEvent(input, repo),
++      finish: (gate, error, responseBody) => finishInboundEvent(gate, error, repo, responseBody),
++      processInbound: async () => {
++        consumes += 1;
++        const result = await world.reentry.consumeInbound(world.conversation, FREE_TEXT);
++        return { kind: 'reentry', reply: result.reply, replyAuthorized: true };
++      },
++    });
+   }
+ 
+   const first = await deliver();
+   const second = await deliver();
+-  assert.equal(first.duplicate, undefined);
+-  assert.equal(first.action, 'prompt');
+-  assert.equal(second.duplicate, true);
++  assert.equal(first.httpStatus, 200);
++  assert.match(first.twiml, /consulta/);
++  assert.equal(second.httpStatus, 200);
++  assert.equal(second.twiml, first.twiml);
+   assert.equal(consumes, 1);
+   assert.equal(world.conversation.reentryJson.status, 'awaiting_choice');
+ });
+diff --git a/whatsapp-bot/src/services/conversationRetention.integration.test.js b/whatsapp-bot/src/services/conversationRetention.integration.test.js
+index f55f75c..2034df1 100644
+--- a/whatsapp-bot/src/services/conversationRetention.integration.test.js
++++ b/whatsapp-bot/src/services/conversationRetention.integration.test.js
+@@ -2,6 +2,7 @@ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import '../config.js';
+ import { isConversationDbEnabled, pingDatabase, query } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
+ import conversationRepository from '../repositories/conversation.repository.js';
+ import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+ import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+@@ -13,13 +14,16 @@ import auditLogService from './audit-log.service.js';
+ const integrationEnabled = isConversationDbEnabled();
+ 
+ async function skipIfNoDb() {
+-  if (!integrationEnabled) return true;
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
++  if (!integrationEnabled) return 'Conversation DB disabled';
+   try {
+     const ping = await pingDatabase();
+-    return !ping.ok;
+-  } catch {
+-    return true;
++    if (!ping.ok) return 'Conversation DB unavailable';
++  } catch (error) {
++    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
+   }
++  return null;
+ }
+ 
+ async function createAgedConversation({ suffix, lastMessageAt, withDeps = false }) {
+@@ -115,8 +119,9 @@ async function countByConversation(conversationId) {
+ }
+ 
+ test('schema real: índice last_message_at y cascades de retención', async (t) => {
+-  if (await skipIfNoDb()) {
+-    t.skip('SQL Server no disponible');
++  const reason = await skipIfNoDb();
++  if (reason) {
++    t.skip(reason);
+     return;
+   }
+ 
+
+===== UNTRACKED: whatsapp-bot/migrations/010_webhook_response_body.sql =====
+diff --git a/whatsapp-bot/migrations/010_webhook_response_body.sql b/whatsapp-bot/migrations/010_webhook_response_body.sql
+new file mode 100644
+index 0000000..ec6eb65
+--- /dev/null
++++ b/whatsapp-bot/migrations/010_webhook_response_body.sql
+@@ -0,0 +1,11 @@
++-- Replay del TwiML ya comprometido para un inbound PROCESSED.
++-- No es la autoridad de idempotencia: esa sigue siendo el estado y el attempts.
++-- Sin esta columna el retry de un evento PROCESSED responde TwiML vacío.
++-- Rollback: no dropear la columna. El código anterior la ignora.
++
++IF COL_LENGTH(N'dbo.provider_webhook_events', N'response_body') IS NULL
++BEGIN
++  ALTER TABLE dbo.provider_webhook_events
++    ADD response_body NVARCHAR(MAX) NULL;
++END;
++GO
+
+===== UNTRACKED: whatsapp-bot/src/db/isolated-test-database.js =====
+diff --git a/whatsapp-bot/src/db/isolated-test-database.js b/whatsapp-bot/src/db/isolated-test-database.js
+new file mode 100644
+index 0000000..656f6ac
+--- /dev/null
++++ b/whatsapp-bot/src/db/isolated-test-database.js
+@@ -0,0 +1,13 @@
++/**
++ * Las pruebas que escriben SQL solo corren contra una base local cuyo nombre
++ * contiene "test". tea-bot y cualquier servidor remoto quedan fuera.
++ */
++export function isolatedTestDatabaseReason() {
++  const name = String(process.env.DB_NAME || '').toLowerCase();
++  const server = String(process.env.DB_SERVER || '').toLowerCase();
++  const local = server === 'localhost' || server === '127.0.0.1' || server === 'sqlserver';
++  if (!local || !name.includes('test')) {
++    return 'SQL TEST aislado no configurado (DB_SERVER local y DB_NAME con "test")';
++  }
++  return null;
++}
+
+===== UNTRACKED: whatsapp-bot/src/controllers/twilio-webhook.controller.test.js =====
+diff --git a/whatsapp-bot/src/controllers/twilio-webhook.controller.test.js b/whatsapp-bot/src/controllers/twilio-webhook.controller.test.js
+new file mode 100644
+index 0000000..c1fa6e0
+--- /dev/null
++++ b/whatsapp-bot/src/controllers/twilio-webhook.controller.test.js
+@@ -0,0 +1,348 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import fs from 'fs';
++import { config } from '../config.js';
++import { settleTwilioInbound } from './twilio-webhook.controller.js';
++import { beginInboundEvent, finishInboundEvent } from '../monitoring/webhook-events.service.js';
++import { buildTwimlMessage } from '../adapters/twilio/twilio-outbound.adapter.js';
++
++function createRepo() {
++  const rows = new Map();
++  let seq = 0;
++  return {
++    rows,
++    async acquireInboundProcessing(input) {
++      const now = new Date().toISOString();
++      const match = [...rows.values()].find((row) => (
++        row.provider === input.provider
++        && row.eventType === input.eventType
++        && row.providerMessageId === input.providerMessageId
++      ));
++      if (!match) {
++        seq += 1;
++        const stored = {
++          id: `id-${seq}`,
++          provider: input.provider,
++          eventType: input.eventType,
++          providerMessageId: input.providerMessageId,
++          status: 'PROCESSING',
++          attempts: 1,
++          updatedAt: now,
++          responseBody: null,
++        };
++        rows.set(stored.id, stored);
++        return { acquired: true, row: { ...stored }, reason: 'acquired' };
++      }
++      const stale = match.status === 'PROCESSING'
++        && new Date(match.updatedAt).getTime() < new Date(input.staleBefore).getTime();
++      const canFail = match.status === 'FAILED' && match.attempts < input.maxAttempts;
++      const canStale = stale && match.attempts < input.maxAttempts;
++      if (canFail || canStale) {
++        match.attempts += 1;
++        match.status = 'PROCESSING';
++        match.updatedAt = now;
++        return {
++          acquired: true,
++          row: { ...match },
++          reason: canStale ? 'reclaimed' : 'retry',
++        };
++      }
++      let reason = 'in_flight';
++      if (match.status === 'PROCESSED') reason = 'processed';
++      else if (match.status === 'DEAD_LETTER') reason = 'dead_letter';
++      return { acquired: false, row: { ...match }, reason };
++    },
++    async markWebhookProcessed(id, options = {}) {
++      const row = rows.get(id);
++      if (!row || row.status !== 'PROCESSING') return { owned: false, replayStored: false };
++      if (Number(row.attempts) !== Number(options.attempts)) return { owned: false, replayStored: false };
++      row.status = 'PROCESSED';
++      row.responseBody = options.responseBody ?? null;
++      return { owned: true, replayStored: true };
++    },
++    async markWebhookFailed(id, patch) {
++      const row = rows.get(id);
++      if (!row || row.status !== 'PROCESSING') return { owned: false };
++      if (Number(row.attempts) !== Number(patch.attempts)) return { owned: false };
++      row.status = patch.status;
++      row.errorMessage = patch.errorMessage;
++      return { owned: true };
++    },
++  };
++}
++
++function harness(repo, processInbound) {
++  return {
++    begin: (input) => beginInboundEvent(input, repo),
++    finish: (gate, error, responseBody) => finishInboundEvent(gate, error, repo, responseBody),
++    processInbound,
++  };
++}
++
++function body(messageId, text = 'hola') {
++  return {
++    MessageSid: messageId,
++    Body: text,
++    From: 'whatsapp:+5491100001111',
++    NumMedia: '0',
++  };
++}
++
++test('T07 el mismo MessageSid tiene un solo turno y el retry reproduce el TwiML', async () => {
++  const repo = createRepo();
++  let turns = 0;
++  const deps = harness(repo, async () => {
++    turns += 1;
++    return { kind: 'bot', reply: 'Menú principal', replyAuthorized: true };
++  });
++  const first = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM100'),
++    ...deps,
++  });
++  const second = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM100', 'otro texto'),
++    ...deps,
++  });
++  assert.equal(first.httpStatus, 200);
++  assert.equal(second.httpStatus, 200);
++  assert.equal(turns, 1);
++  assert.equal(second.twiml, first.twiml);
++  assert.equal(second.twiml, buildTwimlMessage('Menú principal'));
++  assert.equal(repo.rows.size, 1);
++  assert.equal([...repo.rows.values()][0].status, 'PROCESSED');
++});
++
++test('T08 un fallo no queda PROCESSED y el reintento puede completar', async () => {
++  const repo = createRepo();
++  let turns = 0;
++  const deps = harness(repo, async () => {
++    turns += 1;
++    if (turns === 1) throw new Error('db down');
++    return { kind: 'bot', reply: 'recuperado', replyAuthorized: true };
++  });
++  const failed = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-FAIL'),
++    ...deps,
++  });
++  assert.equal(failed.httpStatus, 503);
++  assert.equal([...repo.rows.values()][0].status, 'FAILED');
++  const recovered = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-FAIL'),
++    ...deps,
++  });
++  assert.equal(recovered.httpStatus, 200);
++  assert.match(recovered.twiml, /recuperado/);
++  assert.equal([...repo.rows.values()][0].status, 'PROCESSED');
++  assert.equal(turns, 2);
++});
++
++test('T09 la idempotencia no depende de MONITORING_ENABLED', async () => {
++  const previous = config.monitoringEnabled;
++  try {
++    for (const enabled of [false, true]) {
++      config.monitoringEnabled = enabled;
++      const repo = createRepo();
++      let turns = 0;
++      const deps = harness(repo, async () => {
++        turns += 1;
++        return { kind: 'bot', reply: 'uno', replyAuthorized: true };
++      });
++      await settleTwilioInbound({ flowId: 'main-menu', body: body(`SM-FLAG-${enabled}`), ...deps });
++      await settleTwilioInbound({ flowId: 'main-menu', body: body(`SM-FLAG-${enabled}`), ...deps });
++      assert.equal(turns, 1);
++      assert.equal([...repo.rows.values()][0].status, 'PROCESSED');
++    }
++  } finally {
++    config.monitoringEnabled = previous;
++  }
++});
++
++test('T11 el dueño anterior no pisa el TwiML del worker que reclamó', async () => {
++  const repo = createRepo();
++  const deps = harness(repo, async () => ({ kind: 'bot', reply: 'nuevo', replyAuthorized: true }));
++  const firstGate = await beginInboundEvent({
++    event: { provider: 'twilio', messageId: 'SM-LEASE', flowId: 'main-menu' },
++    payload: body('SM-LEASE'),
++  }, repo);
++  repo.rows.get(firstGate.id).updatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
++  const settled = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-LEASE'),
++    ...deps,
++  });
++  assert.equal(settled.httpStatus, 200);
++  const late = await finishInboundEvent(firstGate, null, repo, buildTwimlMessage('viejo'));
++  assert.equal(late.owned, false);
++  assert.match([...repo.rows.values()][0].responseBody, /nuevo/);
++  assert.doesNotMatch([...repo.rows.values()][0].responseBody, /viejo/);
++});
++
++test('T12 si SQL no adquiere, no hay turno ni archivo de dedupe', async () => {
++  let turns = 0;
++  const result = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-DOWN'),
++    begin: async () => {
++      throw new Error('pool unavailable');
++    },
++    processInbound: async () => {
++      turns += 1;
++      return { kind: 'bot', reply: 'no', replyAuthorized: true };
++    },
++  });
++  assert.equal(result.httpStatus, 503);
++  assert.equal(turns, 0);
++  assert.match(result.twiml, /<Response><\/Response>/);
++});
++
++test('T13 el retry después de un HTTP perdido reproduce el TwiML sin otro turno', async () => {
++  const repo = createRepo();
++  let turns = 0;
++  const deps = harness(repo, async () => {
++    turns += 1;
++    return { kind: 'reentry', reply: '¿Seguimos con esta consulta?', replyAuthorized: true };
++  });
++  const first = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-REPLAY', 'texto libre'),
++    ...deps,
++  });
++  const retry = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-REPLAY', 'texto libre'),
++    ...deps,
++  });
++  assert.equal(first.httpStatus, 200);
++  assert.equal(retry.httpStatus, 200);
++  assert.equal(retry.twiml, first.twiml);
++  assert.match(retry.twiml, /Seguimos/);
++  assert.equal(turns, 1);
++});
++
++test('T14 un retry del primer mensaje de reentrada no vuelve a consumir la elección', async () => {
++  const repo = createRepo();
++  let consumes = 0;
++  let status = 'pending';
++  const deps = harness(repo, async () => {
++    consumes += 1;
++    status = 'awaiting_choice';
++    return { kind: 'reentry', reply: 'prompt de reentrada', replyAuthorized: true };
++  });
++  await settleTwilioInbound({ flowId: 'main-menu', body: body('SM-REENTRY', 'quiero seguir'), ...deps });
++  await settleTwilioInbound({ flowId: 'main-menu', body: body('SM-REENTRY', 'quiero seguir'), ...deps });
++  assert.equal(consumes, 1);
++  assert.equal(status, 'awaiting_choice');
++});
++
++test('T15 una toma que suprime el turno no se reactiva en el retry', async () => {
++  const repo = createRepo();
++  let turns = 0;
++  const deps = harness(repo, async () => {
++    turns += 1;
++    return { kind: 'human_mode_skip', reply: null, replyAuthorized: false, conversation: { status: 'assigned' } };
++  });
++  const first = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-TAKE'),
++    ...deps,
++  });
++  const second = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-TAKE'),
++    ...deps,
++  });
++  assert.equal(first.httpStatus, 200);
++  assert.match(first.twiml, /<Response><\/Response>/);
++  assert.equal(second.httpStatus, 200);
++  assert.equal(second.twiml, first.twiml);
++  assert.equal(turns, 1);
++});
++
++test('un PROCESSING vigente no confirma el webhook con 200', async () => {
++  const repo = createRepo();
++  await beginInboundEvent({
++    event: { provider: 'twilio', messageId: 'SM-BUSY', flowId: 'main-menu' },
++    payload: body('SM-BUSY'),
++  }, repo);
++  let turns = 0;
++  const result = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-BUSY'),
++    ...harness(repo, async () => {
++      turns += 1;
++      return { kind: 'bot', reply: 'tarde', replyAuthorized: true };
++    }),
++  });
++  assert.equal(result.httpStatus, 503);
++  assert.equal(turns, 0);
++  assert.equal([...repo.rows.values()][0].status, 'PROCESSING');
++});
++
++test('un MessageSid ausente no se procesa ni se inventa', async () => {
++  let turns = 0;
++  let began = 0;
++  const result = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: { Body: 'hola', From: 'whatsapp:+5491100001111' },
++    begin: async (input) => {
++      began += 1;
++      return beginInboundEvent(input, createRepo());
++    },
++    processInbound: async () => {
++      turns += 1;
++      return { kind: 'bot', reply: 'no', replyAuthorized: true };
++    },
++  });
++  assert.equal(began, 1);
++  assert.equal(result.httpStatus, 400);
++  assert.equal(turns, 0);
++});
++
++test('un handoff humano vacío no genera un mensaje de WhatsApp', async () => {
++  const repo = createRepo();
++  const result = await settleTwilioInbound({
++    flowId: 'main-menu',
++    body: body('SM-HAND'),
++    ...harness(repo, async () => ({
++      kind: 'human_handoff',
++      reply: 'Te derivamos',
++      shouldSendTwiml: false,
++      replyAuthorized: false,
++    })),
++  });
++  assert.equal(result.httpStatus, 200);
++  assert.match(result.twiml, /<Response><\/Response>/);
++  assert.doesNotMatch(result.twiml, /derivamos/);
++});
++
++test('el controlador no usa el dedupe local ni el flag de monitoreo', () => {
++  const source = fs.readFileSync(new URL('./twilio-webhook.controller.js', import.meta.url), 'utf8');
++  assert.equal(source.includes('webhookDedupe'), false);
++  assert.equal(source.includes('monitoringEnabled'), false);
++  assert.equal(source.includes('Twilio From'), false);
++  assert.equal(source.includes('Normalized phone'), false);
++});
++
++test('el cierre SQL solo lo puede hacer el attempts dueño', () => {
++  const source = fs.readFileSync(
++    new URL('../monitoring/monitoring.repository.js', import.meta.url),
++    'utf8',
++  );
++  assert.match(source, /AND status = N'PROCESSING'\s+AND attempts = \$2/);
++  assert.match(source, /AND status = N'PROCESSING'\s+AND attempts = \$5/);
++  assert.match(source, /DELETED\.status AS previous_status/);
++});
++
++test('la migracion 010 solo agrega response_body', () => {
++  const sql = fs.readFileSync(
++    new URL('../../migrations/010_webhook_response_body.sql', import.meta.url),
++    'utf8',
++  );
++  assert.match(sql, /response_body NVARCHAR\(MAX\) NULL/);
++  assert.equal(sql.includes('DROP '), false);
++  assert.equal(sql.includes('007_monitoring'), false);
++});

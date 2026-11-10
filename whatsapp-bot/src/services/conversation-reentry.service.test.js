@@ -9,7 +9,8 @@ import conversationService from './conversation.service.js';
 import conversationReentryService, { REENTRY_PROMPT } from './conversation-reentry.service.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import sessionService from './session.service.js';
-import webhookDedupe from './webhook-dedupe.service.js';
+import { settleTwilioInbound } from '../controllers/twilio-webhook.controller.js';
+import { beginInboundEvent, finishInboundEvent } from '../monitoring/webhook-events.service.js';
 import {
   classifyReentryInput,
   hasFlowProgressAfterReturn,
@@ -492,22 +493,61 @@ test('dos webhooks simultáneos dejan una sola transición a awaiting_choice', a
 test('reentrega del mismo MessageSid no vuelve a consumir la reentrada', async () => {
   const world = createWorld({ id: `case-${Date.now()}` });
   await closeHumanCase(world);
-  const messageId = `SM-reentry-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+  const messageId = `SMreentry${Date.now()}`;
   let consumes = 0;
+  const rows = new Map();
+  const repo = {
+    async acquireInboundProcessing(input) {
+      const match = [...rows.values()].find((row) => row.providerMessageId === input.providerMessageId);
+      if (!match) {
+        const stored = {
+          id: 'reentry-gate',
+          status: 'PROCESSING',
+          attempts: 1,
+          providerMessageId: input.providerMessageId,
+          responseBody: null,
+        };
+        rows.set(stored.id, stored);
+        return { acquired: true, row: { ...stored }, reason: 'acquired' };
+      }
+      return {
+        acquired: false,
+        row: { ...match },
+        reason: match.status === 'PROCESSED' ? 'processed' : 'in_flight',
+      };
+    },
+    async markWebhookProcessed(id, options = {}) {
+      const row = rows.get(id);
+      if (!row || Number(row.attempts) !== Number(options.attempts)) return { owned: false };
+      row.status = 'PROCESSED';
+      row.responseBody = options.responseBody ?? null;
+      return { owned: true, replayStored: true };
+    },
+    async markWebhookFailed() {
+      return { owned: true };
+    },
+  };
 
   async function deliver() {
-    const key = webhookDedupe.buildProviderMessageKey('twilio', messageId);
-    if (await webhookDedupe.isDuplicate(key)) return { duplicate: true };
-    await webhookDedupe.markProcessed(key);
-    consumes += 1;
-    return world.reentry.consumeInbound(world.conversation, FREE_TEXT);
+    return settleTwilioInbound({
+      flowId: 'main-menu',
+      body: { MessageSid: messageId, Body: FREE_TEXT, From: 'whatsapp:+5491100000099' },
+      begin: (input) => beginInboundEvent(input, repo),
+      finish: (gate, error, responseBody) => finishInboundEvent(gate, error, repo, responseBody),
+      processInbound: async () => {
+        consumes += 1;
+        const result = await world.reentry.consumeInbound(world.conversation, FREE_TEXT);
+        return { kind: 'reentry', reply: result.reply, replyAuthorized: true };
+      },
+    });
   }
 
   const first = await deliver();
   const second = await deliver();
-  assert.equal(first.duplicate, undefined);
-  assert.equal(first.action, 'prompt');
-  assert.equal(second.duplicate, true);
+  assert.equal(first.httpStatus, 200);
+  assert.match(first.twiml, /consulta/);
+  assert.equal(second.httpStatus, 200);
+  assert.equal(second.twiml, first.twiml);
   assert.equal(consumes, 1);
   assert.equal(world.conversation.reentryJson.status, 'awaiting_choice');
 });

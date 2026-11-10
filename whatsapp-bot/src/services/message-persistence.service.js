@@ -1,3 +1,5 @@
+import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+import { twilioTurnOutboundId } from '../monitoring/webhook-events.service.js';
 import conversationService from './conversation.service.js';
 import humanHandoffService from './human-handoff.service.js';
 import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
@@ -31,6 +33,31 @@ class MessagePersistenceService {
   }
 
   /**
+   * Si el outbound de este MessageSid ya commiteó, el turno no se vuelve a ejecutar.
+   * El cuerpo guardado es la respuesta que se puede repetir. No es la entrega de WhatsApp.
+   */
+  async replayCommittedTurn(event) {
+    if (!this.isEnabled()) return null;
+    const providerMessageId = twilioTurnOutboundId(event?.messageId);
+    if (!providerMessageId) return null;
+    const message = await conversationMessageRepository.findByProviderMessageId('twilio', providerMessageId);
+    if (!message) return null;
+    const eventName = String(message.metadataJson?.event || '');
+    const reply = message.body || null;
+    const base = {
+      conversation: { id: message.conversationId },
+      result: null,
+      reply,
+      shouldSendTwiml: Boolean(reply),
+      replyAuthorized: true,
+      replayed: true,
+    };
+    if (eventName === 'human_handoff_requested') return { ...base, kind: 'human_handoff' };
+    if (eventName.startsWith('reentry_')) return { ...base, kind: 'reentry' };
+    return { ...base, kind: 'bot' };
+  }
+
+  /**
    * Antes del motor: conversación + mensaje inbound + sesión DB + hidratación opcional.
    * @returns {{ conversation: object, dbSession: object | null, skipFlowEngine?: boolean } | null}
    */
@@ -41,8 +68,11 @@ class MessagePersistenceService {
     let conversation = await conversationService.reloadConversation(initial);
 
     if (conversation.status === 'closed') {
-      conversation = await conversationService.reopenClosedConversationIfNeeded(conversation);
+      conversation = await conversationService.reopenClosedConversationIfNeeded(conversation, {
+        providerMessageId: event.messageId || null,
+      });
     }
+    const outboundId = twilioTurnOutboundId(event.messageId);
 
     if (isConversationInHumanMode(conversation)) {
       await conversationService.persistInboundMessage(
@@ -68,9 +98,11 @@ class MessagePersistenceService {
     await conversationService.persistInboundMessage(conversation, event);
     conversation = await conversationService.reloadConversation(conversation);
 
-    const reentry = await conversationReentryService.consumeInbound(conversation, event.text || '');
+    const reentry = await conversationReentryService.consumeInbound(conversation, event.text || '', {
+      providerMessageId: event.messageId || null,
+    });
     if (reentry?.action && reentry.action !== 'delegate') {
-      return this.finishReentry(reentry);
+      return this.finishReentry(reentry, null, { providerMessageId: outboundId });
     }
     if (reentry?.conversation) conversation = reentry.conversation;
 
@@ -98,7 +130,7 @@ class MessagePersistenceService {
    * Una sola respuesta. present_entry y legacy_cleared delegan la presentación al motor,
    * con la sesión en memoria ya reseteada para que el texto no se matchee.
    */
-  async finishReentry(reentry, statusVersionAtStart = null) {
+  async finishReentry(reentry, statusVersionAtStart = null, options = {}) {
     const conversation = reentry.conversation;
     if (reentry.action === 'human_skip') {
       return { conversation, dbSession: null, skipFlowEngine: true, decision: 'SUPPRESS' };
@@ -119,6 +151,7 @@ class MessagePersistenceService {
         event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
         handoffId: reentry.handoff?.id,
         handoff: reentry.handoff,
+        providerMessageId: options.providerMessageId || null,
       },
     );
     if (decision.decision === 'SUPPRESS') {
@@ -147,6 +180,7 @@ class MessagePersistenceService {
         event: reentry.action === 'handoff' ? 'human_handoff_requested' : `reentry_${reentry.action}`,
         handoffId: reentry.handoff?.id,
         handoff: reentry.handoff,
+        providerMessageId: options.providerMessageId || null,
       });
     }
 
@@ -159,16 +193,20 @@ class MessagePersistenceService {
     };
   }
 
-  async _authorizeBotReply(conversation, statusVersionAtStart, reply, context) {
+  async _authorizeBotReply(conversation, statusVersionAtStart, reply, context, alongside = null) {
     const decision = await conversationTurnGuard.authorizeAutomaticReply({
       conversation,
       statusVersionAtStart,
-      persist: async (transaction, locked) => conversationService.persistOutboundBotMessage(
-        locked,
-        reply,
-        context,
-        { transaction, deferNotify: true },
-      ),
+      persist: async (transaction, locked) => {
+        const message = await conversationService.persistOutboundBotMessage(
+          locked,
+          reply,
+          context,
+          { transaction, deferNotify: true },
+        );
+        if (alongside) await alongside(transaction, locked);
+        return message;
+      },
     });
     if (decision.decision === 'ALLOW' && decision.persisted) {
       await conversationService.publishPersistedOutbound(
@@ -204,24 +242,37 @@ class MessagePersistenceService {
       flowId: engineResult.flowId,
       flowVersion: memorySession?.flowVersion,
       nodeKey: engineResult.currentNodeId,
+      providerMessageId: twilioTurnOutboundId(event?.messageId),
     };
+    let synced = false;
     const decision = await this._authorizeBotReply(
       conversation,
       statusVersionAtStart ?? conversation.statusVersion ?? null,
       engineResult.reply,
       context,
+      async (transaction, locked) => {
+        await conversationService.syncSessionFromFlowEngine(
+          locked,
+          dbSession,
+          event.userId,
+          engineResult,
+          transaction,
+        );
+        synced = true;
+      },
     );
     if (decision.decision !== 'ALLOW') return decision;
     if (!decision.persisted) {
       await conversationService.persistOutboundBotMessage(conversation, engineResult.reply, context);
     }
-
-    await conversationService.syncSessionFromFlowEngine(
-      decision.conversation || conversation,
-      dbSession,
-      event.userId,
-      engineResult,
-    );
+    if (!synced) {
+      await conversationService.syncSessionFromFlowEngine(
+        decision.conversation || conversation,
+        dbSession,
+        event.userId,
+        engineResult,
+      );
+    }
     return { decision: 'ALLOW', reason: decision.reason };
   }
 
@@ -253,6 +304,7 @@ class MessagePersistenceService {
               flowVersion: memorySession?.flowVersion || conversation.currentFlowVersion,
               nodeKey: engineResult?.currentNodeId || conversation.currentNodeKey,
               event: 'human_handoff_requested',
+              providerMessageId: twilioTurnOutboundId(event?.messageId),
             },
             { transaction, deferNotify: true },
           );

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
+import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
@@ -14,9 +15,16 @@ import { WELCOME_NODE_ID } from '../constants/contact-email-flow.js';
 const integrationEnabled = isConversationDbEnabled();
 
 async function skipIfNoDb() {
-  if (!integrationEnabled) return true;
-  const ping = await pingDatabase();
-  return !ping.ok;
+  const isolated = isolatedTestDatabaseReason();
+  if (isolated) return isolated;
+  if (!integrationEnabled) return 'Conversation DB disabled';
+  try {
+    const ping = await pingDatabase();
+    if (!ping.ok) return 'Conversation DB unavailable';
+  } catch (error) {
+    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
+  }
+  return null;
 }
 
 async function createFixture() {
@@ -60,8 +68,9 @@ async function cleanupFixture(conversationId) {
 }
 
 test('integration: returnConversationToBot deja estado coherente', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -90,8 +99,9 @@ test('integration: returnConversationToBot deja estado coherente', async (t) => 
 });
 
 test('integration: rollback mantiene handoff activo si falla antes del commit', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -120,8 +130,9 @@ test('integration: rollback mantiene handoff activo si falla antes del commit', 
 });
 
 test('integration: ensurePendingHandoff concurrente crea un solo handoff activo', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -157,8 +168,9 @@ test('integration: ensurePendingHandoff concurrente crea un solo handoff activo'
 });
 
 test('integration: double close es idempotente', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -183,8 +195,9 @@ test('integration: double close es idempotente', async (t) => {
 });
 
 test('integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene coherencia', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -240,8 +253,9 @@ test('integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene c
 });
 
 test('integration: requestHumanHandoff hace rollback completo si falla antes del commit', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -303,8 +317,9 @@ test('integration: requestHumanHandoff hace rollback completo si falla antes del
 });
 
 test('integration: estado inconsistente bot + handoff pending no normaliza', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 
@@ -345,8 +360,9 @@ test('integration: estado inconsistente bot + handoff pending no normaliza', asy
 });
 
 test('integration: reopen assigned preserva assignedAgentId', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('Conversation DB unavailable');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 

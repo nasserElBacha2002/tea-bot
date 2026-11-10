@@ -41,10 +41,11 @@ function createRepo() {
       const canFail = match.status === 'FAILED' && match.attempts < input.maxAttempts;
       const canStale = stale && match.attempts < input.maxAttempts;
       if (canReceive || canFail || canStale) {
+        const reason = canStale ? 'reclaimed' : (canFail ? 'retry' : 'acquired');
         if (!canReceive) match.attempts += 1;
         match.status = 'PROCESSING';
         match.updatedAt = now;
-        return { acquired: true, row: { ...match }, reason: 'acquired' };
+        return { acquired: true, row: { ...match }, reason };
       }
       const exhausted = match.attempts >= input.maxAttempts && (
         match.status === 'FAILED' || match.status === 'RECEIVED' || stale
@@ -60,18 +61,29 @@ function createRepo() {
       else if (match.status === 'DEAD_LETTER') reason = 'dead_letter';
       return { acquired: false, row: { ...match }, reason };
     },
-    async markWebhookProcessed(id) {
+    async markWebhookProcessed(id, options = {}) {
       const row = rows.get(id);
+      if (!row || row.status !== 'PROCESSING') return { owned: false, replayStored: false };
+      if (options.attempts != null && Number(row.attempts) !== Number(options.attempts)) {
+        return { owned: false, replayStored: false };
+      }
       row.status = 'PROCESSED';
+      row.responseBody = options.responseBody ?? null;
       row.processedAt = new Date().toISOString();
       row.updatedAt = row.processedAt;
+      return { owned: true, replayStored: true };
     },
     async markWebhookFailed(id, patch) {
       const row = rows.get(id);
+      if (!row || row.status !== 'PROCESSING') return { owned: false };
+      if (patch.attempts != null && Number(row.attempts) !== Number(patch.attempts)) {
+        return { owned: false };
+      }
       row.status = patch.status;
       row.errorCode = patch.errorCode;
       row.errorMessage = patch.errorMessage;
       row.updatedAt = new Date().toISOString();
+      return { owned: true };
     },
   };
 }
@@ -137,6 +149,26 @@ test('fallo de procesamiento marca FAILED y el tercer intento queda DEAD_LETTER'
   const fourth = await beginInboundEvent({ event, payload: { MessageSid: 'SM100' } }, repo);
   assert.equal(fourth.action, 'skip');
   assert.equal(fourth.reason, 'dead_letter');
+});
+
+test('el worker anterior no cierra un evento ya reclamado', async () => {
+  const repo = createRepo();
+  const first = await beginInboundEvent({ event, payload: { MessageSid: 'SM100' } }, repo);
+  repo.rows.get(first.id).updatedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const second = await beginInboundEvent({ event, payload: { MessageSid: 'SM100' } }, repo);
+  assert.equal(second.reason, 'reclaimed');
+  assert.equal(second.attempts, 2);
+  const staleFinish = await finishInboundEvent(first, null, repo, '<Response>viejo</Response>');
+  assert.equal(staleFinish.owned, false);
+  assert.equal(repo.rows.get(first.id).status, 'PROCESSING');
+  const ownedFinish = await finishInboundEvent(second, null, repo, '<Response>nuevo</Response>');
+  assert.equal(ownedFinish.owned, true);
+  assert.equal(repo.rows.get(first.id).status, 'PROCESSED');
+  assert.equal(repo.rows.get(first.id).responseBody, '<Response>nuevo</Response>');
+  const replay = await beginInboundEvent({ event, payload: { MessageSid: 'SM100', Body: 'otro' } }, repo);
+  assert.equal(replay.action, 'skip');
+  assert.equal(replay.reason, 'processed');
+  assert.equal(replay.responseBody, '<Response>nuevo</Response>');
 });
 
 test('FAILED en el maximo de intentos queda DEAD_LETTER y no procesa', async () => {

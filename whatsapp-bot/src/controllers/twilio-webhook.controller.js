@@ -1,5 +1,3 @@
-import { config } from '../config.js';
-import webhookDedupe from '../services/webhook-dedupe.service.js';
 import { processCanonicalTwilioInbound } from '../services/twilio-inbound-pipeline.js';
 import { toCanonicalTwilioInboundEvent } from '../adapters/twilio/twilio-inbound.adapter.js';
 import {
@@ -8,192 +6,149 @@ import {
 } from '../adapters/twilio/twilio-outbound.adapter.js';
 import { createPerfContext, logPerf, maskId, nowMs, roundMs } from '../utils/perf-timer.js';
 import { noteActivity } from '../monitoring/activity-store.js';
-import { beginInboundEvent, finishInboundEvent } from '../monitoring/webhook-events.service.js';
+import {
+  beginInboundEvent,
+  finishInboundEvent,
+  logInbound,
+} from '../monitoring/webhook-events.service.js';
 
-function sendTwiml(res, twiml) {
-  return res.status(200).type('text/xml').send(twiml);
-}
+/**
+ * Idempotencia del inbound Twilio. SQL es la autoridad, con o sin monitoreo.
+ * PROCESSED significa que los efectos internos de ese intento quedaron
+ * comprometidos y que el TwiML guardado puede repetirse. No significa que
+ * Twilio haya aceptado el HTTP ni que WhatsApp haya entregado el mensaje.
+ *
+ * Un PROCESSING vigente responde 503 para que Twilio reintente. Un 200 en
+ * ese caso cerraría el único reintento mientras el dueño todavía puede fallar.
+ * Un fallo de adquisición no cae al archivo local ni ejecuta el turno.
+ */
 
-async function openMonitoringGate(event, body) {
-  if (!config.monitoringEnabled) return { action: 'process', tracked: false };
-  try {
-    return await beginInboundEvent({ event, payload: body });
-  } catch (error) {
-    console.error(`[Monitoring] webhook persist failed: ${error.message}`);
-    return { action: 'process', tracked: false };
+function twimlForTurn(processed) {
+  if (!processed) return buildEmptyTwimlResponse();
+  if (processed.kind === 'reply_indeterminate' || processed.kind === 'human_mode_skip') {
+    return buildEmptyTwimlResponse();
   }
-}
-
-async function closeMonitoringGate(gate, error) {
-  if (!gate?.tracked) return;
-  try {
-    await finishInboundEvent(gate, error || null);
-  } catch (err) {
-    console.error(`[Monitoring] webhook status update failed: ${err.message}`);
+  if (processed.replyAuthorized === false) return buildEmptyTwimlResponse();
+  if (processed.kind === 'human_handoff' && processed.shouldSendTwiml === false) {
+    return buildEmptyTwimlResponse();
   }
+  if (processed.reply == null || processed.reply === '') return buildEmptyTwimlResponse();
+  return buildTwimlMessage(processed.reply);
 }
 
-export const receiveTwilioMessage = async (req, res) => {
-  const flowId = req.params.flowId;
-  const requestStart = nowMs();
-  let gate = { action: 'process', tracked: false };
-
-  try {
-    const adapterStart = nowMs();
-    const event = toCanonicalTwilioInboundEvent({ body: req.body, flowId });
-    noteActivity('lastInboundAt');
-    console.log('Twilio From:', req.body?.From);
-    console.log('Normalized phone:', event.phone);
-    const perfContext = createPerfContext({
-      channel: 'twilio',
-      flowId: event.flowId,
-      userIdMasked: maskId(event.userId),
-      messageIdMasked: maskId(event.messageId),
-      inboundLength: event.text?.length || 0,
-    });
-    perfContext.add('adapterMs', roundMs(nowMs() - adapterStart));
-    const dedupeKey = webhookDedupe.buildProviderMessageKey(event.provider, event.messageId);
-    gate = await openMonitoringGate(event, req.body);
-
-    if (gate.action === 'skip') {
-      console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
-      );
-      perfContext.add('duplicate', true);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
-
-    if (!gate.tracked) {
-      if (dedupeKey && (await webhookDedupe.isDuplicate(dedupeKey, perfContext))) {
-        console.log(
-          `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=true action=ignored reason=${gate.reason || 'historical'}`,
-        );
-        perfContext.add('duplicate', true);
-        perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-        logPerf('twilio_webhook', perfContext.toJSON());
-        return sendTwiml(res, buildEmptyTwimlResponse());
-      }
-
-      if (dedupeKey) {
-        await webhookDedupe.markProcessed(dedupeKey, perfContext);
-      }
-    }
-
-    const markHandled = async ({ flow = false } = {}) => {
-      noteActivity('lastProcessedAt');
-      if (flow) noteActivity('lastSuccessfulFlowAt');
-      if (gate.tracked && dedupeKey) {
-        try {
-          await webhookDedupe.markProcessed(dedupeKey, perfContext);
-        } catch (error) {
-          console.error(`[Monitoring] dedupe mark failed: ${error.message}`);
-        }
-      }
-      await closeMonitoringGate(gate, null);
+function skippedResponse(gate) {
+  if (gate.reason === 'in_flight') {
+    return { httpStatus: 503, twiml: buildEmptyTwimlResponse() };
+  }
+  if (gate.reason === 'processed') {
+    return {
+      httpStatus: 200,
+      twiml: gate.responseBody || buildEmptyTwimlResponse(),
     };
+  }
+  return { httpStatus: 200, twiml: buildEmptyTwimlResponse() };
+}
 
-    if (!event.text) {
-      console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=empty_text`,
-      );
-      perfContext.add('duplicate', false);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      await markHandled();
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
+export async function settleTwilioInbound({
+  flowId,
+  body,
+  processInbound = processCanonicalTwilioInbound,
+  begin = beginInboundEvent,
+  finish = (gate, error, responseBody) => finishInboundEvent(gate, error, undefined, responseBody),
+} = {}) {
+  const requestStart = nowMs();
+  const event = toCanonicalTwilioInboundEvent({ body, flowId });
+  noteActivity('lastInboundAt');
+  const perfContext = createPerfContext({
+    channel: 'twilio',
+    flowId: event.flowId,
+    userIdMasked: maskId(event.userId),
+    messageIdMasked: maskId(event.messageId),
+    inboundLength: event.text?.length || 0,
+  });
 
-    const processed = await processCanonicalTwilioInbound(event, { perfContext });
-
-    if (processed.kind === 'reply_indeterminate') {
-      console.error(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} action=reply_indeterminate reason=${processed.reason || 'unknown'}`,
-      );
-      perfContext.add('replyIndeterminate', processed.reason || true);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      await markHandled();
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
-
-    if (processed.kind === 'human_mode_skip') {
-      console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_mode_skip_engine status=${processed.conversation?.status}`,
-      );
-      perfContext.add('humanModeSkip', true);
-      perfContext.add('conversationStatus', processed.conversation?.status || null);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      await markHandled();
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
-
-    if (processed.replyAuthorized === false) {
-      await markHandled();
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
-
-    if (processed.kind === 'reentry') {
-      console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=reentry`,
-      );
-      perfContext.add('reentry', true);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      await markHandled({ flow: true });
-      return sendTwiml(res, buildTwimlMessage(processed.reply));
-    }
-
-    if (processed.kind === 'human_handoff') {
-      console.log(
-        `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false action=human_handoff node=${processed.result?.currentNodeId}`,
-      );
-      perfContext.add('humanHandoff', true);
-      perfContext.add('nodeId', processed.result?.currentNodeId || null);
-      perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-      logPerf('twilio_webhook', perfContext.toJSON());
-      await markHandled({ flow: true });
-      if (processed.shouldSendTwiml === false) {
-        return sendTwiml(res, buildEmptyTwimlResponse());
-      }
-      return sendTwiml(res, buildTwimlMessage(processed.reply));
-    }
-
-    console.log(
-      `[WebhookInbound] provider=${event.provider} flowId=${event.flowId} userId=${event.userId} messageId=${event.messageId} duplicate=false node=${processed.result?.currentNodeId}`,
-    );
-
-    const twimlStart = nowMs();
-    const twiml = buildTwimlMessage(processed.reply);
-    perfContext.add('twimlBuildMs', roundMs(nowMs() - twimlStart));
-    perfContext.add('replyLength', processed.reply?.length || 0);
-    perfContext.add('nodeId', processed.result?.currentNodeId || null);
-    perfContext.add('duplicate', false);
-    perfContext.add('totalMs', roundMs(nowMs() - requestStart));
-    logPerf('twilio_webhook', perfContext.toJSON());
-    await markHandled({ flow: true });
-    return sendTwiml(res, twiml);
+  let gate;
+  try {
+    gate = await begin({ event, payload: body });
   } catch (error) {
     noteActivity('lastErrorAt', error.message);
-    await closeMonitoringGate(gate, error);
-    console.error(
-      `[TwilioWebhook] provider=twilio flowId=${flowId} error=${error.message}`,
-    );
+    logInbound('inbound_acquire_error', {
+      provider: event.provider,
+      messageId: event.messageId || null,
+      flowId: event.flowId,
+      reason: 'sql_error',
+      httpStatus: 503,
+    });
     logPerf('twilio_webhook_error', {
       flowId,
       totalMs: roundMs(nowMs() - requestStart),
       error: error.message,
     }, { force: true });
-    if (error?.code === 'TAKEOVER_SCHEMA_REQUIRED') {
-      return sendTwiml(res, buildEmptyTwimlResponse());
-    }
-    return sendTwiml(
-      res,
-      buildTwimlMessage(
-        'No pudimos procesar tu mensaje en este momento. Intenta nuevamente en unos segundos.',
-      ),
-    );
+    return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate: null };
   }
+
+  if (gate.action === 'reject') {
+    return { httpStatus: 400, twiml: buildEmptyTwimlResponse(), gate };
+  }
+  if (gate.action !== 'process') {
+    perfContext.add('duplicate', true);
+    perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+    logPerf('twilio_webhook', perfContext.toJSON());
+    return { ...skippedResponse(gate), gate };
+  }
+
+  try {
+    let processed = null;
+    if (event.text) {
+      processed = await processInbound(event, {
+        perfContext,
+        lease: gate?.id ? { id: gate.id, attempts: gate.attempts } : null,
+      });
+    }
+    if (processed?.kind === 'reply_indeterminate') {
+      const indeterminate = new Error(processed.reason || 'reply_indeterminate');
+      indeterminate.code = processed.reason || 'REPLY_INDETERMINATE';
+      throw indeterminate;
+    }
+    const twiml = event.text ? twimlForTurn(processed) : buildEmptyTwimlResponse();
+    const finished = await finish(gate, null, twiml);
+    if (finished?.owned === false) {
+      return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate };
+    }
+    noteActivity('lastProcessedAt');
+    if (processed && processed.kind !== 'human_mode_skip' && processed.replyAuthorized !== false) {
+      noteActivity('lastSuccessfulFlowAt');
+    }
+    perfContext.add('duplicate', false);
+    perfContext.add('totalMs', roundMs(nowMs() - requestStart));
+    logPerf('twilio_webhook', perfContext.toJSON());
+    return { httpStatus: 200, twiml, gate };
+  } catch (error) {
+    noteActivity('lastErrorAt', error.message);
+    logPerf('twilio_webhook_error', {
+      flowId,
+      totalMs: roundMs(nowMs() - requestStart),
+      error: error.message,
+    }, { force: true });
+    try {
+      await finish(gate, error, null);
+    } catch (finishError) {
+      logInbound('inbound_acquire_error', {
+        provider: event.provider,
+        messageId: event.messageId || null,
+        flowId: event.flowId,
+        reason: 'fail_record_failed',
+        httpStatus: 503,
+      });
+    }
+    return { httpStatus: 503, twiml: buildEmptyTwimlResponse(), gate };
+  }
+}
+
+export const receiveTwilioMessage = async (req, res) => {
+  const result = await settleTwilioInbound({
+    flowId: req.params.flowId,
+    body: req.body,
+  });
+  return res.status(result.httpStatus).type('text/xml').send(result.twiml);
 };

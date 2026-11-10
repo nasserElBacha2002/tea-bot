@@ -5,6 +5,8 @@ import humanHandoffService from './human-handoff.service.js';
 import conversationReentryService from './conversation-reentry.service.js';
 import conversationService from './conversation.service.js';
 import { withInboundUserLock } from '../utils/inbound-user-lock.js';
+import { withInboundLease } from '../monitoring/inbound-lease.js';
+import { twilioTurnOutboundId } from '../monitoring/webhook-events.service.js';
 import { nowMs, roundMs } from '../utils/perf-timer.js';
 
 const PERSISTED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -45,14 +47,33 @@ function classifyOutbound(outbound, conversation) {
  */
 export async function processCanonicalTwilioInbound(
   event,
-  { perfContext = null, flowSnapshot = null, flowMode = 'published' } = {},
+  { perfContext = null, flowSnapshot = null, flowMode = 'published', lease = null } = {},
 ) {
-  return withInboundUserLock(event.userId, () =>
-    processLockedInbound(event, { perfContext, flowSnapshot, flowMode }),
-  );
+  try {
+    return await withInboundLease(lease, () =>
+      withInboundUserLock(event.userId, () =>
+        processLockedInbound(event, { perfContext, flowSnapshot, flowMode }),
+      ));
+  } catch (error) {
+    if (error?.code === 'INBOUND_LEASE_LOST') {
+      try {
+        await sessionService.resetSession(event.userId);
+      } catch {
+        /* la sesión en memoria no debe impedir que el dueño nuevo cierre el turno */
+      }
+    }
+    throw error;
+  }
 }
 
 async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode }) {
+  const replay = await messagePersistence.safeRun(
+    'replayCommittedTurn',
+    () => messagePersistence.replayCommittedTurn(event),
+    { required: true },
+  );
+  if (replay) return replay;
+
   const conversationContext = await messagePersistence.safeRun(
     'handleInbound',
     () => messagePersistence.handleInbound(event),
@@ -113,6 +134,7 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
     const superseded = await conversationReentryService.consumeInbound(
       freshConversation,
       event.text || '',
+      { providerMessageId: event.messageId || null },
     );
     if (superseded?.action === 'human_skip') {
       return humanSkip(superseded.conversation);
@@ -150,7 +172,11 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
       };
     }
     if (superseded?.reply) {
-      const finished = await messagePersistence.finishReentry(superseded, statusVersionAtStart);
+      const finished = await messagePersistence.finishReentry(
+        superseded,
+        statusVersionAtStart,
+        { providerMessageId: twilioTurnOutboundId(event.messageId) },
+      );
       if (finished?.decision === 'INDETERMINATE') {
         return indeterminate(finished.conversation || superseded.conversation, finished.reason);
       }

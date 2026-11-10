@@ -1,6 +1,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
+import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
@@ -15,6 +16,8 @@ import { ConversationReentryService, REENTRY_PROMPT } from './conversation-reent
 const integrationEnabled = isConversationDbEnabled();
 
 async function skipReason() {
+  const isolated = isolatedTestDatabaseReason();
+  if (isolated) return isolated;
   if (!integrationEnabled) return 'Conversation DB disabled';
   try {
     const ping = await pingDatabase();

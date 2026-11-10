@@ -5,6 +5,7 @@ import sessionService from './session.service.js';
 import flowLoader from '../utils/flow-loader.js';
 import { normalizeTwilioWhatsappNumber } from '../utils/twilio-phone.js';
 import { isConversationDbEnabled } from '../db/index.js';
+import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-lease.js';
 import {
   notifyConversationCreated,
   notifyConversationMessageCreated,
@@ -159,9 +160,15 @@ class ConversationService {
     return refreshed;
   }
 
-  async getOrCreateActiveSession(conversation, flowContext = {}) {
+  async getOrCreateActiveSession(conversation, flowContext = {}, options = {}) {
+    if (!options.fenced && currentInboundLease()) {
+      return withFencedWrite(null, (transaction) =>
+        this.getOrCreateActiveSession(conversation, flowContext, { fenced: true, transaction }));
+    }
+    const transaction = options.transaction;
     let dbSession = await conversationSessionRepository.findActiveByConversationId(
       conversation.id,
+      { transaction },
     );
 
     const flowId = flowContext.flowId || conversation.currentFlowId;
@@ -176,7 +183,7 @@ class ConversationService {
         currentNodeKey,
         variablesJson: flowContext.variables || {},
         historyJson: flowContext.history || [],
-      });
+      }, { transaction });
       console.log(
         `[ConversationDB] session_created id=${dbSession.id} conversation=${conversation.id}`,
       );
@@ -184,7 +191,10 @@ class ConversationService {
     }
 
     if (flowId && dbSession.flowId !== flowId) {
-      await conversationSessionRepository.endSession(dbSession.id);
+      await conversationSessionRepository.updateSession(dbSession.id, {
+        status: 'ended',
+        endedAt: new Date(),
+      }, { transaction });
       dbSession = await conversationSessionRepository.createSession({
         conversationId: conversation.id,
         flowId,
@@ -192,7 +202,7 @@ class ConversationService {
         currentNodeKey,
         variablesJson: {},
         historyJson: [],
-      });
+      }, { transaction });
       return { session: dbSession, created: true, replaced: true };
     }
 
@@ -248,7 +258,24 @@ class ConversationService {
     return sessionService.getSession(userId);
   }
 
-  async syncSessionFromFlowEngine(conversation, dbSession, userId, engineResult) {
+  async syncSessionFromFlowEngine(conversation, dbSession, userId, engineResult, existingTransaction = null) {
+    if (existingTransaction) {
+      return this.syncSessionFromFlowEngineUnlocked(
+        conversation,
+        dbSession,
+        userId,
+        engineResult,
+        existingTransaction,
+      );
+    }
+    if (currentInboundLease()) {
+      return withFencedWrite(null, (transaction) =>
+        this.syncSessionFromFlowEngineUnlocked(conversation, dbSession, userId, engineResult, transaction));
+    }
+    return this.syncSessionFromFlowEngineUnlocked(conversation, dbSession, userId, engineResult, null);
+  }
+
+  async syncSessionFromFlowEngineUnlocked(conversation, dbSession, userId, engineResult, transaction) {
     const memorySession = sessionService.getSession(userId);
     const sync = buildSessionSyncPatch(memorySession, engineResult, conversation);
     const {
@@ -265,7 +292,7 @@ class ConversationService {
       currentFlowVersion: flowVersion,
       currentNodeKey,
       lastMessageAt: new Date(),
-    });
+    }, { transaction, fenced: Boolean(transaction) });
     if (!updated) {
       try {
         await sessionService.resetSession(userId);
@@ -285,7 +312,7 @@ class ConversationService {
         currentNodeKey,
         variables,
         history,
-      });
+      }, { fenced: true, transaction });
       activeSession = created.session;
     } else {
       activeSession = await conversationSessionRepository.updateSession(activeSession.id, {
@@ -295,7 +322,7 @@ class ConversationService {
         variablesJson: variables,
         historyJson: history,
         trackingJson,
-      });
+      }, { transaction });
     }
 
     return activeSession;
@@ -355,8 +382,8 @@ class ConversationService {
    * Reabre una conversación cerrada antes de persistir un mensaje entrante.
    * @returns {Promise<object>} conversación actualizada (reabierta o sin cambios)
    */
-  async reopenClosedConversationIfNeeded(conversation) {
-    const result = await conversationReopenService.reopenFromInboundMessage(conversation);
+  async reopenClosedConversationIfNeeded(conversation, context = {}) {
+    const result = await conversationReopenService.reopenFromInboundMessage(conversation, context);
     return result.conversation;
   }
 

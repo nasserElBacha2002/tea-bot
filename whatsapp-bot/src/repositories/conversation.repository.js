@@ -1,4 +1,5 @@
 import { query, isConversationDbEnabled, parseJsonColumn } from '../db/index.js';
+import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-lease.js';
 import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 
@@ -143,7 +144,12 @@ class ConversationRepository {
     return mapRow(rows[0]);
   }
 
-  async updateConversation(id, patch, { transaction } = {}) {
+  async updateConversation(id, patch, options = {}) {
+    if (!options.fenced && currentInboundLease()) {
+      return withFencedWrite(options.transaction, (transaction) =>
+        this.updateConversation(id, patch, { transaction, fenced: true }));
+    }
+    const { transaction } = options;
     const fields = [];
     const values = [];
     let i = 1;
@@ -261,7 +267,12 @@ class ConversationRepository {
    * Escribe el cursor del motor solo si el cierre no armó una reentrada
    * y la conversación sigue en bot. Devuelve null si el UPDATE no matchea.
    */
-  async updateFlowPositionIfNoReentry(id, patch, { transaction } = {}) {
+  async updateFlowPositionIfNoReentry(id, patch, options = {}) {
+    if (!options.fenced && currentInboundLease()) {
+      return withFencedWrite(options.transaction, (transaction) =>
+        this.updateFlowPositionIfNoReentry(id, patch, { transaction, fenced: true }));
+    }
+    const { transaction } = options;
     const { rows } = await query(
       `UPDATE dbo.conversations
        SET current_flow_id = $2,

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../config.js';
 import { isConversationDbEnabled, pingDatabase, query } from '../db/index.js';
+import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
@@ -13,13 +14,16 @@ import auditLogService from './audit-log.service.js';
 const integrationEnabled = isConversationDbEnabled();
 
 async function skipIfNoDb() {
-  if (!integrationEnabled) return true;
+  const isolated = isolatedTestDatabaseReason();
+  if (isolated) return isolated;
+  if (!integrationEnabled) return 'Conversation DB disabled';
   try {
     const ping = await pingDatabase();
-    return !ping.ok;
-  } catch {
-    return true;
+    if (!ping.ok) return 'Conversation DB unavailable';
+  } catch (error) {
+    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
   }
+  return null;
 }
 
 async function createAgedConversation({ suffix, lastMessageAt, withDeps = false }) {
@@ -115,8 +119,9 @@ async function countByConversation(conversationId) {
 }
 
 test('schema real: índice last_message_at y cascades de retención', async (t) => {
-  if (await skipIfNoDb()) {
-    t.skip('SQL Server no disponible');
+  const reason = await skipIfNoDb();
+  if (reason) {
+    t.skip(reason);
     return;
   }
 

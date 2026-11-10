@@ -1,23 +1,16 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
+import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import conversationTakeoverService from './conversation-takeover.service.js';
 import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
 
-function isolatedTestDatabase() {
-  const name = String(process.env.DB_NAME || '').toLowerCase();
-  const server = String(process.env.DB_SERVER || '').toLowerCase();
-  const local = server === 'localhost' || server === '127.0.0.1' || server === 'sqlserver';
-  return local && name.includes('test');
-}
-
 async function skipReason() {
-  if (!isolatedTestDatabase()) {
-    return 'SQL TEST aislado no configurado (DB_SERVER local y DB_NAME con "test")';
-  }
+  const isolated = isolatedTestDatabaseReason();
+  if (isolated) return isolated;
   if (!isConversationDbEnabled()) return 'Conversation DB disabled';
   try {
     const ping = await pingDatabase();
@@ -126,7 +119,7 @@ test('integration: toma manual exclusiva en SQL TEST', async (t) => {
 });
 
 after(async () => {
-  if (isConversationDbEnabled() && isolatedTestDatabase()) {
+  if (isolatedTestDatabaseReason() == null && isConversationDbEnabled()) {
     await closePool();
   }
 });

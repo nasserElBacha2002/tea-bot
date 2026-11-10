@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test, { beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import '../config.js';
 import { processCanonicalTwilioInbound } from './twilio-inbound-pipeline.js';
@@ -12,6 +12,19 @@ import { conversationTurnGuard } from './conversation-turn-guard.service.js';
 
 const INSCRIPTION_TEXT =
   'Hola, buenos días, quería saber si todavía están abiertas las inscripciones para agosto o si solo hay inscripciones en marzo.';
+
+let restoreReplay = null;
+beforeEach(() => {
+  const previous = messagePersistence.replayCommittedTurn;
+  messagePersistence.replayCommittedTurn = async () => null;
+  restoreReplay = () => {
+    messagePersistence.replayCommittedTurn = previous;
+  };
+});
+afterEach(() => {
+  restoreReplay?.();
+  restoreReplay = null;
+});
 
 function buildMenuFlow() {
   return {
@@ -441,5 +454,36 @@ test('una toma que commitea durante el turno anula el TwiML del bot', async () =
     conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
     restore();
     await sessionService.resetSession(userId);
+  }
+});
+
+test('un outbound ya commiteado no vuelve a ejecutar el turno', async () => {
+  let inboundCalls = 0;
+  const previousInbound = messagePersistence.handleInbound;
+  messagePersistence.handleInbound = async () => {
+    inboundCalls += 1;
+    return null;
+  };
+  messagePersistence.replayCommittedTurn = async () => ({
+    kind: 'reentry',
+    reply: '¿Seguimos con tu consulta anterior?',
+    shouldSendTwiml: true,
+    replyAuthorized: true,
+    replayed: true,
+  });
+  try {
+    const processed = await processCanonicalTwilioInbound({
+      userId: `twilio:replay:${Date.now()}`,
+      flowId: 'main-menu',
+      text: 'quiero seguir',
+      messageId: 'SMreplaycommitted',
+      provider: 'twilio',
+    });
+    assert.equal(processed.replayed, true);
+    assert.equal(processed.kind, 'reentry');
+    assert.match(processed.reply, /consulta/);
+    assert.equal(inboundCalls, 0);
+  } finally {
+    messagePersistence.handleInbound = previousInbound;
   }
 });

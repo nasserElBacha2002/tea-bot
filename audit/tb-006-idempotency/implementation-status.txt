@@ -1,0 +1,29 @@
+ticket: TB-006
+status: IMPLEMENTED_PENDING_VALIDATION
+branch: main
+head: 06f26d8b02b9043e2f1ae5688c091084175fc593
+head_subject: Add manual takeover flow with schema guard
+origin_main: 9b2ff0be71058a11713b97146a20f683b631eda5
+working_tree: uncommitted
+commit: none
+push: none
+deploy: none
+
+migration_007: not modified
+migration_008: not modified
+migration_009: not required and not applied for this ticket
+migration_010: added, not applied to tea-bot, not applied to any database
+flags: unchanged (MONITORING_ENABLED and MANUAL_TAKEOVER_ENABLED stay at their existing defaults)
+credentials: unchanged
+
+sql_writes_during_validation: none
+reason: every test that writes SQL returned before connecting because DB_NAME does not contain "test"
+
+not_ready_for_review_because:
+- T10, two independent SQL connections acquiring the same MessageSid, was skipped. There is no isolated TEST database.
+- The real SQL reclaim test was skipped for the same reason. The lease is covered by an in-memory fake and by a static assertion of the UPDATE predicate.
+- Migration 010 was not applied, so replaying a stored TwiML from SQL Server was not executed. Without that column the code returns empty TwiML for a PROCESSED retry.
+- 31 SQL integration tests were skipped. Skipped is not passed.
+
+acceptance_gap:
+The inbound path now uses provider_webhook_events as the authority with MONITORING_ENABLED on or off, and it no longer falls back to the local file. Duplicate, crash, reclaim, reentry and takeover behavior are proven against an in-memory repository. They are not proven against SQL Server.

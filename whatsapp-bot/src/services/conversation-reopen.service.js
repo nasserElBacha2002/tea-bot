@@ -3,6 +3,7 @@ import conversationSessionRepository from '../repositories/conversation-session.
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import auditLogService from './audit-log.service.js';
 import { withTransaction } from '../db/index.js';
+import { fenceInboundLease } from '../monitoring/inbound-lease.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import { resolveReopenStatusFromHandoff } from '../utils/conversation-handoff-policy.js';
@@ -33,7 +34,7 @@ export class ConversationReopenService {
    * @param {object} conversation
    * @returns {Promise<{ conversation: object, reopened: boolean, handoff?: object | null }>}
    */
-  async reopenFromInboundMessage(conversation, _context = {}) {
+  async reopenFromInboundMessage(conversation, context = {}) {
     if (!conversation || conversation.status !== 'closed') {
       return { conversation, reopened: false };
     }
@@ -41,6 +42,7 @@ export class ConversationReopenService {
     const previousStatus = conversation.status;
 
     const txResult = await this.runTransaction(async (transaction) => {
+      await fenceInboundLease(transaction);
       await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
 
       const activeHandoffs = await this.handoffRepo.findActiveByConversationIdForUpdate(
@@ -93,6 +95,7 @@ export class ConversationReopenService {
         reason: 'new_inbound_message',
         previousStatus,
         newStatus: txResult.newStatus,
+        providerMessageId: context.providerMessageId || null,
       },
     });
 

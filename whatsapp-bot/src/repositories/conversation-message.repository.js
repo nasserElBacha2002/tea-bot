@@ -1,4 +1,5 @@
 import { query, parseJsonColumn } from '../db/index.js';
+import { withFencedWrite } from '../monitoring/inbound-lease.js';
 import {
   RETURN_TO_BOT_BODY,
   RETURN_TO_BOT_EVENT,
@@ -25,8 +26,17 @@ function serializeJson(value) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+function isUniqueViolation(error) {
+  const number = error?.number || error?.originalError?.info?.number;
+  return number === 2627 || number === 2601;
+}
+
 class ConversationMessageRepository {
   async createMessage(data, { transaction } = {}) {
+    return withFencedWrite(transaction, (tx) => this.insertMessage(data, tx));
+  }
+
+  async insertMessage(data, transaction) {
     const {
       conversationId,
       direction,
@@ -39,30 +49,54 @@ class ConversationMessageRepository {
     } = data;
 
     if (providerMessageId) {
-      const existing = await this.findByProviderMessageId(provider, providerMessageId);
+      const existing = await this.findByProviderMessageId(provider, providerMessageId, { transaction });
       if (existing) return existing;
     }
 
-    const { rows } = await query(
-      `INSERT INTO dbo.conversation_messages (
-        conversation_id, direction, sender_type, body, provider,
-        provider_message_id, raw_payload_json, metadata_json
-      )
-      OUTPUT INSERTED.*
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        conversationId,
-        direction,
-        senderType,
-        body,
-        provider,
-        providerMessageId,
-        serializeJson(rawPayloadJson),
-        serializeJson(metadataJson),
-      ],
-      { transaction },
-    );
-    return mapRow(rows[0]);
+    try {
+      const { rows } = await query(
+        `INSERT INTO dbo.conversation_messages (
+          conversation_id, direction, sender_type, body, provider,
+          provider_message_id, raw_payload_json, metadata_json
+        )
+        OUTPUT INSERTED.*
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          conversationId,
+          direction,
+          senderType,
+          body,
+          provider,
+          providerMessageId,
+          serializeJson(rawPayloadJson),
+          serializeJson(metadataJson),
+        ],
+        { transaction },
+      );
+      return mapRow(rows[0]);
+    } catch (error) {
+      if (!isUniqueViolation(error) || !providerMessageId) throw error;
+      const existing = await this.findByProviderMessageId(provider, providerMessageId, { transaction });
+      if (existing) return existing;
+      throw error;
+    }
+  }
+
+  async recordTurnEffect(provider, providerMessageId, effect, { transaction } = {}) {
+    return withFencedWrite(transaction, async (tx) => {
+      const existing = await this.findByProviderMessageId(provider, providerMessageId, { transaction: tx });
+      if (!existing) return null;
+      if (existing.metadataJson?.turnEffect?.messageId === effect.messageId) return existing;
+      const metadata = { ...(existing.metadataJson || {}), turnEffect: effect };
+      await query(
+        `UPDATE dbo.conversation_messages
+         SET metadata_json = $1
+         WHERE id = $2`,
+        [JSON.stringify(metadata), existing.id],
+        { transaction: tx },
+      );
+      return { ...existing, metadataJson: metadata };
+    });
   }
 
   async findLatestSystemEvent(conversationId, eventName, { transaction } = {}) {
@@ -78,11 +112,12 @@ class ConversationMessageRepository {
     return mapRow(rows[0]);
   }
 
-  async findByProviderMessageId(provider, providerMessageId) {
+  async findByProviderMessageId(provider, providerMessageId, { transaction } = {}) {
     const { rows } = await query(
       `SELECT TOP (1) * FROM dbo.conversation_messages
        WHERE provider = $1 AND provider_message_id = $2`,
       [provider, providerMessageId],
+      { transaction },
     );
     return mapRow(rows[0]);
   }

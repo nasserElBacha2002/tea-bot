@@ -2,6 +2,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import { withTransaction } from '../db/index.js';
+import { fenceInboundLease } from '../monitoring/inbound-lease.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import {
@@ -78,6 +79,7 @@ export class HumanHandoffService {
       || null;
 
     const run = async (transaction) => {
+      await fenceInboundLease(transaction);
       const locked = await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
       if (!locked || locked.status !== 'bot') {
         return {

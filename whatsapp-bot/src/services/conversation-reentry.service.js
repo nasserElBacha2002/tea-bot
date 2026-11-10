@@ -11,6 +11,7 @@ import {
   validateSqlServerEnv,
   withTransaction,
 } from '../db/index.js';
+import { fenceInboundLease } from '../monitoring/inbound-lease.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import { isConversationInHumanMode, DEFAULT_HANDOFF_MESSAGE } from '../utils/handoff-detection.js';
@@ -176,18 +177,18 @@ export class ConversationReentryService {
    * @param {object} conversation
    * @param {string} text
    */
-  async consumeInbound(conversation, text) {
+  async consumeInbound(conversation, text, options = {}) {
     if (!conversation?.id) return null;
     if (!conversation.reentryJson) {
       if (this.policy() !== 'prompt') return null;
       const parked = await this.legacyParkedState(conversation.id);
       if (!parked?.parked) return null;
-      return this.advance(conversation, text);
+      return this.advance(conversation, text, options);
     }
     if (this.policy() === 'legacy') {
       return this.rollbackPending(conversation);
     }
-    return this.advance(conversation, text);
+    return this.advance(conversation, text, options);
   }
 
   /**
@@ -231,6 +232,7 @@ export class ConversationReentryService {
 
   async rollbackPending(conversation) {
     const txResult = await this.runTransaction(async (transaction) => {
+      await fenceInboundLease(transaction);
       const locked = await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
       if (!locked) return { action: 'delegate', conversation };
       if (isConversationInHumanMode(locked)) {
@@ -259,8 +261,11 @@ export class ConversationReentryService {
     return txResult;
   }
 
-  async advance(conversation, text) {
+  async advance(conversation, text, options = {}) {
     const txResult = await this.runTransaction(async (transaction) => {
+      await fenceInboundLease(transaction);
+      const replayed = await this.replayTurnEffect(options.providerMessageId, transaction);
+      if (replayed) return replayed;
       const locked = await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
       if (!locked) return { action: 'delegate', conversation };
       if (isConversationInHumanMode(locked)) {
@@ -290,8 +295,11 @@ export class ConversationReentryService {
       else if (decision === 'present') applied = await this.applyPrompt(current, transaction, text);
       else applied = await this.applyReprompt(current, transaction);
       if (armedLegacy && applied && !applied.reason) applied.reason = 'legacy_return';
+      await this.rememberTurnEffect(options.providerMessageId, applied, transaction);
       return applied;
     });
+
+    if (txResult?.replayed) return txResult;
 
     if (txResult?.action === 'handoff') {
       notifyConversationUpdated(txResult.conversation, {
@@ -313,6 +321,40 @@ export class ConversationReentryService {
       });
     }
     return txResult;
+  }
+
+  async replayTurnEffect(providerMessageId, transaction) {
+    if (!providerMessageId || typeof this.messageRepo.findByProviderMessageId !== 'function') return null;
+    const message = await this.messageRepo.findByProviderMessageId('twilio', providerMessageId, { transaction });
+    const effect = message?.metadataJson?.turnEffect;
+    if (!effect || effect.messageId !== providerMessageId || !effect.action || effect.action === 'delegate') {
+      return null;
+    }
+    const conversationId = effect.conversationId || message.conversationId;
+    const conversation = typeof this.conversationRepo.findById === 'function'
+      ? await this.conversationRepo.findById(conversationId, { transaction })
+      : null;
+    return {
+      action: effect.action,
+      reply: effect.reply || null,
+      conversation: conversation || { id: conversationId },
+      nodeKey: effect.nodeKey || null,
+      reason: effect.reason || 'replayed_effect',
+      replayed: true,
+    };
+  }
+
+  async rememberTurnEffect(providerMessageId, applied, transaction) {
+    if (!providerMessageId || !applied?.action || applied.action === 'delegate') return;
+    if (typeof this.messageRepo.recordTurnEffect !== 'function') return;
+    await this.messageRepo.recordTurnEffect('twilio', providerMessageId, {
+      messageId: providerMessageId,
+      action: applied.action,
+      reply: applied.reply || null,
+      nodeKey: applied.nodeKey || null,
+      reason: applied.reason || null,
+      conversationId: applied.conversation?.id || null,
+    }, { transaction });
   }
 
   async applyPrompt(locked, transaction, text) {

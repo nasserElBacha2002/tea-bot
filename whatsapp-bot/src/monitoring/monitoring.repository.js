@@ -19,7 +19,53 @@ function mapWebhook(row) {
     errorCode: row.error_code,
     errorMessage: row.error_message,
     updatedAt: row.updated_at,
+    responseBody: row.response_body == null ? null : String(row.response_body),
   };
+}
+
+let responseBodyColumnReady = false;
+let responseBodyAbsenceLogged = false;
+
+/**
+ * NVARCHAR(MAX) hace que COL_LENGTH y max_length devuelvan -1.
+ * La columna existe cuando el valor no es null. Comparar con > 0 la esconde.
+ */
+export function responseBodyColumnPresent(columnLength) {
+  if (columnLength == null || columnLength === '') return false;
+  return Number.isFinite(Number(columnLength));
+}
+
+export function resetResponseBodyColumnCache() {
+  responseBodyColumnReady = false;
+  responseBodyAbsenceLogged = false;
+}
+
+/** Un positivo se cachea. Un negativo no: aplicar 010 sin reiniciar debe verse. */
+export async function hasResponseBodyColumn(dbQuery = query) {
+  if (responseBodyColumnReady) return true;
+  const { rows } = await dbQuery(
+    `SELECT c.max_length AS column_length
+     FROM sys.columns c
+     WHERE c.object_id = OBJECT_ID(N'dbo.provider_webhook_events')
+       AND c.name = N'response_body'`,
+  );
+  if (responseBodyColumnPresent(rows[0]?.column_length)) {
+    responseBodyColumnReady = true;
+    return true;
+  }
+  if (!responseBodyAbsenceLogged) {
+    responseBodyAbsenceLogged = true;
+    console.log(JSON.stringify({
+      event: 'inbound_schema_warning',
+      reason: 'response_body_missing',
+      provider: 'twilio',
+      messageId: null,
+      flowId: null,
+      attempts: null,
+      httpStatus: null,
+    }));
+  }
+  return false;
 }
 
 export async function findWebhookEvent(provider, eventType, providerMessageId) {
@@ -91,7 +137,7 @@ export async function acquireInboundProcessing({
          updated_at = SYSUTCDATETIME(),
          error_code = NULL,
          error_message = NULL
-     OUTPUT INSERTED.*
+     OUTPUT INSERTED.*, DELETED.status AS previous_status
      WHERE provider = $1
        AND event_type = $2
        AND provider_message_id = $3
@@ -103,7 +149,11 @@ export async function acquireInboundProcessing({
     [provider, eventType, providerMessageId, maxAttempts, staleBefore],
   );
   if (claimed.rows[0]) {
-    return { acquired: true, row: mapWebhook(claimed.rows[0]), reason: 'acquired' };
+    const previousStatus = claimed.rows[0].previous_status;
+    let reason = 'acquired';
+    if (previousStatus === 'PROCESSING') reason = 'reclaimed';
+    else if (previousStatus === 'FAILED') reason = 'retry';
+    return { acquired: true, row: mapWebhook(claimed.rows[0]), reason };
   }
 
   const exhausted = await query(
@@ -133,24 +183,98 @@ export async function acquireInboundProcessing({
   return { acquired: false, row, reason };
 }
 
-export async function markWebhookProcessed(id) {
-  await query(
+/**
+ * Solo el dueño del lease cierra la fila. attempts es la generación:
+ * un worker reclamado deja de coincidir y no pisa el resultado del nuevo dueño.
+ * response_body (migración 010) guarda el TwiML para replay. Si la columna
+ * no está, el cierre igual ocurre y el replay queda vacío.
+ */
+export async function markWebhookProcessed(id, { attempts, responseBody = null } = {}, dbQuery = query) {
+  const storeResponse = await hasResponseBodyColumn(dbQuery);
+  const params = [id, Number(attempts)];
+  let responseSql = '';
+  if (storeResponse) {
+    responseSql = ', response_body = $3';
+    params.push(responseBody);
+  }
+  const { rows } = await dbQuery(
     `UPDATE dbo.provider_webhook_events
-     SET status = N'PROCESSED', processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
-         error_code = NULL, error_message = NULL
-     WHERE id = $1`,
-    [id],
+     SET status = N'PROCESSED',
+         processed_at = SYSUTCDATETIME(),
+         updated_at = SYSUTCDATETIME(),
+         error_code = NULL,
+         error_message = NULL
+         ${responseSql}
+     OUTPUT INSERTED.id
+     WHERE id = $1
+       AND status = N'PROCESSING'
+       AND attempts = $2`,
+    params,
   );
+  return { owned: Boolean(rows[0]), replayStored: storeResponse };
 }
 
-export async function markWebhookFailed(id, { status, errorCode, errorMessage }) {
-  await query(
+export async function markWebhookFailed(id, { status, errorCode, errorMessage, attempts }) {
+  const { rows } = await query(
     `UPDATE dbo.provider_webhook_events
-     SET status = $2, processed_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME(),
-         error_code = $3, error_message = $4
-     WHERE id = $1`,
-    [id, status, errorCode, errorMessage],
+     SET status = $2,
+         processed_at = SYSUTCDATETIME(),
+         updated_at = SYSUTCDATETIME(),
+         error_code = $3,
+         error_message = $4
+     OUTPUT INSERTED.id
+     WHERE id = $1
+       AND status = N'PROCESSING'
+       AND attempts = $5`,
+    [id, status, errorCode, errorMessage, Number(attempts)],
   );
+  return { owned: Boolean(rows[0]) };
+}
+
+/**
+ * Un DEAD_LETTER no se borra. El reintento manual baja attempts en uno
+ * y vuelve a FAILED para que el próximo acquire pueda tomarlo una sola vez.
+ * El error_code y el error_message quedan.
+ */
+export async function requeueDeadLetter(id, dbQuery = query) {
+  const { rows } = await dbQuery(
+    `UPDATE dbo.provider_webhook_events
+     SET status = N'FAILED',
+         attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END,
+         updated_at = SYSUTCDATETIME()
+     OUTPUT INSERTED.id,
+            INSERTED.provider_message_id,
+            INSERTED.attempts,
+            INSERTED.error_code,
+            INSERTED.error_message,
+            INSERTED.status
+     WHERE id = $1
+       AND status = N'DEAD_LETTER'`,
+    [id],
+  );
+  if (!rows[0]) return { requeued: false };
+  return {
+    requeued: true,
+    id: rows[0].id,
+    providerMessageId: rows[0].provider_message_id,
+    attempts: Number(rows[0].attempts || 0),
+    errorCode: rows[0].error_code || null,
+    errorMessage: rows[0].error_message || null,
+    status: rows[0].status,
+  };
+}
+
+export async function listDeadLetterWebhookEvents(limit = 50, dbQuery = query) {
+  const { rows } = await dbQuery(
+    `SELECT TOP ($1)
+       id, provider, event_type, provider_message_id, received_at, processed_at,
+       status, attempts, error_code, error_message
+     FROM dbo.provider_webhook_events
+     WHERE status = N'DEAD_LETTER'
+     ORDER BY received_at DESC`,
+    [limit],
+  );
+  return rows.map(mapWebhook);
 }
 
 export async function listFailedWebhookEvents(limit = 50) {

@@ -1,0 +1,19 @@
+# TB-006 diffstat
+# Tracked files (git diff --stat -- whatsapp-bot)
+ whatsapp-bot/.env.example                          |   6 +-
+ .../src/controllers/twilio-webhook.controller.js   | 288 +++++++++------------
+ .../src/monitoring/monitoring.repository.js        |  76 +++++-
+ .../monitoring/webhook-acquire.integration.test.js |  47 ++--
+ .../src/monitoring/webhook-events.service.js       | 139 +++++++---
+ .../src/monitoring/webhook-events.service.test.js  |  36 ++-
+ .../conversation-bot-lifecycle.integration.test.js |  54 ++--
+ .../conversation-reentry.integration.test.js       |   3 +
+ .../services/conversation-reentry.service.test.js  |  60 ++++-
+ .../conversationRetention.integration.test.js      |  17 +-
+ 10 files changed, 461 insertions(+), 265 deletions(-)
+
+# Untracked files (not in the stat above)
+      11 whatsapp-bot/migrations/010_webhook_response_body.sql
+      13 whatsapp-bot/src/db/isolated-test-database.js
+     348 whatsapp-bot/src/controllers/twilio-webhook.controller.test.js
+     372 total
