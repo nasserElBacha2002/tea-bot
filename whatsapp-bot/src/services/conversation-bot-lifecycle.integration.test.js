@@ -65,6 +65,7 @@ async function cleanupFixture(conversationId) {
   await query('DELETE FROM dbo.human_handoffs WHERE conversation_id = $1', [conversationId]);
   await query('DELETE FROM dbo.conversation_messages WHERE conversation_id = $1', [conversationId]);
   await query('DELETE FROM dbo.conversations WHERE id = $1', [conversationId]);
+  await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [String(conversationId)]);
 }
 
 test('integration: returnConversationToBot deja estado coherente', async (t) => {

@@ -7,7 +7,7 @@ import {
   resetResponseBodyColumnCache,
   responseBodyColumnPresent,
 } from './monitoring.repository.js';
-import { twilioTurnOutboundId } from './webhook-events.service.js';
+import { twilioTurnOutboundId, requeueDeadLetter as prepareDeadLetter } from './webhook-events.service.js';
 import {
   fenceInboundLease,
   withInboundLease,
@@ -158,6 +158,34 @@ test('requeue de DEAD_LETTER no borra la fila y un PROCESSED no se reencola', as
 
   const kept = await requeueDeadLetter('processed-1', async () => ({ rows: [] }));
   assert.equal(kept.requeued, false);
+
+  const prepared = await prepareDeadLetter('dead-1', {
+    async requeueDeadLetter() {
+      return {
+        requeued: true,
+        id: 'dead-1',
+        providerMessageId: 'SMDEAD',
+        attempts: 2,
+        errorCode: 'db down',
+        errorMessage: 'timeout',
+        status: 'FAILED',
+      };
+    },
+  });
+  assert.equal(prepared.stateChangedToFailed, true);
+  assert.equal(prepared.executed, false);
+  assert.equal(prepared.recovered, false);
+  assert.equal(prepared.reprocessed, false);
+  assert.equal(prepared.requiresManualWebhook, true);
+
+  const untouched = await prepareDeadLetter('processed-1', {
+    async requeueDeadLetter() {
+      return { requeued: false };
+    },
+  });
+  assert.equal(untouched.stateChangedToFailed, false);
+  assert.equal(untouched.executed, false);
+  assert.equal(untouched.requiresManualWebhook, false);
 });
 
 test('el mismo MessageSid no aplica la reentrada dos veces', async () => {
@@ -233,7 +261,20 @@ test('la clave del outbound cabe en el índice y no reutiliza el MessageSid', ()
   assert.equal(twilioTurnOutboundId('SM123'), 'SM123:outbound');
   assert.equal(twilioTurnOutboundId(''), null);
   assert.equal(twilioTurnOutboundId('tiene espacios'), null);
-  assert.equal(twilioTurnOutboundId('x'.repeat(128)), null);
+  const longestSuffix = 'S'.repeat(119);
+  assert.equal(twilioTurnOutboundId(longestSuffix), `${longestSuffix}:outbound`);
+  assert.equal(twilioTurnOutboundId(longestSuffix).length, 128);
+  const overflow = 'S'.repeat(120);
+  const hashed = twilioTurnOutboundId(overflow);
+  const maximum = 'M'.repeat(128);
+  const maximumAgain = twilioTurnOutboundId(maximum);
+  assert.equal(hashed, twilioTurnOutboundId(overflow));
+  assert.equal(maximumAgain, twilioTurnOutboundId(maximum));
+  assert.notEqual(hashed, overflow);
+  assert.notEqual(maximumAgain, maximum);
+  assert.ok(hashed.length <= 128);
+  assert.ok(maximumAgain.length <= 128);
+  assert.notEqual(hashed, maximumAgain);
 });
 
 test('la base de pruebas no se acepta por contener la palabra test', () => {
@@ -248,14 +289,20 @@ test('la base de pruebas no se acepta por contener la palabra test', () => {
     process.env.TB_SQL_TEST_CONFIRM = 'tea_bot_test';
     assert.match(isolatedTestDatabaseReason(), /tea_bot_test_/);
     process.env.DB_NAME = 'tea-bot';
-    assert.match(isolatedTestDatabaseReason(), /tea_bot_test_/);
+    assert.match(isolatedTestDatabaseReason(), /TB_SQL_TEST_CONFIRM=tea-bot/);
+    process.env.TB_SQL_TEST_CONFIRM = 'tea-bot';
+    assert.equal(isolatedTestDatabaseReason(), null);
     process.env.DB_NAME = 'tea_bot_test_local';
     delete process.env.TB_SQL_TEST_CONFIRM;
-    assert.match(isolatedTestDatabaseReason(), /TB_SQL_TEST_CONFIRM/);
+    assert.match(isolatedTestDatabaseReason(), /TB_SQL_TEST_CONFIRM=tea_bot_test/);
     process.env.TB_SQL_TEST_CONFIRM = 'tea_bot_test';
     assert.equal(isolatedTestDatabaseReason(), null);
     process.env.DB_SERVER = '170.239.85.196';
     assert.match(isolatedTestDatabaseReason(), /DB_SERVER/);
+    process.env.DB_SERVER = 'localhost';
+    process.env.DB_NAME = 'tea-bot';
+    process.env.TB_SQL_TEST_CONFIRM = 'tea_bot_test';
+    assert.match(isolatedTestDatabaseReason(), /TB_SQL_TEST_CONFIRM=tea-bot/);
   } finally {
     if (previous.server === undefined) delete process.env.DB_SERVER;
     else process.env.DB_SERVER = previous.server;

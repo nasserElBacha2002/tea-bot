@@ -1,6 +1,6 @@
 import http from 'http';
 import express from 'express';
-import { config, validateConfig, hasMetaCritical } from './config.js';
+import { config, validateConfig, hasMetaCritical, resolveTwilioSignatureMode } from './config.js';
 import { createCorsMiddleware } from './cors-middleware.js';
 import webhookRouter from './routes/webhook.routes.js';
 import twilioWebhookRouter from './routes/twilio-webhook.routes.js';
@@ -22,6 +22,10 @@ import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
 import { probeReentryColumn } from './services/conversation-reentry.service.js';
 import { attachConversationLiveWebSocket } from './realtime/conversation-live.ws.js';
+import {
+  rememberUrlencodedBody,
+  twilioWebhookBodyError,
+} from './middleware/verify-twilio-signature.js';
 
 const app = express();
 const httpServer = http.createServer(app);
@@ -31,7 +35,11 @@ const httpServer = http.createServer(app);
 const JSON_BODY_LIMIT = process.env.EXPRESS_JSON_LIMIT ?? '2mb';
 
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
-app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({
+  extended: false,
+  limit: JSON_BODY_LIMIT,
+  verify: rememberUrlencodedBody,
+}));
 app.use(createCorsMiddleware());
 
 // Verificación inicial de configuración
@@ -146,11 +154,17 @@ app.get('/healthz', async (req, res) => {
   });
 });
 
+app.use(twilioWebhookBodyError);
+
 attachConversationLiveWebSocket(httpServer);
 
 httpServer.listen(config.port, () => {
   console.log(`🚀 El servidor de WhatsApp bot se levantó correctamente.`);
   console.log(`🌐 Local: http://localhost:${config.port}`);
+  const signatureMode = resolveTwilioSignatureMode();
+  console.log(
+    `🔐 Twilio inbound signature: ${signatureMode.ok ? signatureMode.mode : 'invalid'} (${signatureMode.source || 'env'})`,
+  );
   console.log(`🔗 Webhook endpoint: ${config.appBaseUrl}/webhook`);
   console.log(`📡 Conversaciones live: ws://localhost:${config.port}/api/conversations/live`);
 });

@@ -1,0 +1,68 @@
+# TB-006 final test evidence
+# Date: 2026-11-10
+# Working directory: whatsapp-bot
+# Database: tea-bot on localhost:1433, instance c60449e5dbda
+# Confirmation was passed only in the process environment. .env was not edited.
+
+## Identity logged by the suite
+
+{"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+
+## Final suite
+
+command:
+TB_SQL_TEST_CONFIRM=tea-bot \
+GOOGLE_SHEETS_ENABLED=false \
+CONVERSATION_CLASSIFICATION_SHEET_UPDATE_ENABLED=false \
+node --test --test-concurrency=1 $(find src migrations -name '*.test.js' | sort)
+
+exit_code: 0
+tests: 363
+pass: 361
+fail: 0
+skipped: 2
+duration_ms: 164810.2365
+
+The two skips are not passes:
+- integration: toma manual exclusiva en SQL TEST
+- integration: dos agentes en paralelo sobre SQL real
+reason: Migration 009_conversation_status_version.sql is not applied on the test database
+
+009 was left unapplied. Those tests exercise takeover on, and the flag stays off.
+
+## Earlier suite
+
+The first full run against tea-bot exited 1. One unit assertion expected the service result from the repository function. That assertion was corrected without relaxing the SQL checks. The suite above is the one that counts. It ran after the fix.
+
+## SQL tests that passed in that suite
+
+- Two concurrent acquires of one MessageSid
+- Duplicate insert while the unique index rejects the second row
+- PROCESSING in flight is not acquired again
+- Stale PROCESSING is reclaimed
+- The previous worker cannot finish the reclaimed event
+- The previous worker cannot insert the message after losing the lease
+- FAILED retries and the attempt that reaches the maximum becomes DEAD_LETTER
+- One provider_message_id does not duplicate the outbound message or the handoff
+- A 128-character MessageSid gets one deterministic outbound row
+- The same MessageSid does not consume reentry twice, in memory and on SQL
+- 010 stores TwiML and the retry reads the same body
+- A second begin with monitoring forced off does not process again
+- Takeover-off unit behavior, including TAKEOVER_SCHEMA_REQUIRED staying FAILED
+- Session and lifecycle integration, including the reentry cursor
+- Concurrent audit of one action inserts one row; a different action is kept
+- Retention runs only after confirming that no preexisting conversation matches the cutoff
+
+## Preflight
+
+node scripts/tb006-preflight.js --execute
+exit_code: 0
+ready: true
+twimlAccepted: true
+probeLeft: 0
+
+## Not claimed
+
+whatsapp-bot/package.json has no ESLint script. Lint was not run.
+No frontend tests were run.
+The webhook process was not started and no WhatsApp message was sent.

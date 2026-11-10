@@ -9,6 +9,7 @@ export { isConversationDbEnabled, validateSqlServerEnv, getSqlServerEnv } from '
 
 /** @type {import('mssql').ConnectionPool | null} */
 let pool = null;
+let identityLogged = false;
 
 export async function getPool() {
   if (!isConversationDbEnabled()) return null;
@@ -18,6 +19,24 @@ export async function getPool() {
   pool.on('error', (err) => {
     console.error('[DB] Unexpected pool error:', err.message);
   });
+
+  if (!identityLogged && process.env.TB_SQL_TEST_CONFIRM) {
+    identityLogged = true;
+    const identity = await pool.request().query(
+      'SELECT DB_NAME() AS database_name, @@SERVERNAME AS server_name',
+    );
+    const actual = identity.recordset[0]?.database_name;
+    console.log(JSON.stringify({
+      event: 'sql_test_identity',
+      server: process.env.DB_SERVER,
+      port: Number(process.env.DB_PORT || 1433),
+      database: actual,
+      instance: identity.recordset[0]?.server_name || null,
+    }));
+    if (String(actual || '').toLowerCase() !== String(process.env.DB_NAME || '').trim().toLowerCase()) {
+      throw new Error('DB_NAME no coincide con la base conectada');
+    }
+  }
 
   return pool;
 }

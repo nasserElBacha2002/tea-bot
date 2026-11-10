@@ -39,6 +39,7 @@ async function cleanup(conversationId) {
   await query('DELETE FROM dbo.human_handoffs WHERE conversation_id = $1', [conversationId]);
   await query('DELETE FROM dbo.conversation_messages WHERE conversation_id = $1', [conversationId]);
   await query('DELETE FROM dbo.conversations WHERE id = $1', [conversationId]);
+  await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [String(conversationId)]);
 }
 
 test('integration: cierre humano y texto libre quedan en reentrada, no en welcome', async (t) => {

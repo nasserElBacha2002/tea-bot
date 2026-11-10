@@ -14,6 +14,8 @@ import { resetActivityForTests } from './activity-store.js';
 import monitoringService from './monitoring.service.js';
 import { beginInboundEvent, finishInboundEvent, twilioTurnOutboundId } from './webhook-events.service.js';
 import { hasResponseBodyColumn, resetResponseBodyColumnCache } from './monitoring.repository.js';
+import { withInboundLease } from './inbound-lease.js';
+import auditLogService from '../services/audit-log.service.js';
 
 async function dbUnavailable() {
   const isolated = isolatedTestDatabaseReason();
@@ -437,4 +439,158 @@ test('con monitoreo apagado el segundo begin no procesa de nuevo', async (t) => 
   assert.equal(first.action, 'process');
   assert.equal(second.action, 'skip');
   assert.equal(second.reason, 'processed');
+});
+
+test('un MessageSid de 128 caracteres tiene outbound determinístico y un solo insert', async (t) => {
+  const reason = await dbUnavailable();
+  if (reason) {
+    t.skip(reason);
+    return;
+  }
+  const conversation = await conversationRepository.createConversation({
+    channel: 'whatsapp',
+    provider: 'twilio',
+    externalUserId: `IDEM-LONG-${randomUUID()}`,
+    phoneNumber: null,
+    displayName: 'idempotencia larga',
+    status: 'bot',
+    currentFlowId: 'main-menu',
+    currentNodeKey: null,
+  });
+  const messageId = `L${'a'.repeat(127)}`;
+  const outboundId = twilioTurnOutboundId(messageId);
+  t.after(async () => {
+    await conversationRepository.deleteByIds([conversation.id]);
+  });
+  assert.equal(outboundId, twilioTurnOutboundId(messageId));
+  assert.ok(outboundId.length <= 128);
+  assert.notEqual(outboundId, messageId);
+  await conversationMessageRepository.createMessage({
+    conversationId: conversation.id,
+    direction: 'outbound',
+    senderType: 'bot',
+    body: 'largo',
+    provider: 'twilio',
+    providerMessageId: outboundId,
+  });
+  await conversationMessageRepository.createMessage({
+    conversationId: conversation.id,
+    direction: 'outbound',
+    senderType: 'bot',
+    body: 'reintento',
+    provider: 'twilio',
+    providerMessageId: outboundId,
+  });
+  const stored = await query(
+    `SELECT body FROM dbo.conversation_messages WHERE provider = N'twilio' AND provider_message_id = $1`,
+    [outboundId],
+  );
+  assert.equal(stored.rows.length, 1);
+  assert.equal(stored.rows[0].body, 'largo');
+});
+
+test('el worker que perdió el lease no inserta el mensaje', async (t) => {
+  const reason = await dbUnavailable();
+  if (reason) {
+    t.skip(reason);
+    return;
+  }
+  const conversation = await conversationRepository.createConversation({
+    channel: 'whatsapp',
+    provider: 'twilio',
+    externalUserId: `IDEM-FENCE-${randomUUID()}`,
+    phoneNumber: null,
+    displayName: 'fence',
+    status: 'bot',
+    currentFlowId: 'main-menu',
+    currentNodeKey: null,
+  });
+  const messageId = `SM-LOST-${randomUUID()}`;
+  t.after(async () => {
+    await deleteEvent(messageId);
+    await conversationRepository.deleteByIds([conversation.id]);
+  });
+  const first = await beginInboundEvent({
+    event: { provider: 'twilio', messageId },
+    payload: { MessageSid: messageId },
+  });
+  await query(
+    `UPDATE dbo.provider_webhook_events
+     SET updated_at = DATEADD(minute, -10, SYSUTCDATETIME())
+     WHERE id = $1`,
+    [first.id],
+  );
+  const second = await beginInboundEvent({
+    event: { provider: 'twilio', messageId },
+    payload: { MessageSid: messageId },
+  });
+  assert.equal(second.reason, 'reclaimed');
+  await assert.rejects(
+    () => withInboundLease(
+      { id: first.id, attempts: first.attempts },
+      () => conversationMessageRepository.createMessage({
+        conversationId: conversation.id,
+        direction: 'inbound',
+        senderType: 'user',
+        body: 'no debe quedar',
+        provider: 'twilio',
+        providerMessageId: messageId,
+      }),
+    ),
+    (error) => error.code === 'INBOUND_LEASE_LOST',
+  );
+  const stored = await query(
+    `SELECT id FROM dbo.conversation_messages WHERE provider_message_id = $1`,
+    [messageId],
+  );
+  assert.equal(stored.rows.length, 0);
+  const stale = await finishInboundEvent(first, null, undefined, '<Response>viejo</Response>');
+  assert.equal(stale.owned, false);
+});
+
+test('la misma auditoría por MessageSid se inserta una vez y otra acción se conserva', async (t) => {
+  const reason = await dbUnavailable();
+  if (reason) {
+    t.skip(reason);
+    return;
+  }
+  const entityId = randomUUID();
+  const providerMessageId = `SM-AUD-${randomUUID()}`;
+  t.after(async () => {
+    await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [entityId]);
+  });
+  await Promise.all([
+    auditLogService.record({
+      entityType: 'conversation',
+      entityId,
+      action: 'tb006.same_effect',
+      metadata: { providerMessageId },
+    }),
+    auditLogService.record({
+      entityType: 'conversation',
+      entityId,
+      action: 'tb006.same_effect',
+      metadata: { providerMessageId },
+    }),
+  ]);
+  await auditLogService.record({
+    entityType: 'conversation',
+    entityId,
+    action: 'tb006.other_effect',
+    metadata: { providerMessageId },
+  });
+  const same = await query(
+    `SELECT COUNT(*) AS total
+     FROM dbo.audit_logs
+     WHERE entity_id = $1 AND action = N'tb006.same_effect'`,
+    [entityId],
+  );
+  const other = await query(
+    `SELECT COUNT(*) AS total
+     FROM dbo.audit_logs
+     WHERE entity_id = $1 AND action = N'tb006.other_effect'`,
+    [entityId],
+  );
+  assert.equal(Number(same.rows[0].total), 1);
+  assert.equal(Number(other.rows[0].total), 1);
 });

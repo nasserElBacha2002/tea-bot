@@ -1,0 +1,15 @@
+# TB-005 diffstat
+# HEAD: ac7e69960f133cb32add5a140972329074cbf9fa
+
+ whatsapp-bot/.env.example                          |  32 ++-
+ whatsapp-bot/src/app.js                            |  18 +-
+ whatsapp-bot/src/config.js                         |  82 +++++++
+ .../src/middleware/verify-twilio-signature.js      | 263 ++++++++++++++++++++-
+ whatsapp-bot/src/routes/twilio-webhook.routes.js   |  10 +-
+ 5 files changed, 396 insertions(+), 9 deletions(-)
+
+# untracked
+ .../middleware/twilio-inbound-signature.test.js    | 582 +++++++++++++++++++++
+ 1 file changed, 582 insertions(+)
+ .../twilio-inbound-signature.integration.test.js   | 402 +++++++++++++++++++++
+ 1 file changed, 402 insertions(+)

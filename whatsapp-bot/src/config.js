@@ -26,6 +26,55 @@ const PORT = process.env.PORT || 3000;
 const NODE_ENV = process.env.NODE_ENV || 'development';
 const isProduction = NODE_ENV === 'production';
 
+const TWILIO_SIGNATURE_MODES = new Set(['off', 'log', 'enforce']);
+
+/**
+ * off conserva el comportamiento anterior cuando la variable no está.
+ * log es el valor de activación. enforce no es el default.
+ */
+export function resolveTwilioSignatureMode(raw = process.env.TWILIO_SIGNATURE_MODE) {
+  if (raw == null || String(raw).trim() === '') {
+    return { ok: true, mode: 'off', source: 'default' };
+  }
+  const mode = String(raw).trim().toLowerCase();
+  if (!TWILIO_SIGNATURE_MODES.has(mode)) {
+    return { ok: false, mode: null, source: 'env', reason: 'invalid_mode' };
+  }
+  return { ok: true, mode, source: 'env' };
+}
+
+/** Origen público que Twilio firma. No acepta userinfo, query ni fragmentos. */
+export function resolveTwilioPublicBase(raw = process.env.APP_BASE_URL) {
+  const explicit = String(raw ?? '').trim().replace(/\/$/, '');
+  if (!explicit) return { ok: false, reason: 'public_url_unconfigured', base: null };
+  let parsed;
+  try {
+    parsed = new URL(explicit);
+  } catch {
+    return { ok: false, reason: 'public_url_invalid', base: null };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, reason: 'public_url_invalid', base: null };
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    return { ok: false, reason: 'public_url_invalid', base: null };
+  }
+  return { ok: true, reason: null, base: explicit };
+}
+
+/** Prefijo externo que Nginx agrega y Express no ve. Vacío si no está configurado. */
+export function resolveTwilioPublicPathPrefix(raw = process.env.TWILIO_PUBLIC_PATH_PREFIX) {
+  const value = String(raw ?? '').trim();
+  if (!value) return { ok: true, prefix: '', reason: null };
+  if (/[?#]|:\/\/|\.\./.test(value)) {
+    return { ok: false, prefix: '', reason: 'public_path_prefix_invalid' };
+  }
+  const withSlash = value.startsWith('/') ? value : `/${value}`;
+  const prefix = withSlash.replace(/\/$/, '');
+  if (!prefix || prefix === '/') return { ok: true, prefix: '', reason: null };
+  return { ok: true, prefix, reason: null };
+}
+
 export const config = {
   port: PORT,
   nodeEnv: NODE_ENV,
@@ -153,6 +202,39 @@ export const validateConfig = () => {
   if (String(config.sessionSecret).length < 32) {
     console.error('❌ SESSION_SECRET debe tener al menos 32 caracteres.');
     process.exit(1);
+  }
+
+  const signatureMode = resolveTwilioSignatureMode();
+  if (!signatureMode.ok) {
+    console.error(
+      '❌ TWILIO_SIGNATURE_MODE inválido. Valores permitidos: off, log, enforce. No se degrada a off.',
+    );
+    process.exit(1);
+  }
+  if (signatureMode.mode === 'enforce') {
+    const publicBase = resolveTwilioPublicBase();
+    const pathPrefix = resolveTwilioPublicPathPrefix();
+    if (!config.twilioAuthToken || !publicBase.ok || !pathPrefix.ok) {
+      console.error(
+        '❌ TWILIO_SIGNATURE_MODE=enforce requiere TWILIO_AUTH_TOKEN y APP_BASE_URL http(s) explícita. No se activa enforce sin una URL confiable.',
+      );
+      process.exit(1);
+    }
+  } else if (signatureMode.mode === 'log') {
+    if (!config.twilioAuthToken) {
+      console.error(
+        '❌ TWILIO_SIGNATURE_MODE=log sin TWILIO_AUTH_TOKEN. El inbound responde 403 hasta configurar el token, o TWILIO_SIGNATURE_MODE=off como contingencia.',
+      );
+    }
+    if (!resolveTwilioPublicBase().ok) {
+      console.warn(
+        '⚠️ TWILIO_SIGNATURE_MODE=log sin APP_BASE_URL http(s). No se puede comprobar la firma y no corresponde activar enforce.',
+      );
+    }
+  } else if (signatureMode.mode === 'off') {
+    console.warn(
+      '⚠️ TWILIO_SIGNATURE_MODE=off. El inbound de Twilio no exige firma. El callback de estado sigue exigiéndola.',
+    );
   }
 
   if (config.conversationsOperatorUsername || config.conversationsOperatorPasswordHash) {

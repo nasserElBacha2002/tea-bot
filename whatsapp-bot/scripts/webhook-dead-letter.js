@@ -16,11 +16,12 @@ const id = args[1] || '';
 
 console.log([
   'Procedimiento:',
-  '1. list muestra id, MessageSid, attempts, error_code y error_message.',
+  '1. list consulta id, MessageSid, attempts, error_code y error_message. No cambia filas.',
   '2. La alerta inbound_dead_letter_alert sale cuando el intento agota el máximo.',
-  '3. requeue <id> pasa esa fila de DEAD_LETTER a FAILED y descuenta un attempt.',
-  '4. El próximo webhook de Twilio puede adquirirla. Los efectos ya guardados se reutilizan por MessageSid.',
-  '5. No hay borrado. Un id que no está en DEAD_LETTER no cambia.',
+  '3. requeue <id> solo cambia DEAD_LETTER a FAILED y descuenta un attempt.',
+  '4. Ese cambio no recupera el mensaje, no lo reprocesa y no lo ejecuta.',
+  '5. Hace falta el próximo webhook de Twilio. Los efectos ya guardados se reutilizan por MessageSid.',
+  '6. No hay borrado. Un id que no está en DEAD_LETTER no cambia.',
 ].join('\n'));
 
 if (!execute) {
@@ -56,7 +57,9 @@ if (command === 'requeue') {
   }
   const result = await requeueDeadLetter(id);
   console.log(JSON.stringify(result));
-  process.exit(result?.requeued ? 0 : 1);
+  if (!result.stateChangedToFailed) process.exit(1);
+  console.error('La fila quedó FAILED. El mensaje no se ejecutó y sigue exigiendo el webhook.');
+  process.exit(2);
 }
 
 console.error(`Comando desconocido: ${command}`);

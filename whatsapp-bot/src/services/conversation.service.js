@@ -329,7 +329,12 @@ class ConversationService {
   }
 
   async endActiveSessionsForConversation(conversationId) {
-    await conversationSessionRepository.endAllOpenForConversation(conversationId);
+    return withFencedWrite(null, (transaction) =>
+      conversationSessionRepository.endAllOpenForConversation(
+        conversationId,
+        new Date(),
+        { transaction },
+      ));
   }
 
   async updateStatus(conversationId, status) {

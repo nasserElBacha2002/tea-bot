@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { config } from '../config.js';
 import * as repository from './monitoring.repository.js';
 
@@ -24,12 +25,20 @@ export function isReliableProviderMessageId(value) {
 }
 
 const OUTBOUND_SUFFIX = ':outbound';
+const PROVIDER_MESSAGE_ID_MAX = 128;
 
-/** Clave única del outbound automático de este MessageSid. No pisa el inbound. */
+/**
+ * Clave única del outbound automático de este MessageSid. No pisa el inbound.
+ * Los SID que ya caben con el sufijo histórico lo conservan. Uno más largo
+ * usa un hash estable: antes no tenía clave y no hay filas históricas que
+ * dependan de esa forma.
+ */
 export function twilioTurnOutboundId(messageId) {
   if (!isReliableProviderMessageId(messageId)) return null;
-  if (messageId.length + OUTBOUND_SUFFIX.length > 128) return null;
-  return `${messageId}${OUTBOUND_SUFFIX}`;
+  if (messageId.length + OUTBOUND_SUFFIX.length <= PROVIDER_MESSAGE_ID_MAX) {
+    return `${messageId}${OUTBOUND_SUFFIX}`;
+  }
+  return `out_${createHash('sha256').update(messageId).digest('hex')}`;
 }
 
 function storedPayload(payload) {
@@ -170,18 +179,32 @@ export async function listDeadLetters(limit = 50, repo = repository) {
 }
 
 /**
- * Reintento operativo. No borra la fila ni dispara el turno por sí mismo:
- * deja FAILED con un attempt libre para que el próximo webhook lo adquiera.
+ * Prepara un DEAD_LETTER para un webhook futuro. No lo ejecuta, no lo
+ * recupera y no lo marca como reprocesado: solo lo pasa a FAILED y libera
+ * un attempt. El mensaje sigue exigiendo el próximo inbound de Twilio.
  */
 export async function requeueDeadLetter(id, repo = repository) {
   const result = await repo.requeueDeadLetter(id);
-  if (result?.requeued) {
+  const changed = Boolean(result?.requeued);
+  if (changed) {
     logInbound('inbound_dead_letter_requeued', {
       provider: 'twilio',
       messageId: result.providerMessageId,
       attempts: result.attempts,
-      reason: 'manual_requeue',
+      reason: 'prepared_failed_not_executed',
     });
   }
-  return result;
+  return {
+    stateChangedToFailed: changed,
+    recovered: false,
+    reprocessed: false,
+    executed: false,
+    requiresManualWebhook: changed,
+    id: result?.id || null,
+    providerMessageId: result?.providerMessageId || null,
+    attempts: result?.attempts ?? null,
+    errorCode: result?.errorCode || null,
+    errorMessage: result?.errorMessage || null,
+    status: changed ? result.status : null,
+  };
 }

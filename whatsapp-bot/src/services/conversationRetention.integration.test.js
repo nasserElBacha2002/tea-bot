@@ -133,6 +133,17 @@ test('schema real: índice last_message_at y cascades de retención', async (t) 
   assert.equal(Number(index.rows.length), 1);
 
   const cutoff = new Date('2000-01-15T00:00:00.000Z');
+  const preexisting = await query(
+    `SELECT COUNT(*) AS total
+     FROM dbo.conversations
+     WHERE (last_message_at IS NOT NULL AND last_message_at < $1)
+        OR (last_message_at IS NULL AND started_at < $1)`,
+    [cutoff],
+  );
+  if (Number(preexisting.rows[0]?.total || 0) > 0) {
+    t.skip('BLOCKED: hay conversaciones anteriores al corte; la retención borraría datos ajenos');
+    return;
+  }
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
 
   const stale = await createAgedConversation({
@@ -204,6 +215,11 @@ test('schema real: índice last_message_at y cascades de retención', async (t) 
   } finally {
     for (const conversation of [fresh, exact, stale, raced]) {
       try {
+        await query(
+          `DELETE FROM dbo.audit_logs
+           WHERE entity_id = $1 AND action = N'conversation.retention_fixture'`,
+          [String(conversation.id)],
+        );
         await conversationRepository.deleteByIds([conversation.id]);
       } catch {
         /* already deleted or missing */

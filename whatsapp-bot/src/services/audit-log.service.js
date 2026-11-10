@@ -1,4 +1,4 @@
-import { query, isConversationDbEnabled } from '../db/index.js';
+import { query, isConversationDbEnabled, withTransaction } from '../db/index.js';
 
 function serializeJson(value) {
   if (value == null) return null;
@@ -21,18 +21,44 @@ class AuditLogService {
   }) {
     if (!this.isEnabled()) return;
     try {
+      const metadataJson = serializeJson({
+        ...(metadata || {}),
+        actor: metadata?.actor || (actorUserId ? 'user' : 'system_or_local_admin'),
+      });
+      const values = [
+        actorUserId,
+        entityType,
+        String(entityId),
+        action,
+        serializeJson(beforeJson),
+        serializeJson(afterJson),
+        metadataJson,
+      ];
       if (metadata?.providerMessageId) {
-        const existing = await query(
-          `SELECT TOP (1) id
-           FROM dbo.audit_logs
-           WHERE entity_type = $1
-             AND entity_id = $2
-             AND action = $3
-             AND ISJSON(metadata_json) = 1
-             AND JSON_VALUE(metadata_json, '$.providerMessageId') = $4`,
-          [entityType, String(entityId), action, String(metadata.providerMessageId)],
-        );
-        if (existing.rows[0]) return;
+        await withTransaction(async (transaction) => {
+          const existing = await query(
+            `SELECT TOP (1) id
+             FROM dbo.audit_logs WITH (UPDLOCK, HOLDLOCK)
+             WHERE entity_type = $1
+               AND entity_id = $2
+               AND action = $3
+               AND ISJSON(metadata_json) = 1
+               AND JSON_VALUE(metadata_json, '$.providerMessageId') = $4`,
+            [entityType, String(entityId), action, String(metadata.providerMessageId)],
+            { transaction },
+          );
+          if (existing.rows[0]) return;
+          await query(
+            `INSERT INTO dbo.audit_logs (
+              actor_user_id, entity_type, entity_id, action,
+              before_json, after_json, metadata_json
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            values,
+            { transaction },
+          );
+        });
+        return;
       }
       await query(
         `INSERT INTO dbo.audit_logs (
@@ -40,18 +66,7 @@ class AuditLogService {
           before_json, after_json, metadata_json
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
-          actorUserId,
-          entityType,
-          String(entityId),
-          action,
-          serializeJson(beforeJson),
-          serializeJson(afterJson),
-          serializeJson({
-            ...(metadata || {}),
-            actor: metadata?.actor || (actorUserId ? 'user' : 'system_or_local_admin'),
-          }),
-        ],
+        values,
       );
     } catch (err) {
       console.warn(`[AuditLog] No se pudo registrar ${action}: ${err.message}`);
