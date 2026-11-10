@@ -1,23 +1,5 @@
 import { normalizeGlobalCommandInput } from './global-commands.js';
-import { FlowFieldValidationError } from './flow-field-validation.js';
-
-function normalizeMessage(text, ctx) {
-  if (text == null || text === '') return '';
-  if (typeof text === 'number' || typeof text === 'boolean') {
-    return String(text).trim().toLowerCase();
-  }
-  if (typeof text !== 'string') {
-    throw new FlowFieldValidationError({
-      flowKey: ctx?.flowKey || 'unknown',
-      version: ctx?.version,
-      nodeId: ctx?.nodeId,
-      path: ctx?.path || 'transition.value',
-      expectedType: 'string',
-      value: text,
-    });
-  }
-  return text.trim().toLowerCase();
-}
+import { buildNodeTransitionIndex } from './flow-transition-index.js';
 
 export function compileFlow(flow) {
   if (!flow || !Array.isArray(flow.nodes)) {
@@ -29,6 +11,7 @@ export function compileFlow(flow) {
   const exactMatchByNodeId = new Map();
   const includesRulesByNodeId = new Map();
   const defaultTransitionByNodeId = new Map();
+  const transitionIndexByNodeId = new Map();
   const duplicateNodeIds = [];
   const commandTransitionsByNodeId = new Map();
   const globalCommandEntryByType = new Map();
@@ -51,52 +34,17 @@ export function compileFlow(flow) {
     transitionsByNodeId.set(node.id, transitions);
     transitionCount += transitions.length;
 
-    const exactMap = new Map();
-    const includesRules = [];
-    let defaultTransition = null;
     const commandTransitions = new Map();
-
-    for (const transition of transitions) {
-      const ctx = {
-        flowKey,
-        version: flowVersion,
-        nodeId: node.id,
-        path: `nodes.${node.id}.transitions[].value`,
-      };
-      const type = transition?.type;
-      if (type === 'match') {
-        const key = normalizeMessage(transition.value, ctx);
-        if (key && !exactMap.has(key)) {
-          exactMap.set(key, transition);
-          exactValueCount += 1;
-        }
-        continue;
-      }
-      if (type === 'matchAny' && Array.isArray(transition.value)) {
-        for (const rawValue of transition.value) {
-          const key = normalizeMessage(rawValue, {
-            ...ctx,
-            path: `nodes.${node.id}.transitions[].value[]`,
-          });
-          if (key && !exactMap.has(key)) {
-            exactMap.set(key, transition);
-            exactValueCount += 1;
-          }
-        }
-        continue;
-      }
-      if (type === 'matchIncludes') {
-        const needle = normalizeMessage(transition.value, ctx);
-        if (needle) {
-          includesRules.push({ needle, transition });
-          includesRuleCount += 1;
-        }
-        continue;
-      }
-      if (type === 'default' || transition?.default === true) {
-        if (!defaultTransition) defaultTransition = transition;
-      }
-    }
+    const index = buildNodeTransitionIndex(node, {
+      strict: true,
+      flowKey,
+      version: flowVersion,
+    });
+    const exactMap = index.exact;
+    const includesRules = index.includes;
+    const defaultTransition = index.defaultTransition;
+    exactValueCount += exactMap.size;
+    includesRuleCount += includesRules.length;
 
     // Detect legacy global command transitions for compatibility metadata
     for (const transition of transitions) {
@@ -118,6 +66,7 @@ export function compileFlow(flow) {
 
     exactMatchByNodeId.set(node.id, exactMap);
     includesRulesByNodeId.set(node.id, includesRules);
+    transitionIndexByNodeId.set(node.id, index);
     if (defaultTransition) defaultTransitionByNodeId.set(node.id, defaultTransition);
     commandTransitionsByNodeId.set(node.id, commandTransitions);
   }
@@ -140,6 +89,7 @@ export function compileFlow(flow) {
     transitionsByNodeId,
     exactMatchByNodeId,
     includesRulesByNodeId,
+    transitionIndexByNodeId,
     defaultTransitionByNodeId,
     commandTransitionsByNodeId,
     globalCommandEntryByType,

@@ -1,5 +1,4 @@
 import http from 'http';
-import express from 'express';
 import test, { describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -8,8 +7,7 @@ import '../config.js';
 import { config } from '../config.js';
 import { closePool, query } from '../db/index.js';
 import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
-import twilioWebhookRouter from '../routes/twilio-webhook.routes.js';
-import { rememberUrlencodedBody } from './verify-twilio-signature.js';
+import { createApp } from '../create-app.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
@@ -22,8 +20,18 @@ const BASE = 'https://bot.example';
 
 const previousSheets = config.googleSheetsEnabled;
 config.googleSheetsEnabled = false;
+let sentinelId = null;
 
 after(async () => {
+  if (sentinelId) {
+    const { rows } = await query(
+      'SELECT id FROM dbo.conversations WHERE id = $1',
+      [sentinelId],
+    );
+    if (!rows[0]) {
+      throw new Error('el cleanup alcanzó una conversación preexistente');
+    }
+  }
   config.googleSheetsEnabled = previousSheets;
   await closePool();
 });
@@ -47,6 +55,8 @@ function restoreEnv(snapshot) {
   else process.env.TWILIO_SIGNATURE_MODE = snapshot.mode;
   if (snapshot.base == null) delete process.env.APP_BASE_URL;
   else process.env.APP_BASE_URL = snapshot.base;
+  if (snapshot.prefix == null) delete process.env.TWILIO_PUBLIC_PATH_PREFIX;
+  else process.env.TWILIO_PUBLIC_PATH_PREFIX = snapshot.prefix;
   if (snapshot.takeover == null) delete process.env.MANUAL_TAKEOVER_ENABLED;
   else process.env.MANUAL_TAKEOVER_ENABLED = snapshot.takeover;
   if (snapshot.reentry == null) delete process.env.REENTRY_POLICY;
@@ -58,6 +68,7 @@ function useEnv(t, { mode = 'enforce' } = {}) {
     token: config.twilioAuthToken,
     mode: process.env.TWILIO_SIGNATURE_MODE,
     base: process.env.APP_BASE_URL,
+    prefix: process.env.TWILIO_PUBLIC_PATH_PREFIX,
     takeover: process.env.MANUAL_TAKEOVER_ENABLED,
     reentry: process.env.REENTRY_POLICY,
   };
@@ -65,6 +76,7 @@ function useEnv(t, { mode = 'enforce' } = {}) {
   config.googleSheetsEnabled = false;
   process.env.TWILIO_SIGNATURE_MODE = mode;
   process.env.APP_BASE_URL = BASE;
+  delete process.env.TWILIO_PUBLIC_PATH_PREFIX;
   delete process.env.MANUAL_TAKEOVER_ENABLED;
   t.after(() => restoreEnv(snapshot));
 }
@@ -78,6 +90,10 @@ async function prepare(t) {
   const identity = await query('SELECT DB_NAME() AS database_name');
   const name = String(identity.rows[0]?.database_name || '');
   assert.equal(name.toLowerCase(), 'tea-bot');
+  if (!sentinelId) {
+    const { rows } = await query('SELECT TOP 1 id FROM dbo.conversations');
+    if (rows[0]?.id) sentinelId = rows[0].id;
+  }
   return true;
 }
 
@@ -87,8 +103,8 @@ function listen(app) {
   });
 }
 
-function post(server, { path, params, headers = {} }) {
-  const body = new URLSearchParams(params).toString();
+function post(server, { path, params, rawBody, headers = {} }) {
+  const body = rawBody ?? new URLSearchParams(params).toString();
   return new Promise((resolve, reject) => {
     const req = http.request({
       port: server.address().port,
@@ -112,32 +128,63 @@ function post(server, { path, params, headers = {} }) {
   });
 }
 
-async function cleanup({ phoneNumber, messageIds }) {
-  const externalUserId = `twilio:whatsapp:${phoneNumber}`;
+function idKey(value) {
+  return String(value).toLowerCase();
+}
+
+async function idsFor(phoneNumber, externalUserId) {
   const { rows } = await query(
     `SELECT id FROM dbo.conversations
      WHERE phone_number = $1 OR external_user_id = $2`,
     [phoneNumber, externalUserId],
   );
-  for (const row of rows) {
-    const id = row.id;
+  return rows.map((row) => row.id);
+}
+
+async function deleteOwnedConversations(ids, preexistingKeys) {
+  for (const id of ids) {
+    if (preexistingKeys.has(idKey(id))) {
+      throw new Error('cleanup rechazado: el id ya existía antes del test');
+    }
     await query('DELETE FROM dbo.conversation_sessions WHERE conversation_id = $1', [id]);
     await query('DELETE FROM dbo.human_handoffs WHERE conversation_id = $1', [id]);
     await query('DELETE FROM dbo.conversation_messages WHERE conversation_id = $1', [id]);
     await query('DELETE FROM dbo.conversations WHERE id = $1', [id]);
     await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [String(id)]);
   }
-  for (const messageId of messageIds) {
-    await query(
-      'DELETE FROM dbo.provider_webhook_events WHERE provider_message_id = $1',
-      [messageId],
-    );
-    await query(
-      'DELETE FROM dbo.provider_webhook_events WHERE provider_message_id = $1',
-      [`${messageId}:outbound`],
-    );
-  }
-  await sessionService.resetSession(externalUserId);
+}
+
+async function openFixture(t, phoneNumber, messageIds) {
+  const externalUserId = `twilio:whatsapp:${phoneNumber}`;
+  const preexisting = await idsFor(phoneNumber, externalUserId);
+  const preexistingKeys = new Set(preexisting.map(idKey));
+  t.after(async () => {
+    const current = await idsFor(phoneNumber, externalUserId);
+    const owned = current.filter((id) => !preexistingKeys.has(idKey(id)));
+    await deleteOwnedConversations(owned, preexistingKeys);
+    const remaining = await idsFor(phoneNumber, externalUserId);
+    for (const id of preexisting) {
+      assert.equal(remaining.some((item) => idKey(item) === idKey(id)), true);
+    }
+    for (const messageId of messageIds) {
+      await query(
+        'DELETE FROM dbo.provider_webhook_events WHERE provider_message_id = $1',
+        [messageId],
+      );
+      await query(
+        'DELETE FROM dbo.provider_webhook_events WHERE provider_message_id = $1',
+        [`${messageId}:outbound`],
+      );
+    }
+    await sessionService.resetSession(externalUserId);
+  });
+  return {
+    externalUserId,
+    async ownedIds() {
+      const current = await idsFor(phoneNumber, externalUserId);
+      return current.filter((id) => !preexistingKeys.has(idKey(id)));
+    },
+  };
 }
 
 async function eventRows(messageId) {
@@ -150,15 +197,18 @@ async function eventRows(messageId) {
   return rows;
 }
 
-async function inboundCount(phoneNumber) {
-  const { rows } = await query(
-    `SELECT COUNT(*) AS total
-     FROM dbo.conversation_messages m
-     INNER JOIN dbo.conversations c ON c.id = m.conversation_id
-     WHERE c.phone_number = $1 AND m.direction = N'inbound'`,
-    [phoneNumber],
-  );
-  return Number(rows[0]?.total || 0);
+async function inboundCount(ids) {
+  let total = 0;
+  for (const id of ids) {
+    const { rows } = await query(
+      `SELECT COUNT(*) AS total
+       FROM dbo.conversation_messages
+       WHERE conversation_id = $1 AND direction = N'inbound'`,
+      [id],
+    );
+    total += Number(rows[0]?.total || 0);
+  }
+  return total;
 }
 
 describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
@@ -187,11 +237,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     const messageId = sid('T02');
     const missingId = sid('T03');
     const from = phone();
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId, missingId] }));
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    const fixture = await openFixture(t, from, [messageId, missingId]);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const invalid = await post(server, {
@@ -207,7 +254,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     assert.equal(missing.status, 403);
     assert.equal((await eventRows(messageId)).length, 0);
     assert.equal((await eventRows(missingId)).length, 0);
-    assert.equal(await inboundCount(from), 0);
+    assert.equal((await fixture.ownedIds()).length, 0);
+    assert.equal(await inboundCount(await fixture.ownedIds()), 0);
   });
 
   test('T13 dos firmas validas del mismo MessageSid procesan una sola vez', async (t) => {
@@ -215,11 +263,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     useEnv(t, { mode: 'enforce' });
     const messageId = sid('T13');
     const from = phone();
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId] }));
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    const fixture = await openFixture(t, from, [messageId]);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const params = { MessageSid: messageId, From: `whatsapp:${from}`, Body: 'hola' };
@@ -234,7 +279,9 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, 'PROCESSED');
     assert.equal(Number(rows[0].attempts), 1);
-    assert.equal(await inboundCount(from), 1);
+    const owned = await fixture.ownedIds();
+    assert.equal(owned.length, 1);
+    assert.equal(await inboundCount(owned), 1);
   });
 
   test('T14 una firma invalida no consume el MessageSid', async (t) => {
@@ -242,11 +289,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     useEnv(t, { mode: 'enforce' });
     const messageId = sid('T14');
     const from = phone();
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId] }));
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    const fixture = await openFixture(t, from, [messageId]);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const params = { MessageSid: messageId, From: `whatsapp:${from}`, Body: 'hola' };
@@ -267,7 +311,9 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     const rows = await eventRows(messageId);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, 'PROCESSED');
-    assert.equal(await inboundCount(from), 1);
+    const owned = await fixture.ownedIds();
+    assert.equal(owned.length, 1);
+    assert.equal(await inboundCount(owned), 1);
   });
 
   test('T15 una firma valida permite la reentrada', async (t) => {
@@ -276,8 +322,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     process.env.REENTRY_POLICY = 'prompt';
     const messageId = sid('T15');
     const from = phone();
-    const externalUserId = `twilio:whatsapp:${from}`;
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId] }));
+    const fixture = await openFixture(t, from, [messageId]);
+    const { externalUserId } = fixture;
     const created = await conversationRepository.createConversation({
       channel: 'whatsapp',
       provider: 'twilio',
@@ -316,10 +362,7 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
       { resolutionNote: 'tb005 reentry' },
     );
     assert.equal(closed.conversation.reentryJson.status, 'pending');
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const params = {
@@ -351,11 +394,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     assert.equal(isManualTakeoverEnabled(), false);
     const messageId = sid('T16');
     const from = phone();
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId] }));
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    const fixture = await openFixture(t, from, [messageId]);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const params = { MessageSid: messageId, From: `whatsapp:${from}`, Body: 'hola' };
@@ -367,9 +407,11 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     assert.equal(response.status, 200);
     assert.notEqual(response.status, 409);
     assert.match(response.body, /<Message>/);
+    const owned = await fixture.ownedIds();
+    assert.equal(owned.length, 1);
     const { rows } = await query(
-      `SELECT status FROM dbo.conversations WHERE phone_number = $1`,
-      [from],
+      'SELECT status FROM dbo.conversations WHERE id = $1',
+      [owned[0]],
     );
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, 'bot');
@@ -381,11 +423,8 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     useEnv(t, { mode: 'log' });
     const messageId = sid('T04');
     const from = phone();
-    t.after(() => cleanup({ phoneNumber: from, messageIds: [messageId] }));
-    const app = express();
-    app.use(express.urlencoded({ extended: false, verify: rememberUrlencodedBody }));
-    app.use('/webhooks/twilio', twilioWebhookRouter);
-    const server = await listen(app);
+    await openFixture(t, from, [messageId]);
+    const server = await listen(createApp());
     t.after(() => new Promise((resolve) => server.close(resolve)));
     const path = '/webhooks/twilio/main-menu';
     const response = await post(server, {
@@ -398,5 +437,43 @@ describe('TB-005 firma inbound contra SQL tea-bot', { concurrency: 1 }, () => {
     const rows = await eventRows(messageId);
     assert.equal(rows.length, 1);
     assert.equal(rows[0].status, 'PROCESSED');
+  });
+
+  test('el cleanup rechaza un id preexistente y no lo borra', async (t) => {
+    if (!await prepare(t)) return;
+    assert.ok(sentinelId);
+    await assert.rejects(
+      () => deleteOwnedConversations([sentinelId], new Set([idKey(sentinelId)])),
+      /ya existía/,
+    );
+    const { rows } = await query(
+      'SELECT id FROM dbo.conversations WHERE id = $1',
+      [sentinelId],
+    );
+    assert.equal(rows.length, 1);
+  });
+
+  test('la app real rechaza la firma del último valor repetido sin escribir el SID', async (t) => {
+    if (!await prepare(t)) return;
+    useEnv(t, { mode: 'enforce' });
+    const messageId = sid('DUP');
+    await openFixture(t, `+5491155000000`, [messageId]);
+    const server = await listen(createApp());
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const requestPath = '/webhooks/twilio/main-menu';
+    const rawBody = `MessageSid=${messageId}&Tag=b&Tag=a`;
+    const response = await post(server, {
+      path: requestPath,
+      rawBody,
+      headers: {
+        'x-twilio-signature': twilio.getExpectedTwilioSignature(
+          TOKEN,
+          `${BASE}${requestPath}`,
+          { MessageSid: messageId, Tag: 'a' },
+        ),
+      },
+    });
+    assert.equal(response.status, 403);
+    assert.equal((await eventRows(messageId)).length, 0);
   });
 });

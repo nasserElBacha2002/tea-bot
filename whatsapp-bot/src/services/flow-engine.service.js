@@ -7,6 +7,12 @@ import conversationExportService from './conversationExport.service.js';
 import { config } from '../config.js';
 import { detectGlobalCommand } from '../utils/global-commands.js';
 import { compileFlow } from '../utils/compile-flow.js';
+import { normalizeFlowMatchText } from '../utils/flow-match-text.js';
+import { formatUnmatchedMenuReply, parseEnumeratedMenuOptions } from '../utils/flow-menu-options.js';
+import {
+  buildNodeTransitionIndex,
+  resolveIndexedTransition,
+} from '../utils/flow-transition-index.js';
 import { logPerf, nowMs, roundMs } from '../utils/perf-timer.js';
 import { WELCOME_NODE_ID, COLLECT_EMAIL_NODE_ID, DEFAULT_INVALID_EMAIL_REPLY } from '../constants/contact-email-flow.js';
 import { resolveContactEmail } from './contact-email.service.js';
@@ -17,11 +23,6 @@ import {
   tryHandleEmailCollectionInput,
 } from './email-collection-runtime.js';
 
-function normalizeMessage(text) {
-  return (text || '').trim().toLowerCase();
-}
-
-const HISTORY_LIMIT = 20;
 const CANCEL_INPUTS = new Set(['salir', 'cancelar', 'terminar']);
 
 export class FlowEngine {
@@ -44,8 +45,8 @@ export class FlowEngine {
     conversationContext = null,
   }) {
     const resolveStart = nowMs();
-    const input = normalizeMessage(text);
     const rawText = (text || '').trim();
+    const input = normalizeFlowMatchText(rawText);
     const hasStoredEmail = conversationContext
       ? Boolean(await resolveContactEmail(conversationContext))
       : false;
@@ -242,7 +243,7 @@ export class FlowEngine {
       };
     }
 
-    const globalCommand = detectGlobalCommand(input);
+    const globalCommand = detectGlobalCommand(rawText);
     if (globalCommand.type) {
       const globalResult = await this._resolveGlobalCommand({
         globalCommand: globalCommand.type,
@@ -272,9 +273,24 @@ export class FlowEngine {
     // 3. Evaluar transiciones según el input del usuario
     const transitionStart = nowMs();
     const transitionStats = this._transitionStats(currentNode);
-    const transitionEval = compiled
+    let transitionEval = compiled
       ? this.evaluateCompiledTransitionsDetailed(compiled, currentNode.id, input, flow.fallbackNode)
       : this.evaluateTransitionsDetailed(currentNode, input, flow.fallbackNode);
+    const explainUnmatched = this._shouldExplainUnmatched(currentNode, transitionEval, flow);
+    let turnVariables = { ...(session.variables || {}) };
+    if (explainUnmatched) {
+      transitionEval = {
+        nextNodeId: currentNode.id,
+        reason: transitionEval.reason === 'default' || transitionEval.reason === 'stay_on_node'
+          ? 'unmatched_option'
+          : transitionEval.reason,
+        usedFallback: false,
+        matchedTransition: null,
+      };
+      turnVariables.unmatchedOptionCount = Number(turnVariables.unmatchedOptionCount || 0) + 1;
+    } else if (transitionEval.nextNodeId && transitionEval.nextNodeId !== currentNode.id) {
+      delete turnVariables.unmatchedOptionCount;
+    }
     const nextNodeId = transitionEval.nextNodeId;
     perfContext?.add?.('transitionEvalMs', roundMs(nowMs() - transitionStart));
     perfContext?.add?.('currentNodeId', currentNode.id);
@@ -320,12 +336,20 @@ export class FlowEngine {
       nextNode,
       compiled,
       flow,
-      session.variables,
+      turnVariables,
       session,
-      input,
+      rawText,
       flowMode,
       perfContext
     );
+    if (explainUnmatched) {
+      result.reply = formatUnmatchedMenuReply(
+        currentNode,
+        turnVariables.unmatchedOptionCount,
+        Boolean(this._resolveHumanNodeId(compiled, flow)),
+      );
+      result.unmatchedOption = true;
+    }
     perfContext?.add?.('resolveIncomingMessageMs', roundMs(nowMs() - resolveStart));
     logPerf('flow_resolve', {
       flowId: flow.id,
@@ -535,121 +559,35 @@ export class FlowEngine {
 
   evaluateTransitionsDetailed(node, input, fallbackNodeId) {
     if (!node) {
-      return {
-        nextNodeId: fallbackNodeId,
-        reason: 'node_missing',
-        usedFallback: true,
-        matchedTransition: null,
-      };
+      return resolveIndexedTransition(null, null, '', fallbackNodeId);
     }
-    if (!node.transitions || node.transitions.length === 0) {
-      return {
-        nextNodeId: node.nextNode || fallbackNodeId,
-        reason: node.nextNode ? 'node_next' : 'fallback',
-        usedFallback: !node.nextNode,
-        matchedTransition: null,
-      };
-    }
-
-    // 1. match (Coincidencia exacta)
-    const matchTrans = node.transitions.find((t) => t.type === 'match' && input === normalizeMessage(t.value));
-    if (matchTrans) {
-      return { nextNodeId: matchTrans.nextNode, reason: 'match', usedFallback: false, matchedTransition: matchTrans };
-    }
-
-    // 2. matchAny (Cualquiera de la lista)
-    const matchAnyTrans = node.transitions.find(
-      (t) => t.type === 'matchAny'
-        && Array.isArray(t.value)
-        && t.value.some((v) => input === normalizeMessage(v)),
-    );
-    if (matchAnyTrans) {
-      return {
-        nextNodeId: matchAnyTrans.nextNode,
-        reason: 'matchAny',
-        usedFallback: false,
-        matchedTransition: matchAnyTrans,
-      };
-    }
-
-    // 3. matchIncludes (Contiene la palabra)
-    const matchIncTrans = node.transitions.find(
-      (t) => t.type === 'matchIncludes' && input.includes(normalizeMessage(t.value)),
-    );
-    if (matchIncTrans) {
-      return {
-        nextNodeId: matchIncTrans.nextNode,
-        reason: 'matchIncludes',
-        usedFallback: false,
-        matchedTransition: matchIncTrans,
-      };
-    }
-
-    // 4. default
-    const defTrans = node.transitions.find((t) => t.type === 'default' || t.default === true);
-    if (defTrans) {
-      return { nextNodeId: defTrans.nextNode, reason: 'default', usedFallback: false, matchedTransition: defTrans };
-    }
-
-    return {
-      nextNodeId: fallbackNodeId || node.id,
-      reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
-      usedFallback: Boolean(fallbackNodeId),
-      matchedTransition: null,
-    };
+    const index = buildNodeTransitionIndex(node);
+    return resolveIndexedTransition(node, index, normalizeFlowMatchText(input), fallbackNodeId);
   }
 
   evaluateCompiledTransitionsDetailed(compiled, nodeId, input, fallbackNodeId) {
     const node = compiled.nodesById.get(nodeId);
     if (!node) {
-      return {
-        nextNodeId: fallbackNodeId,
-        reason: 'node_missing',
-        usedFallback: true,
-        matchedTransition: null,
-      };
+      return resolveIndexedTransition(null, null, '', fallbackNodeId);
     }
-    const transitions = compiled.transitionsByNodeId.get(nodeId) || [];
-    if (transitions.length === 0) {
-      return {
-        nextNodeId: node.nextNode || fallbackNodeId,
-        reason: node.nextNode ? 'node_next' : 'fallback',
-        usedFallback: !node.nextNode,
-        matchedTransition: null,
-      };
+    const index = compiled.transitionIndexByNodeId?.get(nodeId) || buildNodeTransitionIndex(node);
+    return resolveIndexedTransition(node, index, normalizeFlowMatchText(input), fallbackNodeId);
+  }
+
+  _shouldExplainUnmatched(node, evaluation, flow) {
+    if (!node || !evaluation) return false;
+    if (node.type === 'capture' || node.type === 'redirect' || node.type === 'end') return false;
+    if (flow?.fallbackNode && node.id === flow.fallbackNode) return false;
+    if (parseEnumeratedMenuOptions(node.message).length === 0) return false;
+    if (
+      evaluation.reason === 'ambiguous_exact'
+      || evaluation.reason === 'ambiguous_label'
+      || evaluation.reason === 'ambiguous_include'
+    ) {
+      return true;
     }
-
-    const exact = compiled.exactMatchByNodeId.get(nodeId);
-    const match = exact?.get(input);
-    if (match) return { nextNodeId: match.nextNode, reason: 'exact', usedFallback: false, matchedTransition: match };
-
-    const includes = compiled.includesRulesByNodeId.get(nodeId) || [];
-    const includeMatch = includes.find((rule) => input.includes(rule.needle));
-    if (includeMatch) {
-      return {
-        nextNodeId: includeMatch.transition.nextNode,
-        reason: 'matchIncludes',
-        usedFallback: false,
-        matchedTransition: includeMatch.transition,
-      };
-    }
-
-    const defaultTransition = compiled.defaultTransitionByNodeId.get(nodeId);
-    if (defaultTransition) {
-      return {
-        nextNodeId: defaultTransition.nextNode,
-        reason: 'default',
-        usedFallback: false,
-        matchedTransition: defaultTransition,
-      };
-    }
-
-    return {
-      nextNodeId: fallbackNodeId || node.id,
-      reason: fallbackNodeId ? 'fallback' : 'stay_on_node',
-      usedFallback: Boolean(fallbackNodeId),
-      matchedTransition: null,
-    };
+    return (evaluation.reason === 'default' || evaluation.reason === 'stay_on_node')
+      && evaluation.nextNodeId === node.id;
   }
 
   async _resolveGlobalCommand({

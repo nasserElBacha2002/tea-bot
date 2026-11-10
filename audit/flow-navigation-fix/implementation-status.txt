@@ -1,0 +1,16 @@
+READY_FOR_REVIEW
+
+Flujo de referencia: main-menu v62 exportado de producción (main-menu.json).
+Base local usada solo para pruebas: tea-bot en localhost. Publicado local vigente: main-menu v24. No se publicó ni se sobrescribió ningún snapshot.
+
+Causa raíz confirmada en si_pd_menu antes de modificar el motor.
+La opción 3 ya tenía destino válido: si_pd_direccion.
+El arreglo está en el matching y en el fallback del motor. No requiere una versión nueva del flujo.
+
+Suite completa:
+  tests 428
+  pass 426
+  fail 0
+  skipped 2
+Los dos omitidos son las integraciones de toma manual que dependen de la migración 009. No cuentan como aprobados.
+No se aplicaron migraciones. No hubo commit, push ni deploy.

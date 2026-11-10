@@ -1,0 +1,43 @@
+Suite completa, 2026-11-10, base tea-bot, TB_SQL_TEST_CONFIRM=tea-bot:
+
+  cd whatsapp-bot
+  TB_SQL_TEST_CONFIRM=tea-bot node --test --test-concurrency=1 $(find src migrations -name '*.test.js' | sort)
+
+  tests 428
+  pass 426
+  fail 0
+  skipped 2
+  duration_ms 170618
+
+Omitidos, no aprobados:
+  integration: toma manual exclusiva en SQL TEST
+    SKIP Migration 009_conversation_status_version.sql is not applied on the test database
+  integration: dos agentes en paralelo sobre SQL real
+    SKIP Migration 009_conversation_status_version.sql is not applied on the test database
+
+Pruebas nuevas de navegación, todas aprobadas:
+
+  src/utils/flow-match-text.test.js
+  src/services/flow-navigation.test.js
+  src/services/flow-navigation.integration.test.js
+
+Cubren, contra el documento de producción v62 salvo el retry de MessageSid:
+
+  3, 3️⃣, Dirección de estudios, Direccion de estudios, DIRECCIÓN DE ESTUDIOS,
+  espacios extremos y espacios internos -> si_pd_direccion
+  Secretaría, Administración, Mail de profesores/as, Blanqueo de mail institucional
+  dos preguntas libres consecutivas -> mismo nodo, textos distintos, sin fecha inventada
+  Menú y menu con email -> welcome
+  MENU sin email -> collect_email
+  Atrás y atras -> historial
+  captura de texto libre
+  etiquetas ambiguas y aliases normalizados en colisión
+  includes "si" no matchea "inscripciones"
+  SQL: current_node_key y variables de sesión persistidos
+  SQL: conversación assigned no cambia de nodo con Menú
+  SQL: reentrada pending no consume "Dirección de estudios" ni "3"
+  SQL: el mismo MessageSid persiste un solo outbound y no reejecuta la transición
+
+El retry de MessageSid corre sobre el snapshot publicado local v24.
+En ese snapshot, si_pd_menu y si_pd_direccion son idénticos a v62.
+El resto de la navegación se ejecutó con el export de producción montado en la sesión.

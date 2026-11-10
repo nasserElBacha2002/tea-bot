@@ -62,7 +62,7 @@ export function resolveTwilioPublicBase(raw = process.env.APP_BASE_URL) {
   return { ok: true, reason: null, base: explicit };
 }
 
-/** Prefijo externo que Nginx agrega y Express no ve. Vacío si no está configurado. */
+/** Prefijo externo. Vacío si no está configurado. No se infiere del request. */
 export function resolveTwilioPublicPathPrefix(raw = process.env.TWILIO_PUBLIC_PATH_PREFIX) {
   const value = String(raw ?? '').trim();
   if (!value) return { ok: true, prefix: '', reason: null };
@@ -73,6 +73,127 @@ export function resolveTwilioPublicPathPrefix(raw = process.env.TWILIO_PUBLIC_PA
   const prefix = withSlash.replace(/\/$/, '');
   if (!prefix || prefix === '/') return { ok: true, prefix: '', reason: null };
   return { ok: true, prefix, reason: null };
+}
+
+/**
+ * Contrato de URL pública. No mira el request ni los headers forwarded.
+ * El pathname de APP_BASE_URL y TWILIO_PUBLIC_PATH_PREFIX no se combinan:
+ * los dos juntos son ambiguos y no sirven para log ni para enforce.
+ * Si Nginx conserva el prefijo, la base es solo el origen y el prefijo va vacío:
+ * la ruta que recibe Express ya es la ruta pública.
+ */
+export function planTwilioPublicUrl(env = process.env) {
+  const base = resolveTwilioPublicBase(env.APP_BASE_URL);
+  const prefixState = resolveTwilioPublicPathPrefix(env.TWILIO_PUBLIC_PATH_PREFIX);
+  if (!base.ok) {
+    return {
+      ok: false,
+      reason: base.reason,
+      origin: null,
+      publicPrefix: '',
+      prefixSource: null,
+      basePath: '',
+    };
+  }
+  if (!prefixState.ok) {
+    return {
+      ok: false,
+      reason: prefixState.reason,
+      origin: null,
+      publicPrefix: '',
+      prefixSource: null,
+      basePath: '',
+    };
+  }
+  const parsed = new URL(base.base);
+  const basePath = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/$/, '');
+  const origin = `${parsed.protocol}//${parsed.host}`;
+  if (basePath && prefixState.prefix) {
+    return {
+      ok: false,
+      reason: 'public_prefix_ambiguous',
+      origin,
+      publicPrefix: '',
+      prefixSource: 'ambiguous',
+      basePath,
+    };
+  }
+  const publicPrefix = prefixState.prefix || basePath;
+  let prefixSource = 'none';
+  if (prefixState.prefix) prefixSource = 'prefix';
+  else if (basePath) prefixSource = 'base';
+  return {
+    ok: true,
+    reason: null,
+    origin,
+    publicPrefix,
+    prefixSource,
+    basePath,
+  };
+}
+
+export function assessTwilioSignatureReadiness(
+  env = process.env,
+  authToken = config.twilioAuthToken,
+) {
+  const modeState = resolveTwilioSignatureMode(env.TWILIO_SIGNATURE_MODE);
+  const base = resolveTwilioPublicBase(env.APP_BASE_URL);
+  const prefixState = resolveTwilioPublicPathPrefix(env.TWILIO_PUBLIC_PATH_PREFIX);
+  const plan = planTwilioPublicUrl(env);
+  const authTokenConfigured = Boolean(String(authToken ?? '').trim());
+  const mode = modeState.ok ? modeState.mode : null;
+  const logBlocking = [];
+  if (!authTokenConfigured) logBlocking.push('missing_auth_token');
+  if (!base.ok) logBlocking.push(base.reason);
+  if (!prefixState.ok) logBlocking.push(prefixState.reason);
+  if (base.ok && prefixState.ok && plan.reason === 'public_prefix_ambiguous') {
+    logBlocking.push('public_prefix_ambiguous');
+  }
+  const configComplete = logBlocking.length === 0;
+  const startupBlocking = [];
+  if (!modeState.ok) startupBlocking.push('invalid_mode');
+  else if ((mode === 'log' || mode === 'enforce') && !configComplete) {
+    startupBlocking.push(...logBlocking);
+  }
+  let configurationState = 'insecure';
+  if (configComplete && mode === 'log') configurationState = 'observing';
+  if (configComplete && mode === 'enforce') configurationState = 'enforcing';
+  const logReady = configComplete;
+  return {
+    event: 'twilio_signature_preflight',
+    mode,
+    modeSource: modeState.ok ? modeState.source : 'env',
+    modeValid: modeState.ok,
+    authTokenConfigured,
+    appBaseUrlValid: base.ok,
+    appBaseUrlReason: base.ok ? null : base.reason,
+    publicPrefixValid: prefixState.ok && plan.reason !== 'public_prefix_ambiguous',
+    publicPrefixReason: !prefixState.ok
+      ? prefixState.reason
+      : (plan.reason === 'public_prefix_ambiguous' ? 'public_prefix_ambiguous' : null),
+    prefixSource: plan.prefixSource,
+    publicOrigin: plan.origin,
+    publicPrefix: plan.publicPrefix,
+    configurationState,
+    secure: configurationState === 'enforcing',
+    activated: configurationState === 'observing' || configurationState === 'enforcing',
+    ready: configurationState === 'observing',
+    logReady,
+    logDisruptive: mode === 'log' && !configComplete,
+    enforceConfigurable: configComplete,
+    enforceReady: false,
+    productionUrlVerified: false,
+    startup: startupBlocking.length > 0 ? 'refuse' : 'boot',
+    startupBlocking,
+    logBlocking,
+  };
+}
+
+export function twilioSignatureStartupDecision(report) {
+  return {
+    allowBoot: report.startup !== 'refuse',
+    reasons: report.startupBlocking || [],
+  };
 }
 
 export const config = {
@@ -204,36 +325,23 @@ export const validateConfig = () => {
     process.exit(1);
   }
 
-  const signatureMode = resolveTwilioSignatureMode();
-  if (!signatureMode.ok) {
+  const signatureReadiness = assessTwilioSignatureReadiness();
+  console.log(JSON.stringify(signatureReadiness));
+  const signatureStartup = twilioSignatureStartupDecision(signatureReadiness);
+  if (!signatureStartup.allowBoot) {
     console.error(
-      '❌ TWILIO_SIGNATURE_MODE inválido. Valores permitidos: off, log, enforce. No se degrada a off.',
+      `❌ Firma Twilio: el proceso no arranca (${signatureStartup.reasons.join(', ')}). No se degrada a off.`,
     );
+    if (signatureReadiness.logDisruptive) {
+      console.error(
+        '❌ TWILIO_SIGNATURE_MODE=log no es una activación inocua con esta configuración. El inbound respondería 403. Dejá off hasta que el preflight marque logReady.',
+      );
+    }
     process.exit(1);
   }
-  if (signatureMode.mode === 'enforce') {
-    const publicBase = resolveTwilioPublicBase();
-    const pathPrefix = resolveTwilioPublicPathPrefix();
-    if (!config.twilioAuthToken || !publicBase.ok || !pathPrefix.ok) {
-      console.error(
-        '❌ TWILIO_SIGNATURE_MODE=enforce requiere TWILIO_AUTH_TOKEN y APP_BASE_URL http(s) explícita. No se activa enforce sin una URL confiable.',
-      );
-      process.exit(1);
-    }
-  } else if (signatureMode.mode === 'log') {
-    if (!config.twilioAuthToken) {
-      console.error(
-        '❌ TWILIO_SIGNATURE_MODE=log sin TWILIO_AUTH_TOKEN. El inbound responde 403 hasta configurar el token, o TWILIO_SIGNATURE_MODE=off como contingencia.',
-      );
-    }
-    if (!resolveTwilioPublicBase().ok) {
-      console.warn(
-        '⚠️ TWILIO_SIGNATURE_MODE=log sin APP_BASE_URL http(s). No se puede comprobar la firma y no corresponde activar enforce.',
-      );
-    }
-  } else if (signatureMode.mode === 'off') {
+  if (signatureReadiness.mode === 'off') {
     console.warn(
-      '⚠️ TWILIO_SIGNATURE_MODE=off. El inbound de Twilio no exige firma. El callback de estado sigue exigiéndola.',
+      '⚠️ Firma Twilio inactiva (off). ready=false. El inbound no exige firma. El callback de estado sí la exige.',
     );
   }
 

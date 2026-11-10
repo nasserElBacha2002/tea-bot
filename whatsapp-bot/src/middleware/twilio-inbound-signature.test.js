@@ -435,17 +435,12 @@ describe('TB-005 firma inbound de Twilio', { concurrency: 1 }, () => {
         'x-twilio-signature': signatureFor(`https://evil.example${path}`, params),
       },
     });
-    assert.equal(logged.status, 200);
-    const names = logs.events().map((event) => event.event);
-    assert.equal(names.includes('twilio_signature_valid') && names.at(-1) === 'twilio_signature_valid', false);
-    assert.equal(
-      logs.events().some((event) => event.reason === 'public_url_unconfigured'),
-      true,
-    );
-    assert.equal(
-      logs.events().filter((event) => event.reason === 'public_url_unconfigured').every((event) => event.event !== 'twilio_signature_valid'),
-      true,
-    );
+    assert.equal(logged.status, 403);
+    assert.equal(calls.length, 1);
+    const broken = logs.events().filter((event) => event.reason === 'public_url_unconfigured');
+    assert.equal(broken.length >= 2, true);
+    assert.equal(broken.every((event) => event.event === 'twilio_signature_configuration_error'), true);
+    assert.equal(logs.events().some((event) => event.event === 'twilio_signature_valid'), true);
   });
 
   test('parametros repetidos se firman sin quedarse con el ultimo valor', async (t) => {

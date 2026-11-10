@@ -32,7 +32,8 @@ test('compila indices principales', () => {
   assert.equal(compiled.nodesById.get('welcome').id, 'welcome');
   assert.equal(compiled.defaultTransitionByNodeId.get('welcome').nextNode, 'fallback');
   assert.equal(compiled.exactMatchByNodeId.get('welcome').get('1').nextNode, 'products');
-  assert.equal(compiled.exactMatchByNodeId.get('welcome').get('sí').nextNode, 'products');
+  assert.equal(compiled.exactMatchByNodeId.get('welcome').get('si').nextNode, 'products');
+  assert.equal(compiled.exactMatchByNodeId.get('welcome').has('sí'), false);
   assert.equal(compiled.includesRulesByNodeId.get('welcome')[0].needle, 'comprar');
 });
 
@@ -40,5 +41,5 @@ test('expone stats del flujo', () => {
   const compiled = compileFlow(sampleFlow());
   assert.equal(compiled.stats.nodeCount, 4);
   assert.equal(compiled.stats.transitionCount, 4);
-  assert.equal(compiled.stats.exactValueCount, 3);
+  assert.equal(compiled.stats.exactValueCount, 2);
 });

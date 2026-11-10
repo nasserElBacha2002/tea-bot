@@ -2,44 +2,41 @@ import { randomUUID } from 'node:crypto';
 import twilio from 'twilio';
 import {
   config,
-  resolveTwilioPublicBase,
-  resolveTwilioPublicPathPrefix,
+  planTwilioPublicUrl,
   resolveTwilioSignatureMode,
 } from '../config.js';
 
-function firstHeader(req, name) {
-  const value = req.get(name);
-  if (!value) return '';
-  return String(value).split(',')[0].trim();
+/**
+ * URL que Twilio firmó. Origen y prefijo salen solo de la configuración.
+ * La ruta y el query se copian de Express, sin recodificar y sin X-Forwarded-*.
+ */
+export function resolveInboundSignatureUrl(req, env = process.env) {
+  const plan = planTwilioPublicUrl(env);
+  if (!plan.ok) return { ok: false, reason: plan.reason, url: null, safe: null };
+  const pathAndQuery = String(req.originalUrl || req.url || '');
+  if (!pathAndQuery.startsWith('/')) {
+    return { ok: false, reason: 'public_url_invalid', url: null, safe: null };
+  }
+  const url = `${plan.origin}${plan.publicPrefix}${pathAndQuery}`;
+  return { ok: true, reason: null, url, safe: safeUrlParts(url) };
 }
 
-/**
- * Public URL Twilio signed. APP_BASE_URL wins when it is set, because that is
- * the URL configured on the Twilio webhook. Otherwise the first forwarded
- * proto/host is used so a reverse proxy does not force req.protocol=http.
- *
- * The status callback keeps this behavior. Inbound verification does not.
- */
-export function resolveTwilioRequestUrl(req) {
-  const pathAndQuery = req.originalUrl || req.url || '';
-  const explicit = String(process.env.APP_BASE_URL || '').trim().replace(/\/$/, '');
-  if (explicit) return `${explicit}${pathAndQuery}`;
-  const proto = firstHeader(req, 'x-forwarded-proto') || req.protocol || 'http';
-  const host = firstHeader(req, 'x-forwarded-host') || req.get('host') || '';
-  return `${proto}://${host}${pathAndQuery}`;
+export function resolveTwilioRequestUrl(req, env = process.env) {
+  return resolveInboundSignatureUrl(req, env).url || '';
 }
 
 export function verifyTwilioSignature(req, res, next) {
   const token = config.twilioAuthToken;
-  const signature = req.get('x-twilio-signature');
-  if (!token || !signature) {
+  const signature = headerSignature(req);
+  const target = resolveInboundSignatureUrl(req);
+  const params = signatureParams(req);
+  if (!token || !signature || !target.ok || !params.ok) {
     return res.status(403).type('text/plain').send('Forbidden');
   }
   let valid = false;
   try {
-    valid = twilio.validateRequest(token, signature, resolveTwilioRequestUrl(req), req.body || {});
-  } catch (error) {
-    console.error(`[Twilio] signature validation failed: ${error.message}`);
+    valid = twilio.validateRequest(token, signature, target.url, params.params);
+  } catch {
     valid = false;
   }
   if (!valid) {
@@ -70,34 +67,6 @@ function safeUrlParts(url) {
   } catch {
     return null;
   }
-}
-
-/**
- * URL pública del inbound. Ignora X-Forwarded-* de un cliente no confiable.
- * El prefijo cubre una ruta que Nginx publica y el backend no recibe.
- */
-export function resolveInboundSignatureUrl(req, env = process.env) {
-  const base = resolveTwilioPublicBase(env.APP_BASE_URL);
-  if (!base.ok) return { ok: false, reason: base.reason, url: null, safe: null };
-  const prefixState = resolveTwilioPublicPathPrefix(env.TWILIO_PUBLIC_PATH_PREFIX);
-  if (!prefixState.ok) {
-    return { ok: false, reason: prefixState.reason, url: null, safe: null };
-  }
-  const pathAndQuery = String(req.originalUrl || req.url || '');
-  if (!pathAndQuery.startsWith('/')) {
-    return { ok: false, reason: 'public_url_invalid', url: null, safe: null };
-  }
-  let suffix = pathAndQuery;
-  if (prefixState.prefix) {
-    const basePath = new URL(base.base).pathname.replace(/\/$/, '');
-    const alreadyPrefixed = suffix === prefixState.prefix
-      || suffix.startsWith(`${prefixState.prefix}/`)
-      || suffix.startsWith(`${prefixState.prefix}?`);
-    const baseHasPrefix = basePath === prefixState.prefix || basePath.endsWith(prefixState.prefix);
-    if (!alreadyPrefixed && !baseHasPrefix) suffix = `${prefixState.prefix}${suffix}`;
-  }
-  const url = `${base.base}${suffix}`;
-  return { ok: true, reason: null, url, safe: safeUrlParts(url) };
 }
 
 function headerSignature(req) {
@@ -186,14 +155,12 @@ export function evaluateTwilioInboundSignature(req, env = process.env) {
 
   const target = resolveInboundSignatureUrl(req, env);
   if (!target.ok) {
-    const fields = {
+    return decision({
       ...base,
       event: 'twilio_signature_configuration_error',
       result: 'configuration_error',
       reason: target.reason,
-    };
-    if (modeState.mode === 'log') return decision(fields, { allow: true, httpStatus: 200 });
-    return decision(fields, { allow: false, httpStatus: 403 });
+    }, { allow: false, httpStatus: 403 });
   }
 
   const params = signatureParams(req);
