@@ -110,10 +110,11 @@ export const sendAgentMessage = async (req, res) => {
 
 export const closeConversation = async (req, res) => {
   try {
-    requireConversationOperator(req);
+    const actor = requireConversationOperator(req);
     const data = await conversationInboxService.closeConversation(
       req.params.conversationId,
       req.body?.resolutionNote,
+      actor,
     );
     return sendSuccess(res, data);
   } catch (error) {
@@ -166,9 +167,10 @@ export const transferConversation = async (req, res) => {
 
 export const returnConversationToBot = async (req, res) => {
   try {
-    requireConversationOperator(req);
+    const actor = requireConversationOperator(req);
     const data = await conversationInboxService.returnConversationToBot(
       req.params.conversationId,
+      actor,
     );
     return sendSuccess(res, data);
   } catch (error) {

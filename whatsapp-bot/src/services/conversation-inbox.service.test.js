@@ -359,7 +359,11 @@ test('closeConversation devuelve la conversación al bot', async () => {
   };
 
   try {
-    const result = await service.closeConversation('conv-1', 'Caso resuelto');
+    const result = await service.closeConversation('conv-1', 'Caso resuelto', {
+      agentId: 'agent-1',
+      username: 'ana',
+      role: 'admin',
+    });
     assert.equal(returnPatch, 'conv-1');
     assert.equal(result.conversation.status, 'bot');
     assert.equal(endedSessions[0], 'conv-1');
@@ -406,7 +410,11 @@ test('returnConversationToBot reactiva el bot y resetea sesión', async () => {
   });
 
   try {
-    const result = await service.returnConversationToBot('conv-1');
+    const result = await service.returnConversationToBot('conv-1', {
+      agentId: 'agent-1',
+      username: 'ana',
+      role: 'admin',
+    });
     assert.equal(result.conversation.status, 'bot');
   } finally {
     conversationService.returnConversationToBot = prevReturn;

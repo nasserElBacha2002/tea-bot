@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { exclusiveAgentIdentityConflict } from './utils/exclusive-agent-identity.js';
 import {
   clampRetentionBatchSize,
   parsePositiveInt,
@@ -365,6 +366,14 @@ export const validateConfig = () => {
       console.error(
         '❌ CONVERSATIONS_OPERATOR_USERNAME no puede ser igual a ADMIN_USERNAME.',
       );
+      process.exit(1);
+    }
+  }
+
+  if (envFlag('MANUAL_TAKEOVER_ENABLED')) {
+    const identityConflict = exclusiveAgentIdentityConflict();
+    if (identityConflict) {
+      console.error(`❌ ${identityConflict.message}`);
       process.exit(1);
     }
   }

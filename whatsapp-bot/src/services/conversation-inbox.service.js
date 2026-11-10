@@ -23,6 +23,7 @@ import {
 } from '../realtime/conversation-live.notify.js';
 import { validateContactName } from '../utils/contact-name.js';
 import { agentsMatch, labelForAssignedAgent } from '../utils/agent-identity.js';
+import { canTakeoverConversation } from '../auth/roles.js';
 import { CONVERSATION_CHANNELS } from '../constants/conversation-channels.js';
 import {
   RETURN_TO_BOT_BODY,
@@ -33,6 +34,17 @@ import conversationTakeoverService, {
   describeTakeoverAccess,
   isManualTakeoverEnabled,
 } from './conversation-takeover.service.js';
+
+function requireReturnActor(actor) {
+  if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
+    throw appError(
+      'FORBIDDEN',
+      'No tenés permiso para devolver esta conversación al bot.',
+      403,
+    );
+  }
+  return actor;
+}
 
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
 const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
@@ -492,6 +504,7 @@ export class ConversationInboxService {
     resolutionNote = null,
     systemMessage = RETURN_TO_BOT_BODY,
     generatedBy = 'agent_inbox',
+    actor = null,
   } = {}) {
     const conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
@@ -500,7 +513,11 @@ export class ConversationInboxService {
 
     const { conversation: updated } = await conversationBotLifecycleService.returnConversationToBot(
       conversation,
-      { resolutionNote },
+      {
+        resolutionNote,
+        actor,
+        takeoverEnabled: isManualTakeoverEnabled(),
+      },
     );
 
     await conversationMessageRepository.createMessage({
@@ -517,11 +534,13 @@ export class ConversationInboxService {
     return result;
   }
 
-  async closeConversation(conversationId, resolutionNote = null) {
+  async closeConversation(conversationId, resolutionNote = null, actor = null) {
     await this.ensureReady();
+    requireReturnActor(actor);
     return this._returnConversationToBot(conversationId, {
       resolutionNote,
       generatedBy: 'agent_inbox_close',
+      actor,
     });
   }
 
@@ -569,11 +588,13 @@ export class ConversationInboxService {
     };
   }
 
-  async returnConversationToBot(conversationId) {
+  async returnConversationToBot(conversationId, actor = null) {
     await this.ensureReady();
+    requireReturnActor(actor);
     return this._returnConversationToBot(conversationId, {
       systemMessage: 'Conversación devuelta al bot.',
       generatedBy: 'agent_inbox_return_to_bot',
+      actor,
     });
   }
 }

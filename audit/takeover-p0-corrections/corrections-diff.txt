@@ -1,0 +1,1420 @@
+diff --git a/frontend/src/features/conversations/components/ConversationComposer.test.tsx b/frontend/src/features/conversations/components/ConversationComposer.test.tsx
+index 3d3b871..96b9f1c 100644
+--- a/frontend/src/features/conversations/components/ConversationComposer.test.tsx
++++ b/frontend/src/features/conversations/components/ConversationComposer.test.tsx
+@@ -80,7 +80,8 @@ describe('ConversationComposer', () => {
+         <ConversationComposer status="bot" onSend={vi.fn()} />
+       </ThemeProvider>,
+     );
+-    expect(screen.getByText(/bot activo/i)).toBeInTheDocument();
++    expect(screen.getByText(/La respuesta manual se habilitará al derivar a humano/i)).toBeInTheDocument();
++    expect(screen.queryByRole('button', { name: /tomar conversación/i })).not.toBeInTheDocument();
+     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+   });
+ 
+@@ -97,6 +98,8 @@ describe('ConversationComposer', () => {
+         />
+       </ThemeProvider>,
+     );
++    expect(screen.getByText(/puede tomarse manualmente/i)).toBeInTheDocument();
++    expect(screen.queryByText(/se habilitará al derivar a humano/i)).not.toBeInTheDocument();
+     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
+     await user.click(screen.getByRole('button', { name: /tomar conversación/i }));
+     expect(onTakeover).toHaveBeenCalledOnce();
+diff --git a/frontend/src/features/conversations/components/ConversationComposer.tsx b/frontend/src/features/conversations/components/ConversationComposer.tsx
+index 42192c2..1b77c02 100644
+--- a/frontend/src/features/conversations/components/ConversationComposer.tsx
++++ b/frontend/src/features/conversations/components/ConversationComposer.tsx
+@@ -105,7 +105,7 @@ export const ConversationComposer: React.FC<Props> = ({
+     return (
+       <Box sx={{ flexShrink: 0 }}>
+         <CompactNotice tone="info">
+-          Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.
++          Bot activo. Esta conversación puede tomarse manualmente. El campo de respuesta se habilita cuando el servidor confirma la toma.
+         </CompactNotice>
+         {canTakeover && (
+           <Box sx={{ p: compact ? 1 : 1.25 }}>
+diff --git a/frontend/src/features/conversations/components/ConversationDetail.test.tsx b/frontend/src/features/conversations/components/ConversationDetail.test.tsx
+index 937edf8..7b9702a 100644
+--- a/frontend/src/features/conversations/components/ConversationDetail.test.tsx
++++ b/frontend/src/features/conversations/components/ConversationDetail.test.tsx
+@@ -75,14 +75,28 @@ describe('ConversationDetail takeover', () => {
+       assignedAgentLabel: 'Ana',
+       takeoverBlock: 'already_owner',
+       canTakeover: false,
++      canReturnToBot: true,
+     }));
+     expect(screen.getByText('Atención humana')).toBeInTheDocument();
+     expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
+     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
+   });
+ 
++  it('un operador que no es dueño no ve el cierre', () => {
++    renderDetail(detail({
++      status: 'assigned',
++      assignedAgentId: 'agent-2',
++      assignedAgentLabel: 'Luis',
++      takeoverBlock: 'owned_by_other',
++      canTakeover: false,
++      canReturnToBot: false,
++    }));
++    expect(screen.queryByRole('button', { name: /cerrar y devolver al bot/i })).not.toBeInTheDocument();
++    expect(screen.getByText('Atención humana')).toBeInTheDocument();
++  });
++
+   it('una conversación en espera también puede devolverse al bot', () => {
+-    renderDetail(detail({ status: 'waiting_human', canTakeover: false }));
++    renderDetail(detail({ status: 'waiting_human', canTakeover: false, canReturnToBot: true }));
+     expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
+     expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThan(0);
+   });
+diff --git a/frontend/src/features/conversations/components/ConversationDetail.tsx b/frontend/src/features/conversations/components/ConversationDetail.tsx
+index bc05cfd..a737baa 100644
+--- a/frontend/src/features/conversations/components/ConversationDetail.tsx
++++ b/frontend/src/features/conversations/components/ConversationDetail.tsx
+@@ -130,9 +130,12 @@ export const ConversationDetail: React.FC<Props> = ({
+       ? 'Esperando que un operador tome la conversación.'
+       : null);
+ 
+-  const canReturnToBot = conversation.status === 'waiting_human'
+-    || conversation.status === 'assigned'
+-    || conversation.status === 'paused';
++  const canReturnToBot = conversation.canReturnToBot === true
++    && (
++      conversation.status === 'waiting_human'
++      || conversation.status === 'assigned'
++      || conversation.status === 'paused'
++    );
+   const showTakeover = Boolean(conversation.canTakeover);
+   const showClaimInHeader = showTakeover || conversation.status === 'waiting_human';
+ 
+diff --git a/frontend/src/features/conversations/pages/ConversationsPage.test.tsx b/frontend/src/features/conversations/pages/ConversationsPage.test.tsx
+index 18b5d5e..373781c 100644
+--- a/frontend/src/features/conversations/pages/ConversationsPage.test.tsx
++++ b/frontend/src/features/conversations/pages/ConversationsPage.test.tsx
+@@ -106,6 +106,7 @@ vi.mock('../hooks/useConversations', () => ({
+             displayName: 'Simulación - Esperando humano',
+             status: 'waiting_human',
+             assignedAgentId: null,
++            canReturnToBot: true,
+             currentFlowId: 'main-menu',
+             currentFlowVersion: 'v22',
+             currentNodeKey: 'human_handoff',
+diff --git a/frontend/src/features/conversations/types/conversation.types.ts b/frontend/src/features/conversations/types/conversation.types.ts
+index 23a4da5..643c97d 100644
+--- a/frontend/src/features/conversations/types/conversation.types.ts
++++ b/frontend/src/features/conversations/types/conversation.types.ts
+@@ -37,6 +37,8 @@ export interface InboxConversationItem {
+   assignedAgentId: string | null;
+   statusVersion?: number | null;
+   canTakeover?: boolean;
++  canReturnToBot?: boolean;
++  canForceReturn?: boolean;
+   takeoverBlock?: string | null;
+   reentryStatus?: string | null;
+   botPaused?: boolean;
+diff --git a/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts b/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
+index cc0a993..15e5b22 100644
+--- a/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
++++ b/frontend/src/features/conversations/utils/applyConversationLiveEvent.test.ts
+@@ -442,6 +442,8 @@ describe('applyConversationLiveEvent', () => {
+         status: 'assigned',
+         takeoverBlock: 'disabled',
+         canTakeover: false,
++        canReturnToBot: true,
++        canForceReturn: false,
+       },
+       activeSession: null,
+       humanHandoff: null,
+@@ -467,5 +469,49 @@ describe('applyConversationLiveEvent', () => {
+ 
+     const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
+     expect(detail?.conversation.takeoverBlock).toBe('disabled');
++    expect(detail?.conversation.canReturnToBot).toBe(true);
++  });
++
++  it('oculta la devolución y refresca el detalle si el evento no trae el permiso', () => {
++    const qc = new QueryClient();
++    const detailKey = conversationKeys.detail('c1');
++    const invalidate = vi.spyOn(qc, 'invalidateQueries');
++    qc.setQueryData<ConversationDetailResponse>(detailKey, {
++      conversation: {
++        ...baseListItem,
++        status: 'assigned',
++        assignedAgentId: 'agent-1',
++        canReturnToBot: true,
++        canForceReturn: false,
++        takeoverBlock: 'already_owner',
++      },
++      activeSession: null,
++      humanHandoff: null,
++    });
++
++    applyConversationLiveEvent(
++      qc,
++      {
++        type: 'conversation.assigned',
++        conversationId: 'c1',
++        occurredAt: new Date().toISOString(),
++        data: {
++          conversation: {
++            ...baseListItem,
++            status: 'assigned',
++            assignedAgentId: 'AGENT-2',
++            assignedAgentLabel: 'Luis',
++          },
++        },
++      },
++      'c1',
++      'agent-1',
++    );
++
++    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
++    expect(detail?.conversation.canReturnToBot).toBe(false);
++    expect(detail?.conversation.canForceReturn).toBe(false);
++    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
++    expect(invalidate).toHaveBeenCalled();
+   });
+ });
+diff --git a/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts b/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
+index 029e1cf..0b9cc55 100644
+--- a/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
++++ b/frontend/src/features/conversations/utils/applyConversationLiveEvent.ts
+@@ -35,13 +35,15 @@ function sameAgent(left?: string | null, right?: string | null) {
+ function liveAttentionPatch(
+   existing: {
+     canTakeover?: boolean;
++    canReturnToBot?: boolean;
++    canForceReturn?: boolean;
+     assignedAgentId?: string | null;
+     assignedAgentLabel?: string | null;
+     takeoverBlock?: string | null;
+   } | undefined,
+   conv: Pick<
+     InboxConversationItem,
+-    'status' | 'canTakeover' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
++    'status' | 'canTakeover' | 'canReturnToBot' | 'canForceReturn' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
+   >,
+   viewerAgentId?: string | null,
+ ): Partial<InboxConversationItem> {
+@@ -73,8 +75,16 @@ function liveAttentionPatch(
+   const assigneeChanged = Boolean(
+     conv.assignedAgentId
+     && existing?.assignedAgentId
+-    && conv.assignedAgentId !== existing.assignedAgentId,
++    && !sameAgent(conv.assignedAgentId, existing.assignedAgentId),
+   );
++  const sharedInbox = existing?.takeoverBlock === 'disabled' || conv.takeoverBlock === 'disabled';
++  if (conv.canReturnToBot != null) patch.canReturnToBot = conv.canReturnToBot;
++  else if (conv.status === 'bot' || conv.status === 'closed') patch.canReturnToBot = false;
++  else if (!sharedInbox && (conv.status === 'assigned' || conv.status === 'paused' || conv.status === 'waiting_human')) {
++    patch.canReturnToBot = false;
++  }
++  if (conv.canForceReturn != null) patch.canForceReturn = conv.canForceReturn;
++  else if (!sharedInbox) patch.canForceReturn = false;
+   if (conv.assignedAgentLabel != null && !assigneeChanged) {
+     patch.assignedAgentLabel = conv.assignedAgentLabel;
+   } else if (assigneeChanged) {
+@@ -86,11 +96,14 @@ function liveAttentionPatch(
+ }
+ 
+ export function liveEventNeedsDetailRefresh(
+-  conv: Pick<InboxConversationItem, 'status' | 'takeoverBlock' | 'assignedAgentLabel'> | undefined,
++  conv: Pick<InboxConversationItem, 'status' | 'takeoverBlock' | 'assignedAgentLabel' | 'canReturnToBot' | 'canForceReturn'> | undefined,
+ ): boolean {
+   if (!conv) return false;
+-  if (conv.status !== 'assigned' && conv.status !== 'paused') return false;
+-  return conv.takeoverBlock == null || conv.assignedAgentLabel == null;
++  if (conv.status !== 'assigned' && conv.status !== 'paused' && conv.status !== 'waiting_human') return false;
++  return conv.takeoverBlock == null
++    || conv.assignedAgentLabel == null
++    || conv.canReturnToBot == null
++    || conv.canForceReturn == null;
+ }
+ 
+ function mergeInboxListItem(
+diff --git a/whatsapp-bot/src/config.js b/whatsapp-bot/src/config.js
+index bc5cbbc..18bbdf3 100644
+--- a/whatsapp-bot/src/config.js
++++ b/whatsapp-bot/src/config.js
+@@ -1,4 +1,5 @@
+ import dotenv from 'dotenv';
++import { exclusiveAgentIdentityConflict } from './utils/exclusive-agent-identity.js';
+ import {
+   clampRetentionBatchSize,
+   parsePositiveInt,
+@@ -369,6 +370,14 @@ export const validateConfig = () => {
+     }
+   }
+ 
++  if (envFlag('MANUAL_TAKEOVER_ENABLED')) {
++    const identityConflict = exclusiveAgentIdentityConflict();
++    if (identityConflict) {
++      console.error(`❌ ${identityConflict.message}`);
++      process.exit(1);
++    }
++  }
++
+   const metaKeys = ['META_VERIFY_TOKEN', 'META_ACCESS_TOKEN', 'META_PHONE_NUMBER_ID'];
+   const missingMeta = metaKeys.filter((key) => !process.env[key]);
+ 
+diff --git a/whatsapp-bot/src/controllers/conversations.controller.js b/whatsapp-bot/src/controllers/conversations.controller.js
+index 8688f1f..626e1e1 100644
+--- a/whatsapp-bot/src/controllers/conversations.controller.js
++++ b/whatsapp-bot/src/controllers/conversations.controller.js
+@@ -110,10 +110,11 @@ export const sendAgentMessage = async (req, res) => {
+ 
+ export const closeConversation = async (req, res) => {
+   try {
+-    requireConversationOperator(req);
++    const actor = requireConversationOperator(req);
+     const data = await conversationInboxService.closeConversation(
+       req.params.conversationId,
+       req.body?.resolutionNote,
++      actor,
+     );
+     return sendSuccess(res, data);
+   } catch (error) {
+@@ -166,9 +167,10 @@ export const transferConversation = async (req, res) => {
+ 
+ export const returnConversationToBot = async (req, res) => {
+   try {
+-    requireConversationOperator(req);
++    const actor = requireConversationOperator(req);
+     const data = await conversationInboxService.returnConversationToBot(
+       req.params.conversationId,
++      actor,
+     );
+     return sendSuccess(res, data);
+   } catch (error) {
+diff --git a/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js b/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
+index a6365c2..d1ddb84 100644
+--- a/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
++++ b/whatsapp-bot/src/services/conversation-bot-lifecycle.service.js
+@@ -9,6 +9,49 @@ import {
+   buildReentrySnapshot,
+   resolveReentryPolicy,
+ } from '../utils/conversation-reentry-policy.js';
++import { canTakeoverConversation } from '../auth/roles.js';
++import { agentsMatch } from '../utils/agent-identity.js';
++import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
++
++function returnAuthError(code, message, httpStatus, details) {
++  const error = new Error(message);
++  error.code = code;
++  error.httpStatus = httpStatus;
++  error.apiError = code;
++  error.apiMessage = message;
++  if (details) error.details = details;
++  return error;
++}
++
++/**
++ * La fila ya está bloqueada. Sin actor, el cierre es interno y no pasa por HTTP.
++ * Con actor y toma activa, solo el dueño cierra. Un administrador que no es
++ * dueño no salta la propiedad: interviene con la reasignación. Con la toma
++ * apagada se conserva el inbox compartido.
++ */
++export function assertExclusiveReturnAllowed(locked, actor, {
++  takeoverEnabled = isManualTakeoverEnabled(),
++} = {}) {
++  if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
++    throw returnAuthError(
++      'FORBIDDEN',
++      'No tenés permiso para devolver esta conversación al bot.',
++      403,
++    );
++  }
++  if (!takeoverEnabled) return;
++
++  const exclusive = Boolean(locked?.assignedAgentId)
++    && (locked.status === 'assigned' || locked.status === 'paused');
++  if (!exclusive || agentsMatch(locked.assignedAgentId, actor.agentId)) return;
++
++  throw returnAuthError(
++    'CONVERSATION_OWNED',
++    'La conversación está asignada a otro agente.',
++    409,
++    { assignedAgentId: locked.assignedAgentId },
++  );
++}
+ 
+ export { isHandoffTerminalNode };
+ 
+@@ -80,6 +123,12 @@ export class ConversationBotLifecycleService {
+         throw err;
+       }
+ 
++      if (options.actor) {
++        assertExclusiveReturnAllowed(locked, options.actor, {
++          takeoverEnabled: options.takeoverEnabled ?? isManualTakeoverEnabled(),
++        });
++      }
++
+       const openSession = await this.sessionRepo.findLatestOpenByConversationId(
+         conversationId,
+         { transaction },
+diff --git a/whatsapp-bot/src/services/conversation-inbox.service.js b/whatsapp-bot/src/services/conversation-inbox.service.js
+index 62dce5e..c32eec5 100644
+--- a/whatsapp-bot/src/services/conversation-inbox.service.js
++++ b/whatsapp-bot/src/services/conversation-inbox.service.js
+@@ -23,6 +23,7 @@ import {
+ } from '../realtime/conversation-live.notify.js';
+ import { validateContactName } from '../utils/contact-name.js';
+ import { agentsMatch, labelForAssignedAgent } from '../utils/agent-identity.js';
++import { canTakeoverConversation } from '../auth/roles.js';
+ import { CONVERSATION_CHANNELS } from '../constants/conversation-channels.js';
+ import {
+   RETURN_TO_BOT_BODY,
+@@ -34,6 +35,17 @@ import conversationTakeoverService, {
+   isManualTakeoverEnabled,
+ } from './conversation-takeover.service.js';
+ 
++function requireReturnActor(actor) {
++  if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
++    throw appError(
++      'FORBIDDEN',
++      'No tenés permiso para devolver esta conversación al bot.',
++      403,
++    );
++  }
++  return actor;
++}
++
+ const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
+ const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
+ const ALLOWED_PROVIDER = new Set(['twilio', 'internal']);
+@@ -492,6 +504,7 @@ export class ConversationInboxService {
+     resolutionNote = null,
+     systemMessage = RETURN_TO_BOT_BODY,
+     generatedBy = 'agent_inbox',
++    actor = null,
+   } = {}) {
+     const conversation = await conversationRepository.getConversationById(conversationId);
+     if (!conversation) {
+@@ -500,7 +513,11 @@ export class ConversationInboxService {
+ 
+     const { conversation: updated } = await conversationBotLifecycleService.returnConversationToBot(
+       conversation,
+-      { resolutionNote },
++      {
++        resolutionNote,
++        actor,
++        takeoverEnabled: isManualTakeoverEnabled(),
++      },
+     );
+ 
+     await conversationMessageRepository.createMessage({
+@@ -517,11 +534,13 @@ export class ConversationInboxService {
+     return result;
+   }
+ 
+-  async closeConversation(conversationId, resolutionNote = null) {
++  async closeConversation(conversationId, resolutionNote = null, actor = null) {
+     await this.ensureReady();
++    requireReturnActor(actor);
+     return this._returnConversationToBot(conversationId, {
+       resolutionNote,
+       generatedBy: 'agent_inbox_close',
++      actor,
+     });
+   }
+ 
+@@ -569,11 +588,13 @@ export class ConversationInboxService {
+     };
+   }
+ 
+-  async returnConversationToBot(conversationId) {
++  async returnConversationToBot(conversationId, actor = null) {
+     await this.ensureReady();
++    requireReturnActor(actor);
+     return this._returnConversationToBot(conversationId, {
+       systemMessage: 'Conversación devuelta al bot.',
+       generatedBy: 'agent_inbox_return_to_bot',
++      actor,
+     });
+   }
+ }
+diff --git a/whatsapp-bot/src/services/conversation-inbox.service.test.js b/whatsapp-bot/src/services/conversation-inbox.service.test.js
+index c81ccdc..4ae5032 100644
+--- a/whatsapp-bot/src/services/conversation-inbox.service.test.js
++++ b/whatsapp-bot/src/services/conversation-inbox.service.test.js
+@@ -359,7 +359,11 @@ test('closeConversation devuelve la conversación al bot', async () => {
+   };
+ 
+   try {
+-    const result = await service.closeConversation('conv-1', 'Caso resuelto');
++    const result = await service.closeConversation('conv-1', 'Caso resuelto', {
++      agentId: 'agent-1',
++      username: 'ana',
++      role: 'admin',
++    });
+     assert.equal(returnPatch, 'conv-1');
+     assert.equal(result.conversation.status, 'bot');
+     assert.equal(endedSessions[0], 'conv-1');
+@@ -406,7 +410,11 @@ test('returnConversationToBot reactiva el bot y resetea sesión', async () => {
+   });
+ 
+   try {
+-    const result = await service.returnConversationToBot('conv-1');
++    const result = await service.returnConversationToBot('conv-1', {
++      agentId: 'agent-1',
++      username: 'ana',
++      role: 'admin',
++    });
+     assert.equal(result.conversation.status, 'bot');
+   } finally {
+     conversationService.returnConversationToBot = prevReturn;
+diff --git a/whatsapp-bot/src/services/conversation-takeover.integration.test.js b/whatsapp-bot/src/services/conversation-takeover.integration.test.js
+index 8ad77d5..cebf9fe 100644
+--- a/whatsapp-bot/src/services/conversation-takeover.integration.test.js
++++ b/whatsapp-bot/src/services/conversation-takeover.integration.test.js
+@@ -7,6 +7,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
+ import conversationSessionRepository from '../repositories/conversation-session.repository.js';
+ import conversationTakeoverService from './conversation-takeover.service.js';
+ import { agentsMatch, resolveAgentIdFromUsername } from '../utils/agent-identity.js';
++import { exclusiveAgentIdentityConflict } from '../utils/exclusive-agent-identity.js';
+ 
+ async function skipReason() {
+   const isolated = isolatedTestDatabaseReason();
+@@ -77,6 +78,8 @@ test('integration: toma manual exclusiva en SQL TEST', async (t) => {
+     username: 'luis-test',
+     role: 'conversations_only',
+   };
++  assert.notEqual(ana.agentId, luis.agentId);
++  assert.equal(exclusiveAgentIdentityConflict(), null);
+ 
+   try {
+     const taken = await conversationTakeoverService.takeover({
+@@ -152,6 +155,8 @@ test('integration: dos agentes en paralelo sobre SQL real', async (t) => {
+     username: 'luis-test',
+     role: 'conversations_only',
+   };
++  assert.notEqual(ana.agentId, luis.agentId);
++  assert.equal(exclusiveAgentIdentityConflict(), null);
+ 
+   try {
+     const [first, second] = await Promise.allSettled([
+diff --git a/whatsapp-bot/src/services/conversation-takeover.service.js b/whatsapp-bot/src/services/conversation-takeover.service.js
+index 1f29594..80fc09e 100644
+--- a/whatsapp-bot/src/services/conversation-takeover.service.js
++++ b/whatsapp-bot/src/services/conversation-takeover.service.js
+@@ -36,6 +36,29 @@ function reentryStatusOf(conversation) {
+   return status == null || status === '' ? null : String(status);
+ }
+ 
++function exclusiveOwner(conversation) {
++  return Boolean(conversation?.assignedAgentId)
++    && (conversation.status === 'assigned' || conversation.status === 'paused');
++}
++
++const RETURNABLE_STATUSES = new Set(['waiting_human', 'assigned', 'paused']);
++
++/**
++ * El botón no es la autorización. El cierre vuelve a evaluarla bajo lock.
++ * Con la toma apagada, cualquier operador habilitado puede devolver la cola.
++ */
++export function describeReturnAccess(conversation, actor, { enabled = isManualTakeoverEnabled() } = {}) {
++  const permitted = canTakeoverConversation(actor?.role);
++  const returnable = RETURNABLE_STATUSES.has(conversation?.status);
++  if (!permitted || !returnable) {
++    return { canReturnToBot: false, canForceReturn: false };
++  }
++  if (!enabled || !exclusiveOwner(conversation) || agentsMatch(conversation.assignedAgentId, actor?.agentId)) {
++    return { canReturnToBot: true, canForceReturn: false };
++  }
++  return { canReturnToBot: false, canForceReturn: false };
++}
++
+ function clearPendingReentry(conversation) {
+   const status = reentryStatusOf(conversation);
+   return status === 'pending' || status === 'awaiting_choice';
+@@ -47,12 +70,14 @@ function clearPendingReentry(conversation) {
+ export function describeTakeoverAccess(conversation, actor, { enabled = isManualTakeoverEnabled() } = {}) {
+   const permitted = canTakeoverConversation(actor?.role);
+   const botPaused = conversation?.status === 'assigned' || conversation?.status === 'paused';
++  const returnAccess = describeReturnAccess(conversation, actor, { enabled });
+   const base = {
+     canTakeover: false,
+     takeoverBlock: null,
+     reentryStatus: reentryStatusOf(conversation),
+     botPaused,
+     statusVersion: conversation?.statusVersion ?? null,
++    ...returnAccess,
+     canReassign: Boolean(
+       canReassignConversation(actor?.role)
+       && botPaused
+diff --git a/whatsapp-bot/scripts/takeover-distributed-worker.js b/whatsapp-bot/scripts/takeover-distributed-worker.js
+new file mode 100644
+index 0000000..90680e3
+--- /dev/null
++++ b/whatsapp-bot/scripts/takeover-distributed-worker.js
+@@ -0,0 +1,91 @@
++import { registerLiveClient } from '../src/realtime/conversation-live.broadcaster.js';
++import conversationTakeoverService from '../src/services/conversation-takeover.service.js';
++import conversationInboxService from '../src/services/conversation-inbox.service.js';
++import { resolveAgentIdFromUsername } from '../src/utils/agent-identity.js';
++import { closePool } from '../src/db/index.js';
++
++const [conversationId, username, role, clientRequestId, operation = 'takeover'] = process.argv.slice(2);
++const events = [];
++
++registerLiveClient({
++  readyState: 1,
++  send(payload) {
++    events.push(JSON.parse(String(payload)));
++  },
++  on() {},
++});
++
++function summarize(event) {
++  return {
++    type: event.type,
++    assignedAgentId: event.data?.conversation?.assignedAgentId ?? null,
++    status: event.data?.conversation?.status ?? null,
++  };
++}
++
++const actor = {
++  agentId: resolveAgentIdFromUsername(username),
++  username,
++  role,
++};
++
++let report;
++try {
++  if (operation === 'reply') {
++    const result = await conversationInboxService.sendAgentMessage(
++      conversationId,
++      'respuesta del propietario',
++      actor.agentId,
++      { username },
++    );
++    report = {
++      ok: true,
++      operation,
++      username,
++      role,
++      agentId: actor.agentId,
++      status: result.conversation?.status ?? null,
++      events: events.map(summarize),
++    };
++  } else if (operation === 'return') {
++    const result = await conversationInboxService.returnConversationToBot(conversationId, actor);
++    report = {
++      ok: true,
++      operation,
++      username,
++      role,
++      agentId: actor.agentId,
++      status: result.conversation?.status ?? null,
++      events: events.map(summarize),
++    };
++  } else {
++    const result = await conversationTakeoverService.takeover({
++      conversationId,
++      actor,
++      clientRequestId,
++    });
++    report = {
++      ok: true,
++      operation: 'takeover',
++      username,
++      role,
++      agentId: actor.agentId,
++      assignedAgentId: result.conversation?.assignedAgentId ?? null,
++      status: result.conversation?.status ?? null,
++      events: events.map(summarize),
++    };
++  }
++} catch (error) {
++  report = {
++    ok: false,
++    operation,
++    username,
++    role,
++    agentId: actor.agentId,
++    code: error?.code || 'ERROR',
++    events: events.map(summarize),
++  };
++} finally {
++  process.stdout.write(`RESULT ${JSON.stringify(report)}\n`);
++  await closePool();
++}
+diff --git a/whatsapp-bot/src/services/conversation-return-authorization.integration.test.js b/whatsapp-bot/src/services/conversation-return-authorization.integration.test.js
+new file mode 100644
+index 0000000..df4055c
+--- /dev/null
++++ b/whatsapp-bot/src/services/conversation-return-authorization.integration.test.js
+@@ -0,0 +1,402 @@
++import http from 'node:http';
++import test, { after } from 'node:test';
++import assert from 'node:assert/strict';
++import { config } from '../config.js';
++import { createApp } from '../create-app.js';
++import { closePool, isConversationDbEnabled, pingDatabase, query } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
++import conversationRepository from '../repositories/conversation.repository.js';
++import { createSignedSessionToken } from './admin-auth.service.js';
++import { resolveAgentIdFromUsername } from '../utils/agent-identity.js';
++import { exclusiveAgentIdentityConflict } from '../utils/exclusive-agent-identity.js';
++import { ROLES } from '../auth/roles.js';
++
++const ADMIN_USER = 'tb-return-admin';
++const OPERATOR_USER = 'tb-return-operator';
++const HASH_A = 'ab'.repeat(32);
++const HASH_B = 'cd'.repeat(32);
++
++async function skipReason() {
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
++  if (!isConversationDbEnabled()) return 'Conversation DB disabled';
++  try {
++    const ping = await pingDatabase();
++    if (!ping.ok) return 'Conversation DB unavailable';
++  } catch (error) {
++    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
++  }
++  const { rows } = await query(
++    `SELECT COL_LENGTH('dbo.conversations', 'status_version') AS column_length`,
++  );
++  if (!rows[0]?.column_length) return 'Migration 009 is not applied on the test database';
++  return null;
++}
++
++function listen(app) {
++  return new Promise((resolve) => {
++    const server = app.listen(0, '127.0.0.1', () => resolve(server));
++  });
++}
++
++function closeServer(server) {
++  return new Promise((resolve, reject) => {
++    server.close((error) => (error ? reject(error) : resolve()));
++  });
++}
++
++function request(server, { method = 'POST', path, cookie, body }) {
++  const payload = body == null ? '' : JSON.stringify(body);
++  return new Promise((resolve, reject) => {
++    const req = http.request({
++      port: server.address().port,
++      host: '127.0.0.1',
++      path,
++      method,
++      headers: {
++        cookie,
++        'content-type': 'application/json',
++        'content-length': Buffer.byteLength(payload),
++      },
++    }, (res) => {
++      const chunks = [];
++      res.on('data', (chunk) => chunks.push(chunk));
++      res.on('end', () => {
++        const raw = Buffer.concat(chunks).toString('utf8');
++        let json = null;
++        try {
++          json = raw ? JSON.parse(raw) : null;
++        } catch {
++          json = { raw };
++        }
++        resolve({ status: res.statusCode, body: json });
++      });
++    });
++    req.on('error', reject);
++    req.end(payload);
++  });
++}
++
++function cookieFor(username, role) {
++  const token = createSignedSessionToken(username, config.sessionSecret, role);
++  return `tea_session=${token}`;
++}
++
++async function createBotConversation(label) {
++  return conversationRepository.createConversation({
++    channel: 'simulator',
++    provider: 'internal',
++    externalUserId: `IT-RETURN-${label}-${Date.now()}`,
++    status: 'bot',
++    currentFlowId: 'main-menu',
++    currentNodeKey: 'welcome',
++  });
++}
++
++async function cleanup(conversationId) {
++  await query('DELETE FROM dbo.conversation_operation_requests WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversation_sessions WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.human_handoffs WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversation_messages WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversations WHERE id = $1', [conversationId]);
++}
++
++function usePanelAccounts() {
++  const saved = {
++    adminUsername: config.adminUsername,
++    adminPasswordHash: config.adminPasswordHash,
++    conversationsOperatorUsername: config.conversationsOperatorUsername,
++    conversationsOperatorPasswordHash: config.conversationsOperatorPasswordHash,
++    takeover: process.env.MANUAL_TAKEOVER_ENABLED,
++    reentry: process.env.REENTRY_POLICY,
++  };
++  config.adminUsername = ADMIN_USER;
++  config.adminPasswordHash = HASH_A;
++  config.conversationsOperatorUsername = OPERATOR_USER;
++  config.conversationsOperatorPasswordHash = HASH_B;
++  return () => {
++    config.adminUsername = saved.adminUsername;
++    config.adminPasswordHash = saved.adminPasswordHash;
++    config.conversationsOperatorUsername = saved.conversationsOperatorUsername;
++    config.conversationsOperatorPasswordHash = saved.conversationsOperatorPasswordHash;
++    if (saved.takeover === undefined) delete process.env.MANUAL_TAKEOVER_ENABLED;
++    else process.env.MANUAL_TAKEOVER_ENABLED = saved.takeover;
++    if (saved.reentry === undefined) delete process.env.REENTRY_POLICY;
++    else process.env.REENTRY_POLICY = saved.reentry;
++  };
++}
++
++test('integration: HTTP real de cierre y devolución con dos cuentas', async (t) => {
++  const reason = await skipReason();
++  if (reason) {
++    t.skip(reason);
++    return;
++  }
++  const adminId = resolveAgentIdFromUsername(ADMIN_USER);
++  const operatorId = resolveAgentIdFromUsername(OPERATOR_USER);
++  if (adminId === operatorId || exclusiveAgentIdentityConflict({
++    ADMIN_USERNAME: ADMIN_USER,
++    CONVERSATIONS_OPERATOR_USERNAME: OPERATOR_USER,
++    INTERNAL_AGENT_ID: process.env.INTERNAL_AGENT_ID,
++  })) {
++    throw new Error('SHARED_AGENT_IDENTITY: las dos cuentas resuelven el mismo agente. La prueba de exclusividad no es válida.');
++  }
++
++  const restore = usePanelAccounts();
++  process.env.MANUAL_TAKEOVER_ENABLED = 'true';
++  process.env.REENTRY_POLICY = 'prompt';
++  const server = await listen(createApp());
++  const adminCookie = cookieFor(ADMIN_USER, ROLES.ADMIN);
++  const operatorCookie = cookieFor(OPERATOR_USER, ROLES.CONVERSATIONS_ONLY);
++  const owned = await createBotConversation('owned');
++  const adminFree = await createBotConversation('admin-free');
++  const shared = await createBotConversation('shared');
++  const race = await createBotConversation('race');
++
++  try {
++    const operatorBot = await request(server, {
++      method: 'GET',
++      path: `/api/conversations/${owned.id}`,
++      cookie: operatorCookie,
++    });
++    assert.equal(operatorBot.body?.data?.conversation?.status, 'bot');
++    assert.equal(operatorBot.body?.data?.conversation?.canTakeover, true);
++
++    const adminBot = await request(server, {
++      method: 'GET',
++      path: `/api/conversations/${adminFree.id}`,
++      cookie: adminCookie,
++    });
++    assert.equal(adminBot.body?.data?.conversation?.canTakeover, true);
++
++    const taken = await request(server, {
++      path: `/api/conversations/${owned.id}/takeover`,
++      cookie: operatorCookie,
++      body: { clientRequestId: `http-own-${owned.id}` },
++    });
++    assert.equal(taken.status, 200, JSON.stringify(taken.body));
++    assert.equal(taken.body?.data?.conversation?.assignedAgentId, operatorId);
++
++    const adminTaken = await request(server, {
++      path: `/api/conversations/${adminFree.id}/takeover`,
++      cookie: adminCookie,
++      body: { clientRequestId: `http-admin-free-${adminFree.id}` },
++    });
++    assert.equal(adminTaken.status, 200, JSON.stringify(adminTaken.body));
++    assert.equal(adminTaken.body?.data?.conversation?.status, 'assigned');
++    assert.equal(adminTaken.body?.data?.conversation?.assignedAgentId, adminId);
++
++    const ownerView = await request(server, {
++      method: 'GET',
++      path: `/api/conversations/${owned.id}`,
++      cookie: operatorCookie,
++    });
++    assert.equal(ownerView.body?.data?.conversation?.canReturnToBot, true);
++    assert.equal(ownerView.body?.data?.conversation?.canForceReturn, false);
++
++    const adminView = await request(server, {
++      method: 'GET',
++      path: `/api/conversations/${owned.id}`,
++      cookie: adminCookie,
++    });
++    assert.equal(adminView.body?.data?.conversation?.canReturnToBot, false);
++    assert.equal(adminView.body?.data?.conversation?.canForceReturn, false);
++    assert.equal(adminView.body?.data?.conversation?.canReassign, true);
++
++    const adminClose = await request(server, {
++      path: `/api/conversations/${owned.id}/close`,
++      cookie: adminCookie,
++      body: {},
++    });
++    assert.equal(adminClose.status, 409);
++    assert.equal(adminClose.body?.error, 'CONVERSATION_OWNED');
++
++    const adminReturn = await request(server, {
++      path: `/api/conversations/${owned.id}/return-to-bot`,
++      cookie: adminCookie,
++      body: {},
++    });
++    assert.equal(adminReturn.status, 409);
++    assert.equal(adminReturn.body?.error, 'CONVERSATION_OWNED');
++
++    const adminReply = await request(server, {
++      path: `/api/conversations/${owned.id}/messages`,
++      cookie: adminCookie,
++      body: { body: 'intento del administrador' },
++    });
++    assert.equal(adminReply.status, 409);
++    assert.equal(adminReply.body?.error, 'CONVERSATION_OWNED');
++
++    const ownerReply = await request(server, {
++      path: `/api/conversations/${owned.id}/messages`,
++      cookie: operatorCookie,
++      body: { body: 'respuesta del propietario' },
++    });
++    assert.equal(ownerReply.status, 201, JSON.stringify(ownerReply.body));
++
++    const stillOwned = await conversationRepository.findById(owned.id);
++    assert.equal(stillOwned.status, 'assigned');
++    assert.equal(stillOwned.assignedAgentId, operatorId);
++
++    const ownerReturn = await request(server, {
++      path: `/api/conversations/${owned.id}/return-to-bot`,
++      cookie: operatorCookie,
++      body: {},
++    });
++    assert.equal(ownerReturn.status, 200, JSON.stringify(ownerReturn.body));
++    const returned = await conversationRepository.findById(owned.id);
++    assert.equal(returned.status, 'bot');
++    assert.equal(returned.assignedAgentId, null);
++    assert.equal(returned.reentryJson?.status, 'pending');
++
++    const secondClose = await request(server, {
++      path: `/api/conversations/${owned.id}/close`,
++      cookie: operatorCookie,
++      body: {},
++    });
++    assert.equal(secondClose.status, 200, JSON.stringify(secondClose.body));
++    const closedAgain = await conversationRepository.findById(owned.id);
++    assert.equal(closedAgain.status, 'bot');
++    assert.equal(closedAgain.assignedAgentId, null);
++
++    const retaken = await request(server, {
++      path: `/api/conversations/${owned.id}/takeover`,
++      cookie: operatorCookie,
++      body: { clientRequestId: `http-own-2-${owned.id}` },
++    });
++    assert.equal(retaken.status, 200, JSON.stringify(retaken.body));
++
++    const forced = await request(server, {
++      path: `/api/conversations/${owned.id}/close`,
++      cookie: adminCookie,
++      body: { force: true },
++    });
++    assert.equal(forced.status, 409);
++    assert.equal(forced.body?.error, 'CONVERSATION_OWNED');
++    const forcedRow = await conversationRepository.findById(owned.id);
++    assert.equal(forcedRow.status, 'assigned');
++    assert.equal(forcedRow.assignedAgentId, operatorId);
++
++    const operatorTransfer = await request(server, {
++      path: `/api/conversations/${owned.id}/transfer`,
++      cookie: operatorCookie,
++      body: { targetUsername: ADMIN_USER, reason: 'el operador no reasigna' },
++    });
++    assert.equal(operatorTransfer.status, 403);
++    assert.equal(operatorTransfer.body?.error, 'FORBIDDEN');
++
++    const reassigned = await request(server, {
++      path: `/api/conversations/${owned.id}/transfer`,
++      cookie: adminCookie,
++      body: { targetUsername: ADMIN_USER, reason: 'intervención administrativa explícita' },
++    });
++    assert.equal(reassigned.status, 200, JSON.stringify(reassigned.body));
++    const reassignedRow = await conversationRepository.findById(owned.id);
++    assert.equal(reassignedRow.status, 'assigned');
++    assert.equal(reassignedRow.assignedAgentId, adminId);
++    const audit = await query(
++      `SELECT action FROM dbo.audit_logs WHERE entity_id = $1 AND action = N'manual_reassign'`,
++      [owned.id],
++    );
++    assert.equal(audit.rows.length, 1);
++
++    const otherClose = await request(server, {
++      path: `/api/conversations/${owned.id}/close`,
++      cookie: operatorCookie,
++      body: {},
++    });
++    assert.equal(otherClose.status, 409);
++    assert.equal(otherClose.body?.error, 'CONVERSATION_OWNED');
++
++    const otherReply = await request(server, {
++      path: `/api/conversations/${owned.id}/messages`,
++      cookie: operatorCookie,
++      body: { body: 'el dueño anterior ya no responde' },
++    });
++    assert.equal(otherReply.status, 409);
++    assert.equal(otherReply.body?.error, 'CONVERSATION_OWNED');
++
++    const newOwnerReply = await request(server, {
++      path: `/api/conversations/${owned.id}/messages`,
++      cookie: adminCookie,
++      body: { body: 'respuesta después de reasignar' },
++    });
++    assert.equal(newOwnerReply.status, 201, JSON.stringify(newOwnerReply.body));
++
++    const otherReturn = await request(server, {
++      path: `/api/conversations/${owned.id}/return-to-bot`,
++      cookie: operatorCookie,
++      body: {},
++    });
++    assert.equal(otherReturn.status, 409);
++    assert.equal(otherReturn.body?.error, 'CONVERSATION_OWNED');
++    const untouched = await conversationRepository.findById(owned.id);
++    assert.equal(untouched.status, 'assigned');
++    assert.equal(untouched.assignedAgentId, adminId);
++
++    const sharedTake = await request(server, {
++      path: `/api/conversations/${shared.id}/takeover`,
++      cookie: operatorCookie,
++      body: { clientRequestId: `http-shared-${shared.id}` },
++    });
++    assert.equal(sharedTake.status, 200, JSON.stringify(sharedTake.body));
++    process.env.MANUAL_TAKEOVER_ENABLED = 'false';
++    const sharedClose = await request(server, {
++      path: `/api/conversations/${shared.id}/close`,
++      cookie: adminCookie,
++      body: {},
++    });
++    assert.equal(sharedClose.status, 200, JSON.stringify(sharedClose.body));
++    const sharedRow = await conversationRepository.findById(shared.id);
++    assert.equal(sharedRow.status, 'bot');
++    assert.equal(sharedRow.assignedAgentId, null);
++
++    process.env.MANUAL_TAKEOVER_ENABLED = 'true';
++    const raceTake = await request(server, {
++      path: `/api/conversations/${race.id}/takeover`,
++      cookie: operatorCookie,
++      body: { clientRequestId: `http-race-${race.id}` },
++    });
++    assert.equal(raceTake.status, 200, JSON.stringify(raceTake.body));
++    const [raceReturn, raceTransfer] = await Promise.all([
++      request(server, {
++        path: `/api/conversations/${race.id}/return-to-bot`,
++        cookie: operatorCookie,
++        body: {},
++      }),
++      request(server, {
++        path: `/api/conversations/${race.id}/transfer`,
++        cookie: adminCookie,
++        body: { targetUsername: ADMIN_USER, reason: 'cambio concurrente de prueba' },
++      }),
++    ]);
++    const outcomes = [raceReturn, raceTransfer];
++    assert.equal(outcomes.filter((item) => item.status === 200).length, 1);
++    assert.equal(outcomes.filter((item) => item.status === 409).length, 1);
++    const raceRow = await conversationRepository.findById(race.id);
++    if (raceReturn.status === 200) {
++      assert.equal(raceTransfer.status, 409);
++      assert.equal(raceRow.status, 'bot');
++      assert.equal(raceRow.assignedAgentId, null);
++    } else {
++      assert.equal(raceTransfer.status, 200);
++      assert.equal(raceReturn.body?.error, 'CONVERSATION_OWNED');
++      assert.equal(raceRow.status, 'assigned');
++      assert.equal(raceRow.assignedAgentId, adminId);
++    }
++  } finally {
++    await closeServer(server);
++    await cleanup(owned.id);
++    await cleanup(adminFree.id);
++    await cleanup(shared.id);
++    await cleanup(race.id);
++    restore();
++  }
++});
++
++after(async () => {
++  if (isolatedTestDatabaseReason() == null && isConversationDbEnabled()) {
++    await closePool();
++  }
++});
+diff --git a/whatsapp-bot/src/services/conversation-return-authorization.test.js b/whatsapp-bot/src/services/conversation-return-authorization.test.js
+new file mode 100644
+index 0000000..d0f11a8
+--- /dev/null
++++ b/whatsapp-bot/src/services/conversation-return-authorization.test.js
+@@ -0,0 +1,61 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { assertExclusiveReturnAllowed } from './conversation-bot-lifecycle.service.js';
++import { describeReturnAccess, describeTakeoverAccess } from './conversation-takeover.service.js';
++
++const owner = { agentId: 'agent-ana', username: 'ana', role: 'conversations_only' };
++const other = { agentId: 'agent-luis', username: 'luis', role: 'conversations_only' };
++const admin = { agentId: 'agent-admin', username: 'admin', role: 'admin' };
++const locked = { status: 'assigned', assignedAgentId: 'agent-ana' };
++
++test('admin y operador pueden tomar una conversación libre en bot', () => {
++  const bot = { status: 'bot', assignedAgentId: null };
++  assert.equal(describeTakeoverAccess(bot, owner, { enabled: true }).canTakeover, true);
++  assert.equal(describeTakeoverAccess(bot, admin, { enabled: true }).canTakeover, true);
++  assert.equal(describeTakeoverAccess(bot, { role: 'unknown', agentId: 'x' }, { enabled: true }).canTakeover, false);
++});
++
++test('el dueño puede devolver la atención exclusiva', () => {
++  assert.doesNotThrow(() => assertExclusiveReturnAllowed(locked, owner, { takeoverEnabled: true }));
++  assert.deepEqual(
++    describeReturnAccess(locked, owner, { enabled: true }),
++    { canReturnToBot: true, canForceReturn: false },
++  );
++});
++
++test('otro agente no puede cerrar la atención de otro', () => {
++  assert.throws(
++    () => assertExclusiveReturnAllowed(locked, other, { takeoverEnabled: true }),
++    (error) => error.code === 'CONVERSATION_OWNED' && error.httpStatus === 409,
++  );
++  assert.deepEqual(
++    describeReturnAccess(locked, other, { enabled: true }),
++    { canReturnToBot: false, canForceReturn: false },
++  );
++});
++
++test('el administrador tampoco salta la propiedad de otro agente', () => {
++  assert.throws(
++    () => assertExclusiveReturnAllowed(locked, admin, { takeoverEnabled: true }),
++    (error) => error.code === 'CONVERSATION_OWNED' && error.httpStatus === 409,
++  );
++  assert.deepEqual(
++    describeReturnAccess(locked, admin, { enabled: true }),
++    { canReturnToBot: false, canForceReturn: false },
++  );
++});
++
++test('con la toma apagada cualquier operador habilitado puede devolver la cola', () => {
++  assert.doesNotThrow(() => assertExclusiveReturnAllowed(locked, other, { takeoverEnabled: false }));
++  assert.deepEqual(
++    describeReturnAccess(locked, other, { enabled: false }),
++    { canReturnToBot: true, canForceReturn: false },
++  );
++});
++
++test('un cierre interno sin actor no pasa por esta autorización', () => {
++  assert.throws(
++    () => assertExclusiveReturnAllowed(locked, null, { takeoverEnabled: true }),
++    (error) => error.code === 'FORBIDDEN',
++  );
++});
+diff --git a/whatsapp-bot/src/services/conversation-takeover.distributed.test.js b/whatsapp-bot/src/services/conversation-takeover.distributed.test.js
+new file mode 100644
+index 0000000..585a709
+--- /dev/null
++++ b/whatsapp-bot/src/services/conversation-takeover.distributed.test.js
+@@ -0,0 +1,193 @@
++import test, { after } from 'node:test';
++import assert from 'node:assert/strict';
++import { spawn } from 'node:child_process';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { isConversationDbEnabled, pingDatabase, query, closePool } from '../db/index.js';
++import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
++import conversationRepository from '../repositories/conversation.repository.js';
++import humanHandoffRepository from '../repositories/human-handoff.repository.js';
++import { agentsMatch, resolveAgentIdFromUsername } from '../utils/agent-identity.js';
++import { exclusiveAgentIdentityConflict } from '../utils/exclusive-agent-identity.js';
++
++const workerPath = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)),
++  '../../scripts/takeover-distributed-worker.js',
++);
++const botRoot = path.resolve(path.dirname(workerPath), '..');
++
++async function skipReason() {
++  const isolated = isolatedTestDatabaseReason();
++  if (isolated) return isolated;
++  if (!isConversationDbEnabled()) return 'Conversation DB disabled';
++  try {
++    const ping = await pingDatabase();
++    if (!ping.ok) return 'Conversation DB unavailable';
++  } catch (error) {
++    return `Conversation DB unavailable: ${error instanceof Error ? error.message : String(error)}`;
++  }
++  const { rows } = await query(
++    `SELECT COL_LENGTH('dbo.conversations', 'status_version') AS column_length`,
++  );
++  if (!rows[0]?.column_length) return 'Migration 009 is not applied on the test database';
++  return null;
++}
++
++function assertDistinctAgents() {
++  const ana = resolveAgentIdFromUsername('dist-ana');
++  const luis = resolveAgentIdFromUsername('dist-luis');
++  if (ana === luis || exclusiveAgentIdentityConflict()) {
++    throw new Error('SHARED_AGENT_IDENTITY: las dos cuentas resuelven el mismo agente. La prueba de exclusividad no es válida.');
++  }
++  return { ana, luis };
++}
++
++function runWorker(args) {
++  return new Promise((resolve, reject) => {
++    const child = spawn(process.execPath, [workerPath, ...args], {
++      cwd: botRoot,
++      env: {
++        ...process.env,
++        MANUAL_TAKEOVER_ENABLED: 'true',
++        REENTRY_POLICY: 'prompt',
++        ADMIN_USERNAME: 'dist-ana',
++        ADMIN_PASSWORD_HASH: 'ab'.repeat(32),
++        CONVERSATIONS_OPERATOR_USERNAME: 'dist-luis',
++        CONVERSATIONS_OPERATOR_PASSWORD_HASH: 'cd'.repeat(32),
++      },
++      stdio: ['ignore', 'pipe', 'pipe'],
++    });
++    let stdout = '';
++    child.stdout.on('data', (chunk) => {
++      stdout += chunk;
++    });
++    child.stderr.on('data', () => {});
++    child.on('error', reject);
++    child.on('close', (code) => {
++      const line = stdout.split('\n').find((item) => item.startsWith('RESULT '));
++      if (!line) {
++        reject(new Error(`worker sin resultado (exit ${code})`));
++        return;
++      }
++      resolve(JSON.parse(line.slice('RESULT '.length)));
++    });
++  });
++}
++
++async function cleanup(conversationId) {
++  await query('DELETE FROM dbo.conversation_operation_requests WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.audit_logs WHERE entity_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversation_sessions WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.human_handoffs WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversation_messages WHERE conversation_id = $1', [conversationId]);
++  await query('DELETE FROM dbo.conversations WHERE id = $1', [conversationId]);
++}
++
++test('integration: dos procesos toman la misma conversación en SQL TEST', async (t) => {
++  const reason = await skipReason();
++  if (reason) {
++    t.skip(reason);
++    return;
++  }
++  const ids = assertDistinctAgents();
++  const suffix = `${Date.now()}-dist`;
++  const created = await conversationRepository.createConversation({
++    channel: 'simulator',
++    provider: 'internal',
++    externalUserId: `IT-DIST-${suffix}`,
++    status: 'bot',
++    currentFlowId: 'main-menu',
++    currentNodeKey: 'welcome',
++  });
++
++  try {
++    const [ana, luis] = await Promise.all([
++      runWorker([created.id, 'dist-ana', 'admin', `dist-a-${suffix}`]),
++      runWorker([created.id, 'dist-luis', 'conversations_only', `dist-b-${suffix}`]),
++    ]);
++    const reports = [ana, luis];
++    const accepted = reports.filter((item) => item.ok);
++    const rejected = reports.filter((item) => !item.ok);
++    assert.equal(accepted.length, 1);
++    assert.equal(rejected.length, 1);
++    assert.equal(rejected[0].code, 'CONVERSATION_OWNED');
++    assert.notEqual(ana.agentId, luis.agentId);
++    assert.equal(ana.agentId, ids.ana);
++    assert.equal(luis.agentId, ids.luis);
++
++    const stored = await conversationRepository.findById(created.id);
++    assert.equal(stored.status, 'assigned');
++    assert.equal(agentsMatch(stored.assignedAgentId, accepted[0].agentId), true);
++    assert.equal(agentsMatch(stored.assignedAgentId, rejected[0].agentId), false);
++
++    const active = await humanHandoffRepository.findActiveByConversationId(created.id);
++    assert.equal(active.length, 1);
++    assert.equal(agentsMatch(active[0].assignedAgentId, accepted[0].agentId), true);
++
++    const messages = await query(
++      `SELECT COUNT(*) AS total
++       FROM dbo.conversation_messages
++       WHERE conversation_id = $1
++         AND sender_type = 'system'
++         AND body LIKE '%tomó la conversación%'`,
++      [created.id],
++    );
++    assert.equal(Number(messages.rows[0].total), 1);
++
++    const winnerEvents = accepted[0].events.filter((event) => event.type === 'conversation.assigned');
++    const loserEvents = rejected[0].events.filter((event) => event.type === 'conversation.assigned');
++    assert.equal(winnerEvents.length, 1);
++    assert.equal(agentsMatch(winnerEvents[0].assignedAgentId, accepted[0].agentId), true);
++    assert.equal(loserEvents.length, 0);
++
++    const winner = accepted[0];
++    const loser = rejected[0];
++    const reply = await runWorker([
++      created.id,
++      winner.username,
++      winner.role,
++      `dist-reply-${suffix}`,
++      'reply',
++    ]);
++    assert.equal(reply.ok, true, reply.code);
++    const denied = await runWorker([
++      created.id,
++      loser.username,
++      loser.role,
++      `dist-reply-denied-${suffix}`,
++      'reply',
++    ]);
++    assert.equal(denied.ok, false);
++    assert.equal(denied.code, 'CONVERSATION_OWNED');
++    const returned = await runWorker([
++      created.id,
++      winner.username,
++      winner.role,
++      `dist-return-${suffix}`,
++      'return',
++    ]);
++    assert.equal(returned.ok, true, returned.code);
++    const afterReturn = await conversationRepository.findById(created.id);
++    assert.equal(afterReturn.status, 'bot');
++    assert.equal(afterReturn.assignedAgentId, null);
++    assert.equal(afterReturn.reentryJson?.status, 'pending');
++    const activeAfter = await humanHandoffRepository.findActiveByConversationId(created.id);
++    assert.equal(activeAfter.length, 0);
++    const replies = await query(
++      `SELECT COUNT(*) AS total
++       FROM dbo.conversation_messages
++       WHERE conversation_id = $1
++         AND sender_type = 'agent'`,
++      [created.id],
++    );
++    assert.equal(Number(replies.rows[0].total), 1);
++  } finally {
++    await cleanup(created.id);
++  }
++});
++
++after(async () => {
++  if (isolatedTestDatabaseReason() == null && isConversationDbEnabled()) {
++    await closePool();
++  }
++});
+diff --git a/whatsapp-bot/src/utils/exclusive-agent-identity.js b/whatsapp-bot/src/utils/exclusive-agent-identity.js
+new file mode 100644
+index 0000000..4367aa3
+--- /dev/null
++++ b/whatsapp-bot/src/utils/exclusive-agent-identity.js
+@@ -0,0 +1,20 @@
++/**
++ * Con la toma exclusiva, admin y operador tienen que ser agentes distintos.
++ * INTERNAL_AGENT_ID reemplaza el id derivado del usuario para todas las cuentas.
++ * El resultado no incluye el valor de la variable.
++ *
++ * @param {NodeJS.ProcessEnv} [env]
++ * @returns {{ code: 'SHARED_AGENT_IDENTITY', message: string } | null}
++ */
++export function exclusiveAgentIdentityConflict(env = process.env) {
++  const sharedId = String(env.INTERNAL_AGENT_ID || '').trim();
++  if (!sharedId) return null;
++  const admin = String(env.ADMIN_USERNAME || '').trim();
++  const operator = String(env.CONVERSATIONS_OPERATOR_USERNAME || '').trim();
++  if (!admin || !operator) return null;
++  if (admin.toLowerCase() === operator.toLowerCase()) return null;
++  return {
++    code: 'SHARED_AGENT_IDENTITY',
++    message: 'INTERNAL_AGENT_ID hace que el administrador y el operador sean el mismo agente. La toma exclusiva no puede distinguirlos. Quite esa variable antes de activar la toma manual.',
++  };
++}
+diff --git a/whatsapp-bot/src/utils/exclusive-agent-identity.test.js b/whatsapp-bot/src/utils/exclusive-agent-identity.test.js
+new file mode 100644
+index 0000000..59ffdaa
+--- /dev/null
++++ b/whatsapp-bot/src/utils/exclusive-agent-identity.test.js
+@@ -0,0 +1,71 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import { spawnSync } from 'node:child_process';
++import path from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { exclusiveAgentIdentityConflict } from './exclusive-agent-identity.js';
++import { resolveAgentIdFromUsername } from './agent-identity.js';
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
++const SHARED_ID = '11111111-2222-4333-8444-555555555555';
++
++test('sin INTERNAL_AGENT_ID dos usuarios son agentes distintos', () => {
++  const previous = process.env.INTERNAL_AGENT_ID;
++  delete process.env.INTERNAL_AGENT_ID;
++  try {
++    assert.equal(exclusiveAgentIdentityConflict({
++      ADMIN_USERNAME: 'admin-identity',
++      CONVERSATIONS_OPERATOR_USERNAME: 'operator-identity',
++    }), null);
++    assert.notEqual(
++      resolveAgentIdFromUsername('admin-identity'),
++      resolveAgentIdFromUsername('operator-identity'),
++    );
++  } finally {
++    if (previous === undefined) delete process.env.INTERNAL_AGENT_ID;
++    else process.env.INTERNAL_AGENT_ID = previous;
++  }
++});
++
++test('INTERNAL_AGENT_ID colapsa administrador y operador sin revelar el valor', () => {
++  const conflict = exclusiveAgentIdentityConflict({
++    ADMIN_USERNAME: 'admin-identity',
++    CONVERSATIONS_OPERATOR_USERNAME: 'operator-identity',
++    INTERNAL_AGENT_ID: SHARED_ID,
++  });
++  assert.equal(conflict?.code, 'SHARED_AGENT_IDENTITY');
++  assert.equal(JSON.stringify(conflict).includes(SHARED_ID), false);
++  assert.equal(exclusiveAgentIdentityConflict({
++    ADMIN_USERNAME: 'admin-identity',
++    CONVERSATIONS_OPERATOR_USERNAME: 'admin-identity',
++    INTERNAL_AGENT_ID: SHARED_ID,
++  }), null);
++});
++
++test('el arranque se detiene si la toma exclusiva comparte identidad', () => {
++  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
++    import { validateConfig } from './src/config.js';
++    validateConfig();
++    console.log('BOOTED');
++  `], {
++    cwd: root,
++    env: {
++      ...process.env,
++      NODE_ENV: 'test',
++      TWILIO_SIGNATURE_MODE: 'off',
++      MANUAL_TAKEOVER_ENABLED: 'true',
++      INTERNAL_AGENT_ID: SHARED_ID,
++      ADMIN_USERNAME: 'admin-identity',
++      ADMIN_PASSWORD_HASH: 'ab'.repeat(32),
++      CONVERSATIONS_OPERATOR_USERNAME: 'operator-identity',
++      CONVERSATIONS_OPERATOR_PASSWORD_HASH: 'cd'.repeat(32),
++      SESSION_SECRET: 'session-secret-test-value-32bytes',
++    },
++    encoding: 'utf8',
++  });
++  const output = `${result.stdout}${result.stderr}`;
++  assert.notEqual(result.status, 0);
++  assert.equal(output.includes('BOOTED'), false);
++  assert.equal(output.includes('sean el mismo agente'), true);
++  assert.equal(output.includes(SHARED_ID), false);
++});

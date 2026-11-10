@@ -1,0 +1,25 @@
+ .../components/ConversationComposer.test.tsx       |  5 ++-
+ .../components/ConversationComposer.tsx            |  2 +-
+ .../components/ConversationDetail.test.tsx         | 16 ++++++-
+ .../components/ConversationDetail.tsx              |  9 ++--
+ .../conversations/pages/ConversationsPage.test.tsx |  1 +
+ .../conversations/types/conversation.types.ts      |  2 +
+ .../utils/applyConversationLiveEvent.test.ts       | 46 ++++++++++++++++++++
+ .../utils/applyConversationLiveEvent.ts            | 23 +++++++---
+ whatsapp-bot/src/config.js                         |  9 ++++
+ .../src/controllers/conversations.controller.js    |  6 ++-
+ .../services/conversation-bot-lifecycle.service.js | 49 ++++++++++++++++++++++
+ .../src/services/conversation-inbox.service.js     | 27 ++++++++++--
+ .../services/conversation-inbox.service.test.js    | 12 +++++-
+ .../conversation-takeover.integration.test.js      |  5 +++
+ .../src/services/conversation-takeover.service.js  | 25 +++++++++++
+ 15 files changed, 219 insertions(+), 18 deletions(-)
+
+untracked
+      91 whatsapp-bot/scripts/takeover-distributed-worker.js
+     402 whatsapp-bot/src/services/conversation-return-authorization.integration.test.js
+      61 whatsapp-bot/src/services/conversation-return-authorization.test.js
+     193 whatsapp-bot/src/services/conversation-takeover.distributed.test.js
+      20 whatsapp-bot/src/utils/exclusive-agent-identity.js
+      71 whatsapp-bot/src/utils/exclusive-agent-identity.test.js
+     838 total

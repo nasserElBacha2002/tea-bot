@@ -130,9 +130,12 @@ export const ConversationDetail: React.FC<Props> = ({
       ? 'Esperando que un operador tome la conversación.'
       : null);
 
-  const canReturnToBot = conversation.status === 'waiting_human'
-    || conversation.status === 'assigned'
-    || conversation.status === 'paused';
+  const canReturnToBot = conversation.canReturnToBot === true
+    && (
+      conversation.status === 'waiting_human'
+      || conversation.status === 'assigned'
+      || conversation.status === 'paused'
+    );
   const showTakeover = Boolean(conversation.canTakeover);
   const showClaimInHeader = showTakeover || conversation.status === 'waiting_human';
 

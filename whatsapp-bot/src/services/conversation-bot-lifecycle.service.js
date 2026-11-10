@@ -9,6 +9,49 @@ import {
   buildReentrySnapshot,
   resolveReentryPolicy,
 } from '../utils/conversation-reentry-policy.js';
+import { canTakeoverConversation } from '../auth/roles.js';
+import { agentsMatch } from '../utils/agent-identity.js';
+import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
+
+function returnAuthError(code, message, httpStatus, details) {
+  const error = new Error(message);
+  error.code = code;
+  error.httpStatus = httpStatus;
+  error.apiError = code;
+  error.apiMessage = message;
+  if (details) error.details = details;
+  return error;
+}
+
+/**
+ * La fila ya está bloqueada. Sin actor, el cierre es interno y no pasa por HTTP.
+ * Con actor y toma activa, solo el dueño cierra. Un administrador que no es
+ * dueño no salta la propiedad: interviene con la reasignación. Con la toma
+ * apagada se conserva el inbox compartido.
+ */
+export function assertExclusiveReturnAllowed(locked, actor, {
+  takeoverEnabled = isManualTakeoverEnabled(),
+} = {}) {
+  if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
+    throw returnAuthError(
+      'FORBIDDEN',
+      'No tenés permiso para devolver esta conversación al bot.',
+      403,
+    );
+  }
+  if (!takeoverEnabled) return;
+
+  const exclusive = Boolean(locked?.assignedAgentId)
+    && (locked.status === 'assigned' || locked.status === 'paused');
+  if (!exclusive || agentsMatch(locked.assignedAgentId, actor.agentId)) return;
+
+  throw returnAuthError(
+    'CONVERSATION_OWNED',
+    'La conversación está asignada a otro agente.',
+    409,
+    { assignedAgentId: locked.assignedAgentId },
+  );
+}
 
 export { isHandoffTerminalNode };
 
@@ -78,6 +121,12 @@ export class ConversationBotLifecycleService {
         const err = new Error('Conversation not found');
         err.code = 'NOT_FOUND';
         throw err;
+      }
+
+      if (options.actor) {
+        assertExclusiveReturnAllowed(locked, options.actor, {
+          takeoverEnabled: options.takeoverEnabled ?? isManualTakeoverEnabled(),
+        });
       }
 
       const openSession = await this.sessionRepo.findLatestOpenByConversationId(

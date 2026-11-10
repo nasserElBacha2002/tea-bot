@@ -442,6 +442,8 @@ describe('applyConversationLiveEvent', () => {
         status: 'assigned',
         takeoverBlock: 'disabled',
         canTakeover: false,
+        canReturnToBot: true,
+        canForceReturn: false,
       },
       activeSession: null,
       humanHandoff: null,
@@ -467,5 +469,49 @@ describe('applyConversationLiveEvent', () => {
 
     const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
     expect(detail?.conversation.takeoverBlock).toBe('disabled');
+    expect(detail?.conversation.canReturnToBot).toBe(true);
+  });
+
+  it('oculta la devolución y refresca el detalle si el evento no trae el permiso', () => {
+    const qc = new QueryClient();
+    const detailKey = conversationKeys.detail('c1');
+    const invalidate = vi.spyOn(qc, 'invalidateQueries');
+    qc.setQueryData<ConversationDetailResponse>(detailKey, {
+      conversation: {
+        ...baseListItem,
+        status: 'assigned',
+        assignedAgentId: 'agent-1',
+        canReturnToBot: true,
+        canForceReturn: false,
+        takeoverBlock: 'already_owner',
+      },
+      activeSession: null,
+      humanHandoff: null,
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.assigned',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          conversation: {
+            ...baseListItem,
+            status: 'assigned',
+            assignedAgentId: 'AGENT-2',
+            assignedAgentLabel: 'Luis',
+          },
+        },
+      },
+      'c1',
+      'agent-1',
+    );
+
+    const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
+    expect(detail?.conversation.canReturnToBot).toBe(false);
+    expect(detail?.conversation.canForceReturn).toBe(false);
+    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
+    expect(invalidate).toHaveBeenCalled();
   });
 });

@@ -35,13 +35,15 @@ function sameAgent(left?: string | null, right?: string | null) {
 function liveAttentionPatch(
   existing: {
     canTakeover?: boolean;
+    canReturnToBot?: boolean;
+    canForceReturn?: boolean;
     assignedAgentId?: string | null;
     assignedAgentLabel?: string | null;
     takeoverBlock?: string | null;
   } | undefined,
   conv: Pick<
     InboxConversationItem,
-    'status' | 'canTakeover' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
+    'status' | 'canTakeover' | 'canReturnToBot' | 'canForceReturn' | 'botPaused' | 'assignedAgentLabel' | 'assignedAgentId' | 'statusVersion' | 'takeoverBlock'
   >,
   viewerAgentId?: string | null,
 ): Partial<InboxConversationItem> {
@@ -73,8 +75,16 @@ function liveAttentionPatch(
   const assigneeChanged = Boolean(
     conv.assignedAgentId
     && existing?.assignedAgentId
-    && conv.assignedAgentId !== existing.assignedAgentId,
+    && !sameAgent(conv.assignedAgentId, existing.assignedAgentId),
   );
+  const sharedInbox = existing?.takeoverBlock === 'disabled' || conv.takeoverBlock === 'disabled';
+  if (conv.canReturnToBot != null) patch.canReturnToBot = conv.canReturnToBot;
+  else if (conv.status === 'bot' || conv.status === 'closed') patch.canReturnToBot = false;
+  else if (!sharedInbox && (conv.status === 'assigned' || conv.status === 'paused' || conv.status === 'waiting_human')) {
+    patch.canReturnToBot = false;
+  }
+  if (conv.canForceReturn != null) patch.canForceReturn = conv.canForceReturn;
+  else if (!sharedInbox) patch.canForceReturn = false;
   if (conv.assignedAgentLabel != null && !assigneeChanged) {
     patch.assignedAgentLabel = conv.assignedAgentLabel;
   } else if (assigneeChanged) {
@@ -86,11 +96,14 @@ function liveAttentionPatch(
 }
 
 export function liveEventNeedsDetailRefresh(
-  conv: Pick<InboxConversationItem, 'status' | 'takeoverBlock' | 'assignedAgentLabel'> | undefined,
+  conv: Pick<InboxConversationItem, 'status' | 'takeoverBlock' | 'assignedAgentLabel' | 'canReturnToBot' | 'canForceReturn'> | undefined,
 ): boolean {
   if (!conv) return false;
-  if (conv.status !== 'assigned' && conv.status !== 'paused') return false;
-  return conv.takeoverBlock == null || conv.assignedAgentLabel == null;
+  if (conv.status !== 'assigned' && conv.status !== 'paused' && conv.status !== 'waiting_human') return false;
+  return conv.takeoverBlock == null
+    || conv.assignedAgentLabel == null
+    || conv.canReturnToBot == null
+    || conv.canForceReturn == null;
 }
 
 function mergeInboxListItem(

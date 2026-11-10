@@ -37,6 +37,8 @@ export interface InboxConversationItem {
   assignedAgentId: string | null;
   statusVersion?: number | null;
   canTakeover?: boolean;
+  canReturnToBot?: boolean;
+  canForceReturn?: boolean;
   takeoverBlock?: string | null;
   reentryStatus?: string | null;
   botPaused?: boolean;

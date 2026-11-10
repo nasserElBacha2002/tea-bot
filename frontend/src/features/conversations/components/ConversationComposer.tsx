@@ -105,7 +105,7 @@ export const ConversationComposer: React.FC<Props> = ({
     return (
       <Box sx={{ flexShrink: 0 }}>
         <CompactNotice tone="info">
-          Bot activo. Tomá la conversación para responder. El composer se habilita cuando el servidor confirma la toma.
+          Bot activo. Esta conversación puede tomarse manualmente. El campo de respuesta se habilita cuando el servidor confirma la toma.
         </CompactNotice>
         {canTakeover && (
           <Box sx={{ p: compact ? 1 : 1.25 }}>

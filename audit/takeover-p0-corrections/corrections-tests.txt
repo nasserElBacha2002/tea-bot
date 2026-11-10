@@ -1,0 +1,37 @@
+Backend, tea-bot local, TB_SQL_TEST_CONFIRM=tea-bot, concurrencia 1:
+node --test src migrations
+tests 439
+pass 439
+fail 0
+skipped 0
+
+Incluye, sin skip:
+- admin y conversations_only toman una conversación en bot
+- HTTP real con las dos cuentas: toma, respuesta, cierre, devolución, reasignación y carrera
+- dos procesos Node: una toma, CONVERSATION_OWNED, respuesta del dueño, rechazo del otro, devolución y reentrada
+- toma exclusiva y carrera en el mismo proceso
+- TB-005 firma inbound contra SQL tea-bot
+- reentrada e idempotencia de webhook / TB-006
+
+TB-006 preflight, fuera del find de src/:
+node --test scripts/tb006-preflight.test.js
+tests 5
+pass 5
+fail 0
+skipped 0
+No aplicó 010 ni tocó tea_bot.
+
+Frontend:
+npm test
+53 files, 241 tests, 0 fail
+npm run build
+tsc -b && vite build, exit 0
+
+Lint:
+cd frontend && npm run lint
+exit 1
+4 errors y 4 warnings
+Los archivos de esos diagnósticos no cambiaron en este diff.
+La comparación anterior contra 2ccaeb6, con git show | eslint --stdin y sin tocar el working tree, ya los tenía en las mismas líneas:
+AuthContext.tsx, ContactNameEditor.tsx, ConversationMessageTimeline.tsx, ConversationLiveProvider.tsx y los warnings de ConversationsPage.tsx.
+Esta corrección no agregó diagnósticos.

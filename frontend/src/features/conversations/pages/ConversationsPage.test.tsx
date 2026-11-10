@@ -106,6 +106,7 @@ vi.mock('../hooks/useConversations', () => ({
             displayName: 'Simulación - Esperando humano',
             status: 'waiting_human',
             assignedAgentId: null,
+            canReturnToBot: true,
             currentFlowId: 'main-menu',
             currentFlowVersion: 'v22',
             currentNodeKey: 'human_handoff',

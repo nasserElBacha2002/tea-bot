@@ -36,6 +36,29 @@ function reentryStatusOf(conversation) {
   return status == null || status === '' ? null : String(status);
 }
 
+function exclusiveOwner(conversation) {
+  return Boolean(conversation?.assignedAgentId)
+    && (conversation.status === 'assigned' || conversation.status === 'paused');
+}
+
+const RETURNABLE_STATUSES = new Set(['waiting_human', 'assigned', 'paused']);
+
+/**
+ * El botón no es la autorización. El cierre vuelve a evaluarla bajo lock.
+ * Con la toma apagada, cualquier operador habilitado puede devolver la cola.
+ */
+export function describeReturnAccess(conversation, actor, { enabled = isManualTakeoverEnabled() } = {}) {
+  const permitted = canTakeoverConversation(actor?.role);
+  const returnable = RETURNABLE_STATUSES.has(conversation?.status);
+  if (!permitted || !returnable) {
+    return { canReturnToBot: false, canForceReturn: false };
+  }
+  if (!enabled || !exclusiveOwner(conversation) || agentsMatch(conversation.assignedAgentId, actor?.agentId)) {
+    return { canReturnToBot: true, canForceReturn: false };
+  }
+  return { canReturnToBot: false, canForceReturn: false };
+}
+
 function clearPendingReentry(conversation) {
   const status = reentryStatusOf(conversation);
   return status === 'pending' || status === 'awaiting_choice';
@@ -47,12 +70,14 @@ function clearPendingReentry(conversation) {
 export function describeTakeoverAccess(conversation, actor, { enabled = isManualTakeoverEnabled() } = {}) {
   const permitted = canTakeoverConversation(actor?.role);
   const botPaused = conversation?.status === 'assigned' || conversation?.status === 'paused';
+  const returnAccess = describeReturnAccess(conversation, actor, { enabled });
   const base = {
     canTakeover: false,
     takeoverBlock: null,
     reentryStatus: reentryStatusOf(conversation),
     botPaused,
     statusVersion: conversation?.statusVersion ?? null,
+    ...returnAccess,
     canReassign: Boolean(
       canReassignConversation(actor?.role)
       && botPaused

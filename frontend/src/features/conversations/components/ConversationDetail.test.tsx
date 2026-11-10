@@ -75,14 +75,28 @@ describe('ConversationDetail takeover', () => {
       assignedAgentLabel: 'Ana',
       takeoverBlock: 'already_owner',
       canTakeover: false,
+      canReturnToBot: true,
     }));
     expect(screen.getByText('Atención humana')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 
+  it('un operador que no es dueño no ve el cierre', () => {
+    renderDetail(detail({
+      status: 'assigned',
+      assignedAgentId: 'agent-2',
+      assignedAgentLabel: 'Luis',
+      takeoverBlock: 'owned_by_other',
+      canTakeover: false,
+      canReturnToBot: false,
+    }));
+    expect(screen.queryByRole('button', { name: /cerrar y devolver al bot/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Atención humana')).toBeInTheDocument();
+  });
+
   it('una conversación en espera también puede devolverse al bot', () => {
-    renderDetail(detail({ status: 'waiting_human', canTakeover: false }));
+    renderDetail(detail({ status: 'waiting_human', canTakeover: false, canReturnToBot: true }));
     expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /tomar conversación/i }).length).toBeGreaterThan(0);
   });

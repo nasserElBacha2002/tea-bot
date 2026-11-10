@@ -1,0 +1,15 @@
+STATE=READY_FOR_PRODUCTION_ACTIVATION
+SHA_BASE=2ccaeb6e7b5b2d904c4b3c5063b7d6433f64c937
+SHA_HEAD=0d1814a7fdac2614c477c0b1ad4f114d45bf95a6
+COMMIT=no
+PUSH=no
+DEPLOY=no
+BRANCH=main
+PRODUCCION=sin cambios
+FEATURE_FLAG=MANUAL_TAKEOVER_ENABLED no se activó en producción
+MIGRACION_009=no se aplicó en tea_bot
+TWILIO_SIGNATURE_MODE=sin cambios
+SQL_TEST_GUARD=sin cambios
+P0_ABIERTOS=0
+P1_ABIERTOS=0
+CIERRE_FORZADO=no existe; la intervención de un admin es la reasignación auditada

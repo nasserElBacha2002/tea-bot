@@ -7,6 +7,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import conversationTakeoverService from './conversation-takeover.service.js';
 import { agentsMatch, resolveAgentIdFromUsername } from '../utils/agent-identity.js';
+import { exclusiveAgentIdentityConflict } from '../utils/exclusive-agent-identity.js';
 
 async function skipReason() {
   const isolated = isolatedTestDatabaseReason();
@@ -77,6 +78,8 @@ test('integration: toma manual exclusiva en SQL TEST', async (t) => {
     username: 'luis-test',
     role: 'conversations_only',
   };
+  assert.notEqual(ana.agentId, luis.agentId);
+  assert.equal(exclusiveAgentIdentityConflict(), null);
 
   try {
     const taken = await conversationTakeoverService.takeover({
@@ -152,6 +155,8 @@ test('integration: dos agentes en paralelo sobre SQL real', async (t) => {
     username: 'luis-test',
     role: 'conversations_only',
   };
+  assert.notEqual(ana.agentId, luis.agentId);
+  assert.equal(exclusiveAgentIdentityConflict(), null);
 
   try {
     const [first, second] = await Promise.allSettled([

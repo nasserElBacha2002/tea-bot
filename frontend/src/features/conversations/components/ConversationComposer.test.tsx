@@ -80,7 +80,8 @@ describe('ConversationComposer', () => {
         <ConversationComposer status="bot" onSend={vi.fn()} />
       </ThemeProvider>,
     );
-    expect(screen.getByText(/bot activo/i)).toBeInTheDocument();
+    expect(screen.getByText(/La respuesta manual se habilitará al derivar a humano/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /tomar conversación/i })).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
   });
 
@@ -97,6 +98,8 @@ describe('ConversationComposer', () => {
         />
       </ThemeProvider>,
     );
+    expect(screen.getByText(/puede tomarse manualmente/i)).toBeInTheDocument();
+    expect(screen.queryByText(/se habilitará al derivar a humano/i)).not.toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /tomar conversación/i }));
     expect(onTakeover).toHaveBeenCalledOnce();
