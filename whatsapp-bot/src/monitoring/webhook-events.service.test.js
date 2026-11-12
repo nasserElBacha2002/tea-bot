@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { beginInboundEvent, finishInboundEvent } from './webhook-events.service.js';
 
 function createRepo() {
@@ -169,6 +170,12 @@ test('el worker anterior no cierra un evento ya reclamado', async () => {
   assert.equal(replay.action, 'skip');
   assert.equal(replay.reason, 'processed');
   assert.equal(replay.responseBody, '<Response>nuevo</Response>');
+});
+
+test('la adquisicion no consulta el flag y mide el lease en segundos de SQL', () => {
+  const source = fs.readFileSync(new URL('./webhook-events.service.js', import.meta.url), 'utf8');
+  assert.equal(source.includes('monitoringEnabled'), false);
+  assert.match(source, /staleSeconds: staleWindowSeconds\(\)/);
 });
 
 test('FAILED en el maximo de intentos queda DEAD_LETTER y no procesa', async () => {

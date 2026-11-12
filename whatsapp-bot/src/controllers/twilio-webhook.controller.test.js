@@ -364,6 +364,8 @@ test('el cierre SQL solo lo puede hacer el attempts dueño', () => {
   assert.match(source, /AND status = N'PROCESSING'\s+AND attempts = \$2/);
   assert.match(source, /AND status = N'PROCESSING'\s+AND attempts = \$5/);
   assert.match(source, /DELETED\.status AS previous_status/);
+  assert.match(source, /DATEADD\(second, -1 \* \$5, SYSUTCDATETIME\(\)\)/);
+  assert.equal(source.includes('updated_at < $5'), false);
 });
 
 test('la migracion 010 solo agrega response_body', () => {

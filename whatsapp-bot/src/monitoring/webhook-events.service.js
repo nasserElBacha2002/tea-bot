@@ -10,10 +10,13 @@ function maxAttempts() {
   return Number.isFinite(value) && value > 0 ? value : MAX_ATTEMPTS_FALLBACK;
 }
 
-function staleBeforeDate() {
+function staleWindowSeconds() {
   const seconds = Number(config.webhookProcessingStaleSeconds);
-  const windowSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 120;
-  return new Date(Date.now() - windowSeconds * 1000);
+  return Number.isInteger(seconds) && seconds > 0 ? seconds : 120;
+}
+
+function staleBeforeDate() {
+  return new Date(Date.now() - staleWindowSeconds() * 1000);
 }
 
 /**
@@ -80,6 +83,8 @@ function gateFrom(result, event) {
 /**
  * Adquiere el inbound en SQL. No consulta MONITORING_ENABLED ni el archivo local.
  * Un SID ausente o inválido se rechaza sin insertar una fila.
+ * staleBefore queda solo para los dobles en memoria. El SQL usa staleSeconds
+ * contra SYSUTCDATETIME(): el reloj del proceso no puede reclamar un lease vigente.
  *
  * @param {{ event: { provider?: string, messageId?: string, flowId?: string }, payload?: object }} input
  * @param {typeof repository} [repo]
@@ -115,6 +120,7 @@ export async function beginInboundEvent(input, repo = repository) {
     payloadJson,
     maxAttempts: maxAttempts(),
     staleBefore: staleBeforeDate(),
+    staleSeconds: staleWindowSeconds(),
   });
   const gate = gateFrom(result, { ...event, provider, messageId: providerMessageId });
   if (gate.action === 'process' && gate.reason === 'reclaimed') {

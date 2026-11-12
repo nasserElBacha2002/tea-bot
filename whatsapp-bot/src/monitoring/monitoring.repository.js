@@ -102,11 +102,22 @@ export async function insertWebhookEvent(row) {
   }
 }
 
+function leaseStaleSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isInteger(seconds) || seconds <= 0) return 120;
+  return seconds;
+}
+
 /**
  * One owner for (provider, event_type, provider_message_id).
  * Insert wins the new event. Otherwise a conditional UPDATE ... OUTPUT is the
  * only way to move RECEIVED, FAILED, or a stale PROCESSING row to PROCESSING.
  * Zero rows means this caller did not acquire the message.
+ *
+ * The reclaim predicate uses SYSUTCDATETIME(), the same clock that writes
+ * updated_at. A Date built in the process is not compared: if that clock is
+ * ahead of SQL Server by more than the lease, the loser of the insert would
+ * reclaim the row the winner just took.
  */
 export async function acquireInboundProcessing({
   provider,
@@ -114,8 +125,9 @@ export async function acquireInboundProcessing({
   providerMessageId,
   payloadJson,
   maxAttempts,
-  staleBefore,
+  staleSeconds,
 }) {
+  const windowSeconds = leaseStaleSeconds(staleSeconds);
   try {
     const { rows } = await query(
       `INSERT INTO dbo.provider_webhook_events (
@@ -144,9 +156,13 @@ export async function acquireInboundProcessing({
        AND (
          (status = N'RECEIVED' AND attempts <= $4)
          OR (status = N'FAILED' AND attempts < $4)
-         OR (status = N'PROCESSING' AND updated_at < $5 AND attempts < $4)
+         OR (
+           status = N'PROCESSING'
+           AND updated_at < DATEADD(second, -1 * $5, SYSUTCDATETIME())
+           AND attempts < $4
+         )
        )`,
-    [provider, eventType, providerMessageId, maxAttempts, staleBefore],
+    [provider, eventType, providerMessageId, maxAttempts, windowSeconds],
   );
   if (claimed.rows[0]) {
     const previousStatus = claimed.rows[0].previous_status;
@@ -168,9 +184,12 @@ export async function acquireInboundProcessing({
        AND attempts >= $4
        AND (
          status IN (N'FAILED', N'RECEIVED')
-         OR (status = N'PROCESSING' AND updated_at < $5)
+         OR (
+           status = N'PROCESSING'
+           AND updated_at < DATEADD(second, -1 * $5, SYSUTCDATETIME())
+         )
        )`,
-    [provider, eventType, providerMessageId, maxAttempts, staleBefore],
+    [provider, eventType, providerMessageId, maxAttempts, windowSeconds],
   );
   const row = mapWebhook(exhausted.rows[0])
     || await findWebhookEvent(provider, eventType, providerMessageId);
