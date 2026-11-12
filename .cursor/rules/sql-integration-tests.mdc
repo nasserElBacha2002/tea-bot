@@ -1,0 +1,12 @@
+---
+description: SQL Server integration test discipline
+globs: whatsapp-bot/**/*.integration.test.js
+alwaysApply: false
+---
+
+# SQL integration tests
+
+- Prefer `isolated-test-database.js` and per-file DB isolation when provided.
+- Do not assume a shared local DB name is exclusive under parallel `npm test`.
+- Assert idempotency and lease fencing with reproducible timing, not flaky sleeps.
+- Document required env vars in test headers; never embed production credentials.

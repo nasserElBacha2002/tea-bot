@@ -1,0 +1,37 @@
+---
+description: Tea Bot — core invariants (WhatsApp, SQL Server, Twilio)
+alwaysApply: true
+---
+
+# Tea Bot — core invariants
+
+Production WhatsApp conversation platform: Node/Express backend, React admin, SQL Server, Twilio webhooks, realtime conversation UI.
+
+## Architecture
+
+- Keep webhook ingress, idempotency (`provider_webhook_events`, acquire/lease), flow engine, conversation lifecycle, and admin API boundaries.
+- Controllers stay thin; business rules live in services; SQL in repositories.
+- Preserve published flows in SQL; do not silently change flow semantics without migration/import discipline.
+
+## Security and webhooks
+
+- Twilio signature verification is mandatory in production paths; do not bypass for convenience.
+- Enforce role checks on the backend for takeover, close, and return-to-bot (`admin` and `conversations_only` per product rules).
+- Never commit secrets; use `.env.example` patterns only.
+
+## Concurrency and integrity
+
+- Treat inbound idempotency, processing leases, fencing stale workers, and exclusive agent identity as integrity guarantees.
+- Conversation mutations must respect optimistic concurrency (`status_version`) and audit expectations.
+- Integration tests against SQL Server must avoid cross-file DB contention; prefer isolated DB helpers when the repo provides them.
+
+## Frontend
+
+- Colocate feature code under `frontend/src/features/`.
+- Preserve live update and client request id patterns for takeover UX.
+- Run `typecheck` and tests when touching conversation UI or API client types.
+
+## Deploy
+
+- Respect Docker Compose and documented migration order.
+- Feature flags (`MANUAL_TAKEOVER_ENABLED`, Twilio modes) change behavior — document toggles when editing config.
