@@ -1,4 +1,6 @@
 import monitoringService from '../monitoring/monitoring.service.js';
+import { getWhatsAppCostAudit } from '../monitoring/whatsapp-cost-audit.service.js';
+import { parseWhatsAppCostAuditQuery } from '../monitoring/whatsapp-cost-audit-query.js';
 
 function send(res, body) {
   return res.status(200).json({ ok: true, ...body });
@@ -7,6 +9,10 @@ function send(res, body) {
 function fail(res, error) {
   console.error(`[Monitoring] request failed: ${error.message}`);
   return res.status(500).json({ ok: false, error: 'MONITORING_FAILED' });
+}
+
+function badRequest(res, errors) {
+  return res.status(400).json({ ok: false, error: 'INVALID_QUERY', details: errors });
 }
 
 async function handle(res, loader) {
@@ -47,4 +53,16 @@ export function jobs(req, res) {
 
 export function incidents(req, res) {
   return handle(res, () => monitoringService.getIncidents().then((items) => ({ incidents: items })));
+}
+
+export function whatsappCostAudit(req, res) {
+  const parsed = parseWhatsAppCostAuditQuery(req.query || {});
+  if (!parsed.ok) {
+    return badRequest(res, parsed.errors);
+  }
+  return handle(res, () => getWhatsAppCostAudit({
+    days: parsed.days,
+    asOf: parsed.asOf,
+    fetchUsage: parsed.fetchUsage,
+  }));
 }

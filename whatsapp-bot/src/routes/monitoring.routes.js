@@ -10,6 +10,7 @@ import {
   messageActivity,
   overview,
   twilioHealth,
+  whatsappCostAudit,
 } from '../controllers/monitoring.controller.js';
 
 const router = Router();
@@ -23,5 +24,6 @@ router.get('/message-activity', messageActivity);
 router.get('/failed-events', failedEvents);
 router.get('/jobs', jobs);
 router.get('/incidents', incidents);
+router.get('/whatsapp-cost-audit', whatsappCostAudit);
 
 export default router;

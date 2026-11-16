@@ -1,0 +1,60 @@
+{
+  "usage_records": [
+    {
+      "category": "channels-whatsapp-outbound",
+      "description": "WhatsApp Outbound",
+      "count": "120",
+      "count_unit": "messages",
+      "price": "0.60",
+      "price_unit": "USD",
+      "start_date": "2026-10-15",
+      "end_date": "2026-10-15"
+    },
+    {
+      "category": "channels-whatsapp-conversation-utility",
+      "description": "WhatsApp Meta Utility",
+      "count": "40",
+      "count_unit": "messages",
+      "price": "1.10",
+      "price_unit": "USD",
+      "start_date": "2026-10-15",
+      "end_date": "2026-10-15"
+    },
+    {
+      "category": "sms",
+      "description": "SMS",
+      "count": "50",
+      "count_unit": "messages",
+      "price": "3.50",
+      "price_unit": "USD",
+      "start_date": "2026-10-15",
+      "end_date": "2026-10-15"
+    },
+    {
+      "category": "channels-whatsapp-outbound",
+      "description": "WhatsApp aggregated month",
+      "count": "10",
+      "count_unit": "messages",
+      "price": "0.05",
+      "price_unit": "USD",
+      "start_date": "2026-10-01",
+      "end_date": "2026-10-31"
+    },
+    {
+      "category": "totalprice",
+      "description": "Total",
+      "price": "1.70",
+      "price_unit": "USD",
+      "start_date": "2026-10-15",
+      "end_date": "2026-10-15"
+    },
+    {
+      "category": "account-top-up",
+      "description": "Account recharge",
+      "price": "10.00",
+      "price_unit": "USD",
+      "start_date": "2026-10-16",
+      "end_date": "2026-10-16"
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "countryIso": "AR",
+  "destinationLabel": "Argentina",
+  "sources": [
+    "https://help.twilio.com/articles/53100480177819",
+    "https://www.twilio.com/en-us/whatsapp/pricing"
+  ],
+  "twilioPlatformFee": {
+    "perMessageUsd": 0.005,
+    "effectiveFrom": "2020-01-01",
+    "appliesTo": ["inbound", "outbound"],
+    "sourceNote": "Tarifa plataforma Twilio publicada; verificar vigencia en twilio.com/whatsapp/pricing."
+  },
+  "metaRegimes": {
+    "legacyBefore2026-10-01": {
+      "effectiveUntil": "2026-09-30",
+      "rules": {
+        "serviceInCustomerWindow": { "metaFeePerMessageUsd": 0, "note": "Gratis desde nov-2024 hasta sep-2026" },
+        "utilityInCustomerWindow": { "metaFeePerMessageUsd": 0, "note": "Gratis desde jul-2025 hasta sep-2026" }
+      }
+    },
+    "from2026-10-01": {
+      "effectiveFrom": "2026-10-01",
+      "rules": {
+        "serviceInCustomerWindow": {
+          "metaFeePerMessageUsd": 0.0348,
+          "freeAllowancePerNumberPerMonth": 1000,
+          "freeAllowanceResetsMonthly": true,
+          "note": "Tarifa ilustrativa AR — reemplazar con rate card oficial del período."
+        },
+        "utilityInCustomerWindow": {
+          "metaFeePerMessageUsd": 0.0286,
+          "note": "Utility dentro de ventana 24h vuelve a cobrarse desde oct-2026."
+        },
+        "utilityOutsideWindow": { "metaFeePerMessageUsd": 0.0286 },
+        "marketing": { "metaFeePerMessageUsd": 0.0618 },
+        "authentication": { "metaFeePerMessageUsd": 0.0348 }
+      }
+    }
+  }
+}
