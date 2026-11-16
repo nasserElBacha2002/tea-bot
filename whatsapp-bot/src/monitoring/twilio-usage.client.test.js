@@ -25,13 +25,31 @@ test('classifyUsageRecord separa recargas y excluye SMS de WhatsApp', () => {
   assert.equal(classifyUsageRecord({ category: 'sms' }).whatsappScope, false);
 });
 
-test('summarizeUsageRecords no mezcla SMS ni recargas en costos WhatsApp', () => {
+test('summarizeUsageRecords no mezcla SMS, agregados ni recargas en desglose diario', () => {
   const summary = summarizeUsageRecords(fixture.usage_records);
   assert.equal(summary.prepaidRechargeUsd, 10);
   assert.equal(summary.excludedNonWhatsappUsd, 3.5);
   assert.equal(summary.confirmedMetaUsd, 1.1);
-  assert.equal(summary.confirmedTwilioUsd, 0.65);
+  assert.equal(summary.confirmedTwilioUsd, 0.6);
+  assert.equal(summary.periodAggregateWhatsappUsd, 0.05);
   assert.equal(summary.confirmedTotalControlUsd, 1.7);
+  assert.equal(summary.daily[0].usageStartDate, '2026-10-15');
+  assert.equal(summary.daily[0].presentationDayAr, null);
+});
+
+test('categorías whatsapp desconocidas no se clasifican como Meta', () => {
+  const row = classifyUsageRecord({ category: 'channels-whatsapp-foobar' });
+  assert.equal(row.bucket, 'excluded_unknown_whatsapp');
+  const summary = summarizeUsageRecords([
+    {
+      category: 'channels-whatsapp-foobar',
+      price: '9.99',
+      start_date: '2026-10-15',
+      end_date: '2026-10-15',
+    },
+  ]);
+  assert.equal(summary.excludedUnknownWhatsappUsd, 9.99);
+  assert.equal(summary.confirmedMetaUsd, null);
 });
 
 test('usage agregado mensual no se asigna a días sin granularidad diaria', () => {
@@ -45,6 +63,7 @@ test('usage agregado mensual no se asigna a días sin granularidad diaria', () =
   const summary = summarizeUsageRecords([aggregate]);
   assert.equal(summary.daily.length, 0);
   assert.equal(summary.dailyGranularityAvailable, false);
+  assert.equal(summary.periodAggregateWhatsappUsd, 5);
 });
 
 test('importe confirmado cero se distingue de ausencia de dato', () => {

@@ -6,9 +6,9 @@ import { loadRateCard, rateCardMetaLimitation } from './whatsapp-rate-card.js';
 import {
   applyServiceFreeTier,
   isFullCalendarMonthCoverage,
+  lastDayOfMonthYm,
   monthKeyArgentina,
   resolveMetaPricingRegime,
-  twilioPlatformFeePerMessage,
 } from './whatsapp-pricing-regime.js';
 import { fetchTwilioUsageRecords } from './twilio-usage.client.js';
 
@@ -28,16 +28,24 @@ function formatUsageWindow(window) {
   };
 }
 
-function estimateDailyCostsFromSql(dailyRows, rateCard, metricsWindow) {
-  const twilioPerMsg = twilioPlatformFeePerMessage(rateCard);
+function monthWindowCoverage(metricsWindow, monthAr) {
+  if (!metricsWindow?.startDayAr || !metricsWindow?.endDayAr || !monthAr) {
+    return { coverage: 'unknown', quality: 'unavailable' };
+  }
+  const monthStart = `${monthAr}-01`;
+  const monthEnd = lastDayOfMonthYm(monthAr);
+  const coversStart = metricsWindow.startDayAr <= monthStart;
+  const coversEnd = metricsWindow.endDayAr >= monthEnd;
+  if (coversStart && coversEnd) return { coverage: 'full_month', quality: 'full_calendar_month' };
+  return { coverage: 'partial_month', quality: 'partial_month' };
+}
+
+function estimateDailyCostsFromSql(dailyRows, metricsWindow) {
   const fullMonth = isFullCalendarMonthCoverage(metricsWindow);
   const phoneScoped = Boolean(config.twilioWhatsappFrom);
 
   return dailyRows.map((row) => {
     const regime = resolveMetaPricingRegime(row.dayAr);
-    const twilioMsgCount = row.inbound + row.whatsappOutbound;
-    const twilioEstimated = twilioPerMsg == null ? null : round4(twilioMsgCount * twilioPerMsg);
-
     const franchise = applyServiceFreeTier({
       regime,
       serviceMessageCount: null,
@@ -55,13 +63,14 @@ function estimateDailyCostsFromSql(dailyRows, rateCard, metricsWindow) {
         outboundSystem: row.outboundSystem,
       },
       costs: {
-        twilioEstimatedUsd: twilioEstimated,
-        twilioEstimatedQuality: twilioEstimated == null ? 'unavailable' : 'estimated_platform_fee_only',
+        twilioEstimatedUsd: null,
+        twilioEstimatedQuality: 'unavailable',
+        twilioEstimatedReason: 'NO_CONFIRMED_RATE_WITHOUT_USAGE_OR_CONTRACT',
         metaEstimatedUsd: null,
         metaEstimatedQuality: 'non_determinable',
         metaEstimatedReason: 'META_SERVICE_NOT_INFERABLE_FROM_SQL',
-        totalEstimatedUsd: twilioEstimated,
-        totalEstimatedQuality: twilioEstimated == null ? 'unavailable' : 'partial_estimated',
+        totalEstimatedUsd: null,
+        totalEstimatedQuality: 'unavailable',
         regime,
         metaServiceFreeTier: franchise,
         whatsappOutboundNote:
@@ -71,7 +80,7 @@ function estimateDailyCostsFromSql(dailyRows, rateCard, metricsWindow) {
   });
 }
 
-function mergeDailyCosts(messageDaily, usageDaily, estimates, usageGranular) {
+function mergeDailyMessageAndEstimates(messageDaily, estimates) {
   const byDay = new Map();
   for (const row of messageDaily) {
     byDay.set(row.dayAr, {
@@ -90,51 +99,38 @@ function mergeDailyCosts(messageDaily, usageDaily, estimates, usageGranular) {
   for (const est of estimates) {
     const slot = byDay.get(est.dayAr) || { dayAr: est.dayAr, messages: est.messages, costs: {} };
     slot.messages = { ...slot.messages, ...est.messages };
-    slot.costs = {
-      ...slot.costs,
-      twilioEstimatedUsd: est.costs.twilioEstimatedUsd,
-      twilioEstimatedQuality: est.costs.twilioEstimatedQuality,
-      metaEstimatedUsd: est.costs.metaEstimatedUsd,
-      metaEstimatedQuality: est.costs.metaEstimatedQuality,
-      metaEstimatedReason: est.costs.metaEstimatedReason,
-      totalEstimatedUsd: est.costs.totalEstimatedUsd,
-      totalEstimatedQuality: est.costs.totalEstimatedQuality,
-      regime: est.costs.regime,
-      metaServiceFreeTier: est.costs.metaServiceFreeTier,
-    };
+    slot.costs = { ...slot.costs, ...est.costs };
     byDay.set(est.dayAr, slot);
-  }
-  if (usageGranular) {
-    for (const row of usageDaily || []) {
-      const slot = byDay.get(row.dayAr) || { dayAr: row.dayAr, messages: null, costs: {} };
-      slot.costs = {
-        ...slot.costs,
-        twilioUsd: row.twilioUsd,
-        metaUsd: row.metaUsd,
-        totalUsd: row.totalUsd,
-        twilioQuality: row.twilioQuality,
-        metaQuality: row.metaQuality,
-        totalQuality: row.totalQuality,
-      };
-      byDay.set(row.dayAr, slot);
-    }
   }
   return [...byDay.values()].sort((a, b) => String(a.dayAr).localeCompare(String(b.dayAr)));
 }
 
+function usageFetchQuality(usage) {
+  if (!usage?.ok) return usage?.error === 'twilio_usage_disabled' ? 'disabled' : 'unavailable';
+  if (usage.truncated || usage.completeness === 'partial_truncated') return 'partial_truncated';
+  return 'confirmed_provider';
+}
+
 function buildReconciliation(metrics, usageSummary, usageFetch) {
+  const partial = usageFetchQuality(usageFetch) === 'partial_truncated';
   const sqlOutbound = metrics.daily.reduce((sum, row) => sum + row.whatsappOutbound, 0);
   const sqlInbound = metrics.daily.reduce((sum, row) => sum + row.inbound, 0);
   const botSynthetic = metrics.daily.reduce((sum, row) => sum + row.outboundBot, 0);
   const agentWithPossibleSid = metrics.daily.reduce((sum, row) => sum + row.outboundAgent, 0);
 
   const usageCount = usageSummary?.categories
-    ?.filter((row) => row.whatsappScope && row.bucket === 'twilio_whatsapp')
+    ?.filter((row) => row.bucket === 'twilio_whatsapp' && row.dailyGranular && !row.aggregated)
     .reduce((sum, row) => sum + (row.count || 0), 0) ?? null;
 
+  let status = 'pending_usage';
+  if (usageSummary) {
+    status = partial ? 'partial_truncated' : 'compared';
+  }
+
   return {
-    status: usageSummary ? 'compared' : 'pending_usage',
-    usageCompleteness: usageFetch?.completeness || (usageFetch?.truncated ? 'partial_truncated' : null),
+    status,
+    usageCompleteness: usageFetch?.completeness || null,
+    usageQuality: usageFetchQuality(usageFetch),
     sql: {
       inboundPersisted: sqlInbound,
       whatsappOutboundPersisted: sqlOutbound,
@@ -144,13 +140,19 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
     },
     provider: usageSummary
       ? {
+          quality: partial ? 'partial_truncated' : 'confirmed_provider',
           confirmedTwilioUsd: usageSummary.confirmedTwilioUsd,
           confirmedMetaUsd: usageSummary.confirmedMetaUsd,
           totalControlUsd: usageSummary.confirmedTotalControlUsd,
+          componentTwilioUsd: usageSummary.componentTwilioUsd,
+          componentMetaUsd: usageSummary.componentMetaUsd,
+          periodAggregateWhatsappUsd: usageSummary.periodAggregateWhatsappUsd,
           prepaidRechargeUsd: usageSummary.prepaidRechargeUsd,
           excludedNonWhatsappUsd: usageSummary.excludedNonWhatsappUsd,
+          excludedUnknownWhatsappUsd: usageSummary.excludedUnknownWhatsappUsd,
           whatsappMessagingUnits: usageCount,
           dailyGranularityAvailable: usageSummary.dailyGranularityAvailable,
+          rollupPolicy: usageSummary.rollupPolicy,
         }
       : null,
     nonReconcilable: {
@@ -158,19 +160,26 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
       twimlBotWithoutTwilioSid: botSynthetic,
       systemInternalMessages: metrics.daily.reduce((sum, row) => sum + row.outboundSystem, 0),
       metaServiceFromSql: 'non_determinable',
+      dailyCrossTimezone:
+        'No conciliar usage.daily (fecha Twilio) con messages.daily (día AR) sin mapeo validado.',
     },
-    variance: usageSummary
+    variance: usageSummary && !partial
       ? {
           messageCountDelta: usageCount == null ? null : usageCount - (sqlInbound + sqlOutbound),
           note: 'Diferencia esperada por TwiML, mensajes fuera de SQL o granularidad usage.',
         }
-      : null,
+      : {
+          messageCountDelta: null,
+          note: partial
+            ? 'Conciliación de conteos omitida: usage parcial/truncado.'
+            : 'Sin usage para comparar.',
+        },
     doubleCountingGuard:
-      'Usar totalControlUsd como control. No sumar totalControl con desglose Twilio+Meta ni con estimaciones SQL.',
+      'Usar totalControlUsd como control. No sumar agregados de período con componentes diarios ni con estimaciones SQL.',
   };
 }
 
-function monthlyTotalsByCalendarMonth(dailyMerged) {
+function monthlyTotalsByCalendarMonth(dailyMerged, metricsWindow, usageQuality) {
   const months = new Map();
 
   for (const row of dailyMerged) {
@@ -180,12 +189,9 @@ function monthlyTotalsByCalendarMonth(dailyMerged) {
       monthAr: key,
       twilioConfirmedUsd: 0,
       metaConfirmedUsd: 0,
-      twilioEstimatedUsd: 0,
-      metaEstimatedUsd: 0,
       hasConfirmedTwilio: false,
       hasConfirmedMeta: false,
       hasEstimatedTwilio: false,
-      hasEstimatedMeta: false,
     };
 
     if (Number.isFinite(row.costs?.twilioUsd)) {
@@ -196,26 +202,37 @@ function monthlyTotalsByCalendarMonth(dailyMerged) {
       slot.metaConfirmedUsd += row.costs.metaUsd;
       slot.hasConfirmedMeta = true;
     }
-    if (Number.isFinite(row.costs?.twilioEstimatedUsd)) {
-      slot.twilioEstimatedUsd += row.costs.twilioEstimatedUsd;
-      slot.hasEstimatedTwilio = true;
-    }
 
     months.set(key, slot);
   }
 
-  return [...months.values()].map((slot) => ({
-    monthAr: slot.monthAr,
-    twilioUsd: slot.hasConfirmedTwilio ? round4(slot.twilioConfirmedUsd) : null,
-    metaUsd: slot.hasConfirmedMeta ? round4(slot.metaConfirmedUsd) : null,
-    totalConfirmedUsd: slot.hasConfirmedTwilio || slot.hasConfirmedMeta
-      ? round4(slot.twilioConfirmedUsd + slot.metaConfirmedUsd)
-      : null,
-    twilioEstimatedUsd: slot.hasEstimatedTwilio ? round4(slot.twilioEstimatedUsd) : null,
-    metaEstimatedUsd: null,
-    totalEstimatedUsd: slot.hasEstimatedTwilio ? round4(slot.twilioEstimatedUsd) : null,
-    metaEstimatedQuality: 'non_determinable',
-  }));
+  return [...months.values()].map((slot) => {
+    const coverage = monthWindowCoverage(metricsWindow, slot.monthAr);
+    const partialUsage = usageQuality === 'partial_truncated';
+    return {
+      monthAr: slot.monthAr,
+      monthCoverage: coverage.coverage,
+      monthCoverageQuality: coverage.quality,
+      twilioUsd: slot.hasConfirmedTwilio ? round4(slot.twilioConfirmedUsd) : null,
+      metaUsd: slot.hasConfirmedMeta ? round4(slot.metaConfirmedUsd) : null,
+      totalConfirmedUsd: slot.hasConfirmedTwilio || slot.hasConfirmedMeta
+        ? round4(slot.twilioConfirmedUsd + slot.metaConfirmedUsd)
+        : null,
+      twilioEstimatedUsd: null,
+      metaEstimatedUsd: null,
+      totalEstimatedUsd: null,
+      metaEstimatedQuality: 'non_determinable',
+      totalsQuality: partialUsage
+        ? 'partial_truncated'
+        : coverage.coverage === 'full_month'
+          ? 'partial_data_month_scope'
+          : 'partial_month_window',
+      note:
+        coverage.coverage === 'partial_month'
+          ? 'La ventana consultada no cubre el mes civil completo.'
+          : null,
+    };
+  });
 }
 
 /**
@@ -251,6 +268,8 @@ export async function getWhatsAppCostAudit(options = {}) {
     usage = { ok: false, error: 'missing_metrics_window', records: [], summary: null, truncated: false };
   }
 
+  const usageQuality = usageFetchQuality(usage);
+
   let balance = null;
   if (shouldFetch) {
     const snapshot = await collectTwilioSnapshot({
@@ -269,18 +288,8 @@ export async function getWhatsAppCostAudit(options = {}) {
       : { usd: null, quality: 'unavailable', error: snapshot.error };
   }
 
-  const estimates = metrics
-    ? estimateDailyCostsFromSql(metrics.daily, rateCard, metrics.window)
-    : [];
-  const usageGranular = Boolean(usage?.summary?.dailyGranularityAvailable);
-  const daily = metrics
-    ? mergeDailyCosts(
-      metrics.daily,
-      usage?.summary?.daily || [],
-      estimates,
-      usageGranular,
-    )
-    : [];
+  const estimates = metrics ? estimateDailyCostsFromSql(metrics.daily, metrics.window) : [];
+  const daily = metrics ? mergeDailyMessageAndEstimates(metrics.daily, estimates) : [];
 
   const reconciliation = buildReconciliation(
     metrics || { daily: [] },
@@ -288,17 +297,17 @@ export async function getWhatsAppCostAudit(options = {}) {
     usage,
   );
 
-  const monthlyByCalendar = monthlyTotalsByCalendarMonth(daily);
+  const monthlyByCalendar = monthlyTotalsByCalendarMonth(daily, metrics?.window, usageQuality);
 
   const providerUsage = usage?.ok
     ? {
-      quality: usage.truncated ? 'partial_truncated' : 'confirmed_provider',
+      quality: usageQuality,
       completeness: usage.completeness,
       truncated: usage.truncated,
       ...usage.summary,
     }
     : {
-      quality: usage?.error === 'twilio_usage_disabled' ? 'disabled' : 'unavailable',
+      quality: usageQuality,
       error: usage?.error || 'not_fetched',
     };
 
@@ -308,6 +317,7 @@ export async function getWhatsAppCostAudit(options = {}) {
     days,
     window: metrics?.window || null,
     presentationTimeZone: metrics?.window?.presentationTimeZone || 'Argentina Standard Time',
+    dataQuality: usageQuality,
     templates: TEMPLATE_METRIC_LIMITATION,
     rateCard: rateCardInfo,
     messages: {
@@ -327,7 +337,7 @@ export async function getWhatsAppCostAudit(options = {}) {
       {
         available: false,
         reason: 'SQL_BOT_TWIML_NOT_TWILIO_SID',
-        detail: 'Estimación SQL cubre solo fee plataforma Twilio; Meta service no se infiere de whatsappOutbound.',
+        detail: 'Sin tarifas ilustrativas como costo operativo; confirmado solo desde Usage Records.',
       },
     ],
   };

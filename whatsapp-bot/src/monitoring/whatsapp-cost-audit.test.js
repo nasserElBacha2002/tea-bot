@@ -67,7 +67,10 @@ test('cost audit combina usage confirmado sin doble conteo ni meta inferido desd
   assert.equal(report.costs.providerUsage.excludedNonWhatsappUsd, 3.5);
   assert.equal(report.costs.daily[0].costs.metaEstimatedUsd, null);
   assert.equal(report.costs.daily[0].costs.metaEstimatedQuality, 'non_determinable');
+  assert.equal(report.costs.daily[0].costs.twilioEstimatedUsd, null);
+  assert.equal(report.costs.daily[0].costs.twilioEstimatedQuality, 'unavailable');
   assert.equal(report.rateCard.operationalQuality, 'fixture_illustrative_only');
+  assert.equal(report.costs.providerUsage.periodAggregateWhatsappUsd, 0.05);
   config.monitoringTwilioEnabled = prevTwilio;
   config.twilioAccountSid = prevSid;
   config.twilioAuthToken = prevToken;
@@ -92,6 +95,49 @@ test('acumulado mensual agrupa por mes civil AR', async () => {
   assert.equal(report.costs.monthlyByCalendar[1].monthAr, '2026-10');
   assert.equal(report.costs.daily[0].costs.regime, 'meta-legacy');
   assert.equal(report.costs.daily[1].costs.regime, 'meta-2026-10');
+  assert.equal(report.costs.monthlyByCalendar[0].monthCoverage, 'partial_month');
+  assert.equal(report.costs.monthlyByCalendar[1].monthCoverage, 'partial_month');
+});
+
+test('partial_truncated se propaga a conciliación y dataQuality', async () => {
+  const prevTwilio = config.monitoringTwilioEnabled;
+  config.monitoringTwilioEnabled = true;
+  config.twilioAccountSid = config.twilioAccountSid || 'AC_test';
+  config.twilioAuthToken = config.twilioAuthToken || 'test_token';
+  const report = await getWhatsAppCostAudit({
+    days: 5,
+    fetchUsage: true,
+    metricsOverride: {
+      window: {
+        startDayAr: '2026-10-08',
+        endDayAr: '2026-10-10',
+        startUtc: new Date('2026-10-08T03:00:00.000Z'),
+        endUtcExclusive: new Date('2026-10-11T03:00:00.000Z'),
+      },
+      daily: [],
+      deliveryByDay: [],
+      definitions: {},
+    },
+    usageRequest: async () => ({
+      status: 200,
+      data: {
+        usage_records: [
+          {
+            category: 'channels-whatsapp-outbound',
+            price: '1.00',
+            start_date: '2026-10-10',
+            end_date: '2026-10-10',
+          },
+        ],
+        next_page_uri: '/2010-04-01/Accounts/AC_test/Usage/Records.json?Page=2',
+      },
+    }),
+  });
+  assert.equal(report.dataQuality, 'partial_truncated');
+  assert.equal(report.reconciliation.status, 'partial_truncated');
+  assert.equal(report.reconciliation.usageQuality, 'partial_truncated');
+  assert.equal(report.costs.providerUsage.quality, 'partial_truncated');
+  config.monitoringTwilioEnabled = prevTwilio;
 });
 
 test('parseWhatsAppCostAuditQuery valida fechas y días', () => {
