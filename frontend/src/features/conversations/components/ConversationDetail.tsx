@@ -52,7 +52,6 @@ interface Props {
   onClose: () => Promise<void>;
   onUpdateContact: (name: string) => Promise<void>;
   onBack?: () => void;
-  currentAgentId?: string | null;
 }
 
 export const ConversationDetail: React.FC<Props> = ({
@@ -78,7 +77,6 @@ export const ConversationDetail: React.FC<Props> = ({
   onClose,
   onUpdateContact,
   onBack,
-  currentAgentId = null,
 }) => {
   const theme = useTheme();
   const isMobileViewport = useMediaQuery(theme.breakpoints.down('md'));
@@ -369,8 +367,6 @@ export const ConversationDetail: React.FC<Props> = ({
           canTakeover={conversation.canTakeover}
           takeoverBlock={conversation.takeoverBlock}
           assignedAgentLabel={conversation.assignedAgentLabel}
-          assignedAgentId={conversation.assignedAgentId}
-          currentAgentId={currentAgentId}
           onSend={onSend}
           onClaim={onClaim}
           onTakeover={onTakeover}

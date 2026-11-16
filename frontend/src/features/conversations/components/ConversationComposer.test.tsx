@@ -30,18 +30,18 @@ describe('ConversationComposer', () => {
     expect(onSend).toHaveBeenCalledWith('Hola desde el equipo');
   });
 
-  it('un agente que no es el dueño no puede responder', () => {
+  it('owned_by_other sigue bloqueando agentes sin permiso del panel', () => {
     render(
       <ThemeProvider theme={createTheme()}>
         <ConversationComposer
           status="assigned"
-          assignedAgentId="agent-ana"
-          currentAgentId="agent-luis"
+          takeoverBlock="owned_by_other"
+          assignedAgentLabel="Ana"
           onSend={vi.fn()}
         />
       </ThemeProvider>,
     );
-    expect(screen.getByText(/otro agente/i)).toBeInTheDocument();
+    expect(screen.getByText(/atendiendo Ana/i)).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
   });
 
@@ -53,8 +53,6 @@ describe('ConversationComposer', () => {
         <ConversationComposer
           status="assigned"
           takeoverBlock="disabled"
-          assignedAgentId="agent-ana"
-          currentAgentId="agent-luis"
           onSend={onSend}
         />
       </ThemeProvider>,
@@ -103,6 +101,21 @@ describe('ConversationComposer', () => {
     expect(screen.queryByPlaceholderText(/escribí una respuesta/i)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /tomar conversación/i }));
     expect(onTakeover).toHaveBeenCalledOnce();
+  });
+
+  it('habilita el composer en inbox compartido aunque otro agente la tomó', () => {
+    render(
+      <ThemeProvider theme={createTheme()}>
+        <ConversationComposer
+          status="assigned"
+          takeoverBlock="shared_inbox"
+          assignedAgentLabel="Ana"
+          onSend={vi.fn()}
+        />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText(/podés seguir respondiendo/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 
   it('muestra el conflicto si otro agente ya la tiene y no habilita el composer', () => {

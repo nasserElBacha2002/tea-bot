@@ -200,33 +200,17 @@ test('integration: HTTP real de cierre y devolución con dos cuentas', async (t)
       path: `/api/conversations/${owned.id}`,
       cookie: adminCookie,
     });
-    assert.equal(adminView.body?.data?.conversation?.canReturnToBot, false);
+    assert.equal(adminView.body?.data?.conversation?.canReturnToBot, true);
     assert.equal(adminView.body?.data?.conversation?.canForceReturn, false);
+    assert.equal(adminView.body?.data?.conversation?.takeoverBlock, 'shared_inbox');
     assert.equal(adminView.body?.data?.conversation?.canReassign, true);
-
-    const adminClose = await request(server, {
-      path: `/api/conversations/${owned.id}/close`,
-      cookie: adminCookie,
-      body: {},
-    });
-    assert.equal(adminClose.status, 409);
-    assert.equal(adminClose.body?.error, 'CONVERSATION_OWNED');
-
-    const adminReturn = await request(server, {
-      path: `/api/conversations/${owned.id}/return-to-bot`,
-      cookie: adminCookie,
-      body: {},
-    });
-    assert.equal(adminReturn.status, 409);
-    assert.equal(adminReturn.body?.error, 'CONVERSATION_OWNED');
 
     const adminReply = await request(server, {
       path: `/api/conversations/${owned.id}/messages`,
       cookie: adminCookie,
       body: { body: 'intento del administrador' },
     });
-    assert.equal(adminReply.status, 409);
-    assert.equal(adminReply.body?.error, 'CONVERSATION_OWNED');
+    assert.equal(adminReply.status, 201, JSON.stringify(adminReply.body));
 
     const ownerReply = await request(server, {
       path: `/api/conversations/${owned.id}/messages`,
@@ -267,16 +251,39 @@ test('integration: HTTP real de cierre y devolución con dos cuentas', async (t)
     });
     assert.equal(retaken.status, 200, JSON.stringify(retaken.body));
 
+    const adminCloseWhileOwned = await request(server, {
+      path: `/api/conversations/${owned.id}/close`,
+      cookie: adminCookie,
+      body: {},
+    });
+    assert.equal(adminCloseWhileOwned.status, 200, JSON.stringify(adminCloseWhileOwned.body));
+    const afterAdminClose = await conversationRepository.findById(owned.id);
+    assert.equal(afterAdminClose.status, 'bot');
+    assert.equal(afterAdminClose.assignedAgentId, null);
+
+    const retakenBeforeForce = await request(server, {
+      path: `/api/conversations/${owned.id}/takeover`,
+      cookie: operatorCookie,
+      body: { clientRequestId: `http-own-force-${owned.id}` },
+    });
+    assert.equal(retakenBeforeForce.status, 200, JSON.stringify(retakenBeforeForce.body));
+
     const forced = await request(server, {
       path: `/api/conversations/${owned.id}/close`,
       cookie: adminCookie,
       body: { force: true },
     });
-    assert.equal(forced.status, 409);
-    assert.equal(forced.body?.error, 'CONVERSATION_OWNED');
+    assert.equal(forced.status, 200, JSON.stringify(forced.body));
     const forcedRow = await conversationRepository.findById(owned.id);
-    assert.equal(forcedRow.status, 'assigned');
-    assert.equal(forcedRow.assignedAgentId, operatorId);
+    assert.equal(forcedRow.status, 'bot');
+    assert.equal(forcedRow.assignedAgentId, null);
+
+    const retakenAfterForce = await request(server, {
+      path: `/api/conversations/${owned.id}/takeover`,
+      cookie: operatorCookie,
+      body: { clientRequestId: `http-own-reassign-${owned.id}` },
+    });
+    assert.equal(retakenAfterForce.status, 200, JSON.stringify(retakenAfterForce.body));
 
     const operatorTransfer = await request(server, {
       path: `/api/conversations/${owned.id}/transfer`,
@@ -301,21 +308,12 @@ test('integration: HTTP real de cierre y devolución con dos cuentas', async (t)
     );
     assert.equal(audit.rows.length, 1);
 
-    const otherClose = await request(server, {
-      path: `/api/conversations/${owned.id}/close`,
-      cookie: operatorCookie,
-      body: {},
-    });
-    assert.equal(otherClose.status, 409);
-    assert.equal(otherClose.body?.error, 'CONVERSATION_OWNED');
-
     const otherReply = await request(server, {
       path: `/api/conversations/${owned.id}/messages`,
       cookie: operatorCookie,
-      body: { body: 'el dueño anterior ya no responde' },
+      body: { body: 'el operador sigue aunque el dueño registrado sea admin' },
     });
-    assert.equal(otherReply.status, 409);
-    assert.equal(otherReply.body?.error, 'CONVERSATION_OWNED');
+    assert.equal(otherReply.status, 201, JSON.stringify(otherReply.body));
 
     const newOwnerReply = await request(server, {
       path: `/api/conversations/${owned.id}/messages`,
@@ -329,11 +327,10 @@ test('integration: HTTP real de cierre y devolución con dos cuentas', async (t)
       cookie: operatorCookie,
       body: {},
     });
-    assert.equal(otherReturn.status, 409);
-    assert.equal(otherReturn.body?.error, 'CONVERSATION_OWNED');
+    assert.equal(otherReturn.status, 200, JSON.stringify(otherReturn.body));
     const untouched = await conversationRepository.findById(owned.id);
-    assert.equal(untouched.status, 'assigned');
-    assert.equal(untouched.assignedAgentId, adminId);
+    assert.equal(untouched.status, 'bot');
+    assert.equal(untouched.assignedAgentId, null);
 
     const sharedTake = await request(server, {
       path: `/api/conversations/${shared.id}/takeover`,

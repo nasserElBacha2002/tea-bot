@@ -398,7 +398,7 @@ describe('applyConversationLiveEvent', () => {
     expect(detail?.conversation.assignedAgentLabel).toBe('Ana');
   });
 
-  it('marca owned_by_other si otro agente tomó la conversación', () => {
+  it('marca shared_inbox si otro agente del panel tomó la conversación', () => {
     const qc = new QueryClient();
     const detailKey = conversationKeys.detail('c1');
     qc.setQueryData<ConversationDetailResponse>(detailKey, {
@@ -430,7 +430,8 @@ describe('applyConversationLiveEvent', () => {
     );
 
     const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
-    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
+    expect(detail?.conversation.takeoverBlock).toBe('shared_inbox');
+    expect(detail?.conversation.canReturnToBot).toBe(true);
   });
 
   it('conserva el inbox compartido si la toma está deshabilitada', () => {
@@ -472,10 +473,9 @@ describe('applyConversationLiveEvent', () => {
     expect(detail?.conversation.canReturnToBot).toBe(true);
   });
 
-  it('oculta la devolución y refresca el detalle si el evento no trae el permiso', () => {
+  it('mantiene la devolución al bot cuando otro agente del panel toma la conversación', () => {
     const qc = new QueryClient();
     const detailKey = conversationKeys.detail('c1');
-    const invalidate = vi.spyOn(qc, 'invalidateQueries');
     qc.setQueryData<ConversationDetailResponse>(detailKey, {
       conversation: {
         ...baseListItem,
@@ -509,9 +509,8 @@ describe('applyConversationLiveEvent', () => {
     );
 
     const detail = qc.getQueryData<ConversationDetailResponse>(detailKey);
-    expect(detail?.conversation.canReturnToBot).toBe(false);
+    expect(detail?.conversation.canReturnToBot).toBe(true);
     expect(detail?.conversation.canForceReturn).toBe(false);
-    expect(detail?.conversation.takeoverBlock).toBe('owned_by_other');
-    expect(invalidate).toHaveBeenCalled();
+    expect(detail?.conversation.takeoverBlock).toBe('shared_inbox');
   });
 });

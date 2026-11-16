@@ -65,9 +65,11 @@ function liveAttentionPatch(
     } else if (sameAgent(viewerAgentId, conv.assignedAgentId)) {
       patch.takeoverBlock = 'already_owner';
     } else if (viewerAgentId && conv.assignedAgentId) {
-      patch.takeoverBlock = 'owned_by_other';
+      patch.takeoverBlock = 'shared_inbox';
+      patch.canReturnToBot = true;
     } else {
-      patch.takeoverBlock = existing?.canTakeover ? 'owned_by_other' : existing?.takeoverBlock;
+      patch.takeoverBlock = existing?.canTakeover ? 'shared_inbox' : existing?.takeoverBlock;
+      if (patch.takeoverBlock === 'shared_inbox') patch.canReturnToBot = true;
     }
   }
   if (conv.botPaused != null) patch.botPaused = conv.botPaused;
@@ -80,7 +82,11 @@ function liveAttentionPatch(
   const sharedInbox = existing?.takeoverBlock === 'disabled' || conv.takeoverBlock === 'disabled';
   if (conv.canReturnToBot != null) patch.canReturnToBot = conv.canReturnToBot;
   else if (conv.status === 'bot' || conv.status === 'closed') patch.canReturnToBot = false;
-  else if (!sharedInbox && (conv.status === 'assigned' || conv.status === 'paused' || conv.status === 'waiting_human')) {
+  else if (
+    !sharedInbox
+    && patch.takeoverBlock !== 'shared_inbox'
+    && (conv.status === 'assigned' || conv.status === 'paused' || conv.status === 'waiting_human')
+  ) {
     patch.canReturnToBot = false;
   }
   if (conv.canForceReturn != null) patch.canForceReturn = conv.canForceReturn;

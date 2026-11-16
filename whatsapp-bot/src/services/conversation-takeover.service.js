@@ -20,6 +20,7 @@ import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 export { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 export const MANUAL_TAKEOVER_EVENT = 'manual_takeover';
 export const MANUAL_REASSIGN_EVENT = 'manual_reassign';
+export const TAKEOVER_BLOCK_SHARED_INBOX = 'shared_inbox';
 
 function appError(code, message, httpStatus = 400, details) {
   const err = new Error(message);
@@ -54,6 +55,9 @@ export function describeReturnAccess(conversation, actor, { enabled = isManualTa
     return { canReturnToBot: false, canForceReturn: false };
   }
   if (!enabled || !exclusiveOwner(conversation) || agentsMatch(conversation.assignedAgentId, actor?.agentId)) {
+    return { canReturnToBot: true, canForceReturn: false };
+  }
+  if (canTakeoverConversation(actor?.role)) {
     return { canReturnToBot: true, canForceReturn: false };
   }
   return { canReturnToBot: false, canForceReturn: false };
@@ -96,7 +100,12 @@ export function describeTakeoverAccess(conversation, actor, { enabled = isManual
   if (hasOwner && agentsMatch(conversation.assignedAgentId, actor?.agentId)) {
     return { ...base, takeoverBlock: 'already_owner' };
   }
-  if (hasOwner) return { ...base, takeoverBlock: 'owned_by_other' };
+  if (hasOwner) {
+    if (canTakeoverConversation(actor?.role)) {
+      return { ...base, takeoverBlock: TAKEOVER_BLOCK_SHARED_INBOX };
+    }
+    return { ...base, takeoverBlock: 'owned_by_other' };
+  }
 
   if (
     conversation.status === 'bot'

@@ -478,7 +478,6 @@ export const ConversationsPage: React.FC = () => {
         >
           <ConversationDetail
             detail={detailQuery.data}
-            currentAgentId={currentAgentId}
             messages={messagesQuery.data?.items ?? []}
             conversationId={selectedId}
             readAt={selectedReadAt}

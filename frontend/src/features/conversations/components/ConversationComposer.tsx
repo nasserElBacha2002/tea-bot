@@ -22,8 +22,6 @@ interface Props {
   canTakeover?: boolean;
   takeoverBlock?: string | null;
   assignedAgentLabel?: string | null;
-  assignedAgentId?: string | null;
-  currentAgentId?: string | null;
   onSend: (body: string) => Promise<void>;
   onClaim?: () => Promise<void>;
   onTakeover?: () => Promise<void>;
@@ -81,8 +79,6 @@ export const ConversationComposer: React.FC<Props> = ({
   canTakeover = false,
   takeoverBlock = null,
   assignedAgentLabel = null,
-  assignedAgentId = null,
-  currentAgentId = null,
 }) => {
   const [text, setText] = useState('');
 
@@ -130,15 +126,7 @@ export const ConversationComposer: React.FC<Props> = ({
     );
   }
 
-  const viewerId = currentAgentId?.trim().toLowerCase() || '';
-  const ownerId = assignedAgentId?.trim().toLowerCase() || '';
-  const lostToAnotherAgent = takeoverBlock !== 'disabled'
-    && viewerId.length > 0
-    && ownerId.length > 0
-    && viewerId !== ownerId
-    && (status === 'assigned' || status === 'paused');
-
-  if (takeoverBlock === 'owned_by_other' || lostToAnotherAgent) {
+  if (takeoverBlock === 'owned_by_other') {
     const who = assignedAgentLabel?.trim() || 'otro agente';
     return (
       <Box sx={{ flexShrink: 0 }}>
@@ -167,9 +155,13 @@ export const ConversationComposer: React.FC<Props> = ({
 
   const exclusiveAttention = takeoverBlock != null && takeoverBlock !== 'disabled';
   const pausedNotice = exclusiveAttention && (status === 'assigned' || status === 'paused')
-    ? assignedAgentLabel
-      ? `Atención humana. Atiende ${assignedAgentLabel}.`
-      : 'Atención humana. Estás atendiendo esta conversación.'
+    ? takeoverBlock === 'shared_inbox'
+      ? assignedAgentLabel
+        ? `Atención humana. La tomó ${assignedAgentLabel}. Podés seguir respondiendo.`
+        : 'Atención humana. Otro agente la tomó. Podés seguir respondiendo.'
+      : assignedAgentLabel
+        ? `Atención humana. Atiende ${assignedAgentLabel}.`
+        : 'Atención humana. Estás atendiendo esta conversación.'
     : null;
   const showComposer = !canTakeover || status === 'assigned' || status === 'paused';
 

@@ -82,16 +82,16 @@ describe('ConversationDetail takeover', () => {
     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
 
-  it('un operador que no es dueño no ve el cierre', () => {
+  it('un operador que no es dueño igual ve el cierre en inbox compartido', () => {
     renderDetail(detail({
       status: 'assigned',
       assignedAgentId: 'agent-2',
       assignedAgentLabel: 'Luis',
-      takeoverBlock: 'owned_by_other',
+      takeoverBlock: 'shared_inbox',
       canTakeover: false,
-      canReturnToBot: false,
+      canReturnToBot: true,
     }));
-    expect(screen.queryByRole('button', { name: /cerrar y devolver al bot/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /cerrar y devolver al bot/i })).toBeInTheDocument();
     expect(screen.getByText('Atención humana')).toBeInTheDocument();
   });
 

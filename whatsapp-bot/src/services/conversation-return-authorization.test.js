@@ -23,25 +23,30 @@ test('el dueño puede devolver la atención exclusiva', () => {
   );
 });
 
-test('otro agente no puede cerrar la atención de otro', () => {
-  assert.throws(
-    () => assertExclusiveReturnAllowed(locked, other, { takeoverEnabled: true }),
-    (error) => error.code === 'CONVERSATION_OWNED' && error.httpStatus === 409,
-  );
+test('otro operador del panel puede cerrar la atención compartida', () => {
+  assert.doesNotThrow(() => assertExclusiveReturnAllowed(locked, other, { takeoverEnabled: true }));
   assert.deepEqual(
     describeReturnAccess(locked, other, { enabled: true }),
-    { canReturnToBot: false, canForceReturn: false },
+    { canReturnToBot: true, canForceReturn: false },
   );
 });
 
-test('el administrador tampoco salta la propiedad de otro agente', () => {
-  assert.throws(
-    () => assertExclusiveReturnAllowed(locked, admin, { takeoverEnabled: true }),
-    (error) => error.code === 'CONVERSATION_OWNED' && error.httpStatus === 409,
-  );
+test('el administrador también puede devolver una conversación ajena del panel', () => {
+  assert.doesNotThrow(() => assertExclusiveReturnAllowed(locked, admin, { takeoverEnabled: true }));
   assert.deepEqual(
     describeReturnAccess(locked, admin, { enabled: true }),
-    { canReturnToBot: false, canForceReturn: false },
+    { canReturnToBot: true, canForceReturn: false },
+  );
+});
+
+test('inbox compartido expone takeoverBlock shared_inbox para no dueños del panel', () => {
+  assert.equal(
+    describeTakeoverAccess(locked, other, { enabled: true }).takeoverBlock,
+    'shared_inbox',
+  );
+  assert.equal(
+    describeTakeoverAccess(locked, admin, { enabled: true }).takeoverBlock,
+    'shared_inbox',
   );
 });
 

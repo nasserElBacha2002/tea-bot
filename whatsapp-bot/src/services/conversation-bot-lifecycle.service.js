@@ -25,9 +25,9 @@ function returnAuthError(code, message, httpStatus, details) {
 
 /**
  * La fila ya está bloqueada. Sin actor, el cierre es interno y no pasa por HTTP.
- * Con actor y toma activa, solo el dueño cierra. Un administrador que no es
- * dueño no salta la propiedad: interviene con la reasignación. Con la toma
- * apagada se conserva el inbox compartido.
+ * Con actor y toma activa, el inbox del panel (admin y operador) es compartido:
+ * cualquiera de las dos cuentas habilitadas puede devolver o cerrar aunque no
+ * sea el assigned_agent_id. Con la toma apagada se conserva el mismo criterio.
  */
 export function assertExclusiveReturnAllowed(locked, actor, {
   takeoverEnabled = isManualTakeoverEnabled(),
@@ -44,6 +44,7 @@ export function assertExclusiveReturnAllowed(locked, actor, {
   const exclusive = Boolean(locked?.assignedAgentId)
     && (locked.status === 'assigned' || locked.status === 'paused');
   if (!exclusive || agentsMatch(locked.assignedAgentId, actor.agentId)) return;
+  if (canTakeoverConversation(actor.role)) return;
 
   throw returnAuthError(
     'CONVERSATION_OWNED',

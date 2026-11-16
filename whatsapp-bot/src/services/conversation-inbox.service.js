@@ -46,6 +46,11 @@ function requireReturnActor(actor) {
   return actor;
 }
 
+function humanAttentionReplyAllowed(locked, viewer) {
+  if (!viewer?.agentId || !canTakeoverConversation(viewer.role)) return false;
+  return locked?.status === 'assigned' || locked?.status === 'paused';
+}
+
 const ALLOWED_STATUS = new Set(['bot', 'waiting_human', 'assigned', 'closed', 'paused']);
 const ALLOWED_CHANNEL = new Set(CONVERSATION_CHANNELS);
 const ALLOWED_PROVIDER = new Set(['twilio', 'internal']);
@@ -291,9 +296,7 @@ export class ConversationInboxService {
     const authorized = await withTransaction(async (transaction) => {
       const locked = await conversationRepository.findByIdForUpdate(conversationId, { transaction });
       if (!locked) throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
-      const owns = agentsMatch(locked.assignedAgentId, viewer.agentId)
-        && (locked.status === 'assigned' || locked.status === 'paused');
-      if (!owns) {
+      if (!humanAttentionReplyAllowed(locked, viewer)) {
         throw appError(
           'CONVERSATION_OWNED',
           'La conversación ya está asignada a otro agente.',
@@ -323,10 +326,10 @@ export class ConversationInboxService {
 
     const settled = await withTransaction(async (transaction) => {
       const locked = await conversationRepository.findByIdForUpdate(conversationId, { transaction });
-      const stillOwner = Boolean(locked)
-        && agentsMatch(locked.assignedAgentId, viewer.agentId)
-        && (locked.status === 'assigned' || locked.status === 'paused');
-      if (!stillOwner && !providerMessageId) {
+      const stillReplyable = Boolean(locked) && humanAttentionReplyAllowed(locked, viewer);
+      const stillOwner = stillReplyable
+        && agentsMatch(locked.assignedAgentId, viewer.agentId);
+      if (!stillReplyable && !providerMessageId) {
         throw appError(
           'CONVERSATION_OWNED',
           'La conversación cambió de dueño antes del envío.',
@@ -345,17 +348,18 @@ export class ConversationInboxService {
           generatedBy: 'agent_inbox',
           agentId: viewer.agentId,
           providerAccepted: Boolean(providerMessageId),
-          ownershipLostBeforePersist: !stillOwner,
+          ownershipLostBeforePersist: stillReplyable && !stillOwner,
         },
       }, { transaction });
       const updatedConversation = await conversationRepository.updateConversation(
         conversationId,
-        stillOwner
+        stillReplyable
           ? { status: 'assigned', assignedAgentId: locked.assignedAgentId, lastMessageAt: new Date() }
           : { lastMessageAt: new Date() },
         { transaction },
       );
-      return { message, conversation: updatedConversation || locked, ownershipLost: !stillOwner };
+      const ownershipLost = !stillReplyable && !stillOwner;
+      return { message, conversation: updatedConversation || locked, ownershipLost };
     });
 
     notifyConversationMessageCreated(settled.conversation, settled.message);
