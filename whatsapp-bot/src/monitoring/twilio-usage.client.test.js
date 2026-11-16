@@ -7,6 +7,7 @@ import {
   classifyUsageRecord,
   fetchTwilioUsageRecords,
   hasDailyUsageGranularity,
+  normalizeRecord,
   resolveBillingCompleteness,
   resolveTwilioNextPageUrl,
   summarizeUsageRecords,
@@ -95,25 +96,70 @@ test('importe confirmado cero y ajustes negativos se conservan en acumulados', (
   assert.equal(summary.daily[1].twilioQuality, 'confirmed_adjustment');
 });
 
-test('resolveBillingCompleteness distingue paginación de cobertura de facturación', () => {
+test('resolveBillingCompleteness distingue datos diarios de cobertura contable verificada', () => {
   assert.equal(
     resolveBillingCompleteness({
       hasDailyComponents: true,
       hasPeriodAggregates: false,
-      excludedUnknownWhatsappUsd: 0,
+      hasUnknownWhatsappCategory: false,
+      hasInvalidComponentPrice: false,
       hasAccountTotal: true,
     }),
-    'complete_daily_components',
+    'verified_daily_accounting',
+  );
+  assert.equal(
+    resolveBillingCompleteness({
+      hasDailyComponents: true,
+      hasPeriodAggregates: false,
+      hasUnknownWhatsappCategory: true,
+      hasInvalidComponentPrice: false,
+      hasAccountTotal: false,
+    }),
+    'partial_unknown_categories',
   );
   assert.equal(
     resolveBillingCompleteness({
       hasDailyComponents: false,
       hasPeriodAggregates: false,
-      excludedUnknownWhatsappUsd: 0,
+      hasUnknownWhatsappCategory: false,
+      hasInvalidComponentPrice: false,
       hasAccountTotal: true,
     }),
     'account_total_only',
   );
+});
+
+test('categoría whatsapp desconocida con importe cero impide cobertura verificada', () => {
+  const summary = summarizeUsageRecords([
+    {
+      category: 'channels-whatsapp-outbound',
+      price: '1.00',
+      start_date: '2026-10-15',
+      end_date: '2026-10-15',
+    },
+    {
+      category: 'channels-whatsapp-foobar',
+      price: '0.00',
+      start_date: '2026-10-15',
+      end_date: '2026-10-15',
+    },
+  ]);
+  assert.equal(summary.billingCompleteness, 'partial_unknown_categories');
+});
+
+test('normalizeRecord no convierte importe inválido en cero confirmado', () => {
+  assert.equal(normalizeRecord({ category: 'x', price: 'nope' }).price, null);
+  const summary = summarizeUsageRecords([
+    {
+      category: 'channels-whatsapp-outbound',
+      price: 'nope',
+      start_date: '2026-10-15',
+      end_date: '2026-10-15',
+    },
+  ]);
+  assert.equal(summary.componentTwilioUsd, 0);
+  assert.equal(summary.billingCompleteness, 'partial_invalid_amounts');
+  assert.equal(summary.daily[0].twilioQuality, 'unavailable');
 });
 
 test('resolveTwilioNextPageUrl rechaza URIs fuera de la cuenta', () => {

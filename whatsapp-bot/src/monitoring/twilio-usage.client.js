@@ -32,9 +32,10 @@ async function defaultRequest({ url, accountSid, authToken, timeoutMs }) {
   return { status: response.status, data: response.data };
 }
 
-function normalizeRecord(row) {
+export function normalizeRecord(row) {
   const category = String(row.category || '').trim();
-  const price = Number(row.price);
+  const rawPrice = row.price;
+  const price = rawPrice === '' || rawPrice == null ? null : Number(rawPrice);
   const count = Number(row.count);
   return {
     category,
@@ -49,6 +50,11 @@ function normalizeRecord(row) {
     endDate: row.end_date || null,
     uri: row.uri || null,
   };
+}
+
+function addFinitePrice(total, price) {
+  if (price == null || !Number.isFinite(price)) return total;
+  return total + price;
 }
 
 export function isAggregatedUsagePeriod(record) {
@@ -93,15 +99,21 @@ export function classifyUsageRecord(record) {
 export function resolveBillingCompleteness({
   hasDailyComponents,
   hasPeriodAggregates,
-  excludedUnknownWhatsappUsd,
+  hasUnknownWhatsappCategory,
+  hasInvalidComponentPrice,
   hasAccountTotal,
 }) {
-  if (excludedUnknownWhatsappUsd !== 0) return 'partial_unknown_categories';
+  if (hasUnknownWhatsappCategory) return 'partial_unknown_categories';
+  if (hasInvalidComponentPrice) return 'partial_invalid_amounts';
   if (hasDailyComponents && hasPeriodAggregates) return 'partial_mixed_granularity';
-  if (hasDailyComponents) return 'complete_daily_components';
+  if (hasDailyComponents && !hasPeriodAggregates) return 'verified_daily_accounting';
   if (hasPeriodAggregates) return 'period_aggregates_only';
   if (hasAccountTotal) return 'account_total_only';
   return 'inconclusive';
+}
+
+export function isVerifiedDailyAccounting(billingCompleteness) {
+  return billingCompleteness === 'verified_daily_accounting';
 }
 
 export function resolveTwilioNextPageUrl(nextUri, accountSid) {
@@ -142,12 +154,14 @@ export function summarizeUsageRecords(records) {
   let hasDailyMeta = false;
   let hasPeriodAggregate = false;
   let hasAccountTotal = false;
+  let hasUnknownWhatsappCategory = false;
+  let hasInvalidComponentPrice = false;
 
   for (const raw of records) {
     const record = normalizeRecord(raw);
     const classified = classifyUsageRecord(record);
     const { bucket, billableSpend, whatsappScope, rollupRole } = classified;
-    const price = record.price ?? 0;
+    const price = record.price;
     const dailyGranular = hasDailyUsageGranularity(record);
     const aggregated = isAggregatedUsagePeriod(record);
     summary.categories.push({
@@ -162,26 +176,33 @@ export function summarizeUsageRecords(records) {
     });
 
     if (bucket === 'prepaid_recharge') {
-      summary.prepaidRechargeUsd += price;
+      summary.prepaidRechargeUsd = addFinitePrice(summary.prepaidRechargeUsd, price);
       continue;
     }
     if (bucket === 'control_total') {
-      summary.accountTotalUsd = price;
-      hasAccountTotal = true;
+      if (price != null) {
+        summary.accountTotalUsd = price;
+        hasAccountTotal = true;
+      }
       continue;
     }
     if (bucket === 'excluded_unknown_whatsapp') {
-      summary.excludedUnknownWhatsappUsd += price;
+      hasUnknownWhatsappCategory = true;
+      summary.excludedUnknownWhatsappUsd = addFinitePrice(summary.excludedUnknownWhatsappUsd, price);
       continue;
     }
     if (!whatsappScope) {
-      summary.excludedNonWhatsappUsd += price;
+      summary.excludedNonWhatsappUsd = addFinitePrice(summary.excludedNonWhatsappUsd, price);
       continue;
     }
     if (!billableSpend) continue;
 
     if (aggregated) {
-      summary.periodAggregateWhatsappUsd += price;
+      if (price == null) {
+        hasInvalidComponentPrice = true;
+        continue;
+      }
+      summary.periodAggregateWhatsappUsd = addFinitePrice(summary.periodAggregateWhatsappUsd, price);
       hasPeriodAggregate = true;
       summary.byUsagePeriod.push({
         startDate: record.startDate,
@@ -195,14 +216,24 @@ export function summarizeUsageRecords(records) {
 
     if (!dailyGranular) continue;
 
+    const componentPriceMissing = price == null;
+
     if (bucket === 'meta_whatsapp') {
       hasDailyMeta = true;
-      summary.componentMetaUsd += price;
-      if (price < 0) summary.adjustmentWhatsappUsd += price;
+      if (componentPriceMissing) {
+        hasInvalidComponentPrice = true;
+      } else {
+        summary.componentMetaUsd = addFinitePrice(summary.componentMetaUsd, price);
+        if (price < 0) summary.adjustmentWhatsappUsd = addFinitePrice(summary.adjustmentWhatsappUsd, price);
+      }
     } else if (bucket === 'twilio_whatsapp') {
       hasDailyTwilio = true;
-      summary.componentTwilioUsd += price;
-      if (price < 0) summary.adjustmentWhatsappUsd += price;
+      if (componentPriceMissing) {
+        hasInvalidComponentPrice = true;
+      } else {
+        summary.componentTwilioUsd = addFinitePrice(summary.componentTwilioUsd, price);
+        if (price < 0) summary.adjustmentWhatsappUsd = addFinitePrice(summary.adjustmentWhatsappUsd, price);
+      }
     }
 
     summary.dailyGranularityAvailable = true;
@@ -219,16 +250,20 @@ export function summarizeUsageRecords(records) {
       subtotalQuality: 'unavailable',
     };
     if (bucket === 'meta_whatsapp') {
-      prior.metaUsd += price;
+      if (!componentPriceMissing) prior.metaUsd = addFinitePrice(prior.metaUsd, price);
       prior.metaQuality = priceQuality(price);
     } else if (bucket === 'twilio_whatsapp') {
-      prior.twilioUsd += price;
+      if (!componentPriceMissing) prior.twilioUsd = addFinitePrice(prior.twilioUsd, price);
       prior.twilioQuality = priceQuality(price);
     }
-    prior.whatsappSubtotalUsd = round4(prior.whatsappSubtotalUsd + price);
+    if (!componentPriceMissing) {
+      prior.whatsappSubtotalUsd = round4(addFinitePrice(prior.whatsappSubtotalUsd, price));
+    } else {
+      prior.subtotalQuality = 'unavailable';
+    }
     prior.twilioUsd = round4(prior.twilioUsd);
     prior.metaUsd = round4(prior.metaUsd);
-    prior.subtotalQuality = priceQuality(prior.whatsappSubtotalUsd);
+    if (!componentPriceMissing) prior.subtotalQuality = priceQuality(prior.whatsappSubtotalUsd);
     summary.byUsageDay.set(usageDay, prior);
   }
 
@@ -261,7 +296,8 @@ export function summarizeUsageRecords(records) {
   summary.billingCompleteness = resolveBillingCompleteness({
     hasDailyComponents: hasDailyTwilio || hasDailyMeta,
     hasPeriodAggregates: hasPeriodAggregate,
-    excludedUnknownWhatsappUsd: summary.excludedUnknownWhatsappUsd,
+    hasUnknownWhatsappCategory,
+    hasInvalidComponentPrice,
     hasAccountTotal,
   });
 

@@ -10,7 +10,7 @@ import {
   monthKeyArgentina,
   resolveMetaPricingRegime,
 } from './whatsapp-pricing-regime.js';
-import { fetchTwilioUsageRecords } from './twilio-usage.client.js';
+import { fetchTwilioUsageRecords, isVerifiedDailyAccounting } from './twilio-usage.client.js';
 
 function round4(value) {
   if (!Number.isFinite(value)) return null;
@@ -111,18 +111,67 @@ function usageFetchQuality(usage) {
   return 'confirmed_provider';
 }
 
-export function resolveReconciliationStatus(usageFetch, usageSummary, usageCount) {
+export function assessOutboundMessageCountComparison(metrics, usageSummary) {
+  const outboundRows = usageSummary?.categories?.filter(
+    (row) => row.bucket === 'twilio_whatsapp'
+      && row.dailyGranular
+      && !row.aggregated
+      && String(row.category || '').toLowerCase().includes('outbound'),
+  ) ?? [];
+
+  if (outboundRows.length === 0) {
+    return { comparable: false, reason: 'no_daily_outbound_usage_rows' };
+  }
+
+  let providerOutboundCount = 0;
+  const usageDays = [];
+  for (const row of outboundRows) {
+    if (row.count == null) return { comparable: false, reason: 'missing_outbound_count' };
+    providerOutboundCount += row.count;
+    if (row.startDate) usageDays.push(row.startDate);
+  }
+
+  const uniqueUsageDays = [...new Set(usageDays)];
+  const sqlByDay = new Map((metrics?.daily || []).map((row) => [row.dayAr, row]));
+
+  for (const usageDay of uniqueUsageDays) {
+    if (!sqlByDay.has(usageDay)) {
+      return { comparable: false, reason: 'temporal_mismatch_usage_day_without_sql_row' };
+    }
+  }
+
+  let sqlOutboundCount = 0;
+  for (const usageDay of uniqueUsageDays) {
+    sqlOutboundCount += sqlByDay.get(usageDay)?.whatsappOutbound ?? 0;
+  }
+
+  for (const row of metrics?.daily || []) {
+    if (row.whatsappOutbound > 0 && !uniqueUsageDays.includes(row.dayAr)) {
+      return { comparable: false, reason: 'temporal_mismatch_sql_day_without_usage' };
+    }
+  }
+
+  return {
+    comparable: true,
+    providerOutboundCount,
+    sqlOutboundCount,
+    messageCountDelta: providerOutboundCount - sqlOutboundCount,
+  };
+}
+
+export function resolveReconciliationStatus(usageFetch, usageSummary, countComparison) {
   if (!usageSummary) return 'pending_usage';
   if (usageFetchQuality(usageFetch) === 'partial_truncated') return 'partial_truncated';
-  if (usageSummary.billingCompleteness !== 'complete_daily_components') {
+  if (!isVerifiedDailyAccounting(usageSummary.billingCompleteness)) {
     return 'partial_billing';
   }
-  if (usageCount == null) return 'inconclusive';
+  if (!countComparison?.comparable) return 'inconclusive';
   return 'compared';
 }
 
-function providerTotalsByUsageMonth(usageSummary) {
+export function providerTotalsByUsageMonth(usageSummary) {
   if (!usageSummary?.daily?.length) return [];
+  const verifiedAccounting = isVerifiedDailyAccounting(usageSummary.billingCompleteness);
   const months = new Map();
   for (const row of usageSummary.daily) {
     const key = String(row.usageStartDate || '').slice(0, 7);
@@ -134,7 +183,10 @@ function providerTotalsByUsageMonth(usageSummary) {
       whatsappSubtotalUsd: 0,
       hasTwilio: false,
       hasMeta: false,
+      dayCount: 0,
+      hasUnavailableSubtotal: false,
     };
+    slot.dayCount += 1;
     if (Number.isFinite(row.twilioUsd)) {
       slot.twilioUsd += row.twilioUsd;
       slot.hasTwilio = true;
@@ -143,18 +195,30 @@ function providerTotalsByUsageMonth(usageSummary) {
       slot.metaUsd += row.metaUsd;
       slot.hasMeta = true;
     }
-    slot.whatsappSubtotalUsd += row.whatsappSubtotalUsd ?? 0;
+    if (row.subtotalQuality === 'unavailable') {
+      slot.hasUnavailableSubtotal = true;
+    } else {
+      slot.whatsappSubtotalUsd += row.whatsappSubtotalUsd ?? 0;
+    }
     months.set(key, slot);
   }
   return [...months.values()]
     .sort((a, b) => a.usageMonth.localeCompare(b.usageMonth))
-    .map((slot) => ({
-      usageMonth: slot.usageMonth,
-      twilioUsd: slot.hasTwilio ? round4(slot.twilioUsd) : null,
-      metaUsd: slot.hasMeta ? round4(slot.metaUsd) : null,
-      whatsappSubtotalUsd: round4(slot.whatsappSubtotalUsd),
-      scopeNote: 'Mes calendario de usageStartDate (Twilio); no día civil Argentina.',
-    }));
+    .map((slot) => {
+      const accountingCoverage = verifiedAccounting && !slot.hasUnavailableSubtotal
+        ? 'verified'
+        : 'partial_or_unknown';
+      const temporalCoverage = slot.dayCount > 0 ? 'partial_days_only' : 'unknown';
+      return {
+        usageMonth: slot.usageMonth,
+        twilioUsd: slot.hasTwilio ? round4(slot.twilioUsd) : null,
+        metaUsd: slot.hasMeta ? round4(slot.metaUsd) : null,
+        whatsappSubtotalUsd: slot.hasUnavailableSubtotal ? null : round4(slot.whatsappSubtotalUsd),
+        accountingCoverage,
+        temporalCoverage,
+        scopeNote: 'Mes calendario de usageStartDate (Twilio); no día civil Argentina.',
+      };
+    });
 }
 
 function buildReconciliation(metrics, usageSummary, usageFetch) {
@@ -164,12 +228,15 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
   const botSynthetic = metrics.daily.reduce((sum, row) => sum + row.outboundBot, 0);
   const agentWithPossibleSid = metrics.daily.reduce((sum, row) => sum + row.outboundAgent, 0);
 
-  const usageCount = usageSummary?.categories
-    ?.filter((row) => row.bucket === 'twilio_whatsapp' && row.dailyGranular && !row.aggregated)
-    .reduce((sum, row) => sum + (row.count || 0), 0) ?? null;
+  const countComparison = usageSummary
+    ? assessOutboundMessageCountComparison(metrics, usageSummary)
+    : { comparable: false, reason: 'no_usage_summary' };
 
-  const status = resolveReconciliationStatus(usageFetch, usageSummary, usageCount);
+  const status = resolveReconciliationStatus(usageFetch, usageSummary, countComparison);
   const countComparisonAllowed = status === 'compared';
+  const usageOutboundCount = countComparison.comparable
+    ? countComparison.providerOutboundCount
+    : null;
 
   return {
     status,
@@ -197,7 +264,7 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
           prepaidRechargeUsd: usageSummary.prepaidRechargeUsd,
           excludedNonWhatsappUsd: usageSummary.excludedNonWhatsappUsd,
           excludedUnknownWhatsappUsd: usageSummary.excludedUnknownWhatsappUsd,
-          whatsappMessagingUnits: usageCount,
+          whatsappOutboundMessagingUnits: usageOutboundCount,
           dailyGranularityAvailable: usageSummary.dailyGranularityAvailable,
           billingCompleteness: usageSummary.billingCompleteness,
           rollupPolicy: usageSummary.rollupPolicy,
@@ -213,20 +280,25 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
       dailyCrossTimezone:
         'No conciliar usage.daily (fecha Twilio) con messages.daily (día AR) sin mapeo validado.',
     },
-    variance: countComparisonAllowed
+    countComparison: countComparisonAllowed
       ? {
-          messageCountDelta: usageCount - (sqlInbound + sqlOutbound),
-          note: 'Solo con paginación completa, billing complete_daily_components y conteos diarios Twilio outbound.',
+          comparable: true,
+          providerOutboundCount: countComparison.providerOutboundCount,
+          sqlWhatsappOutboundCount: countComparison.sqlOutboundCount,
+          messageCountDelta: countComparison.messageCountDelta,
+          note: 'Comparación solo outbound Twilio (usage) vs whatsappOutbound (SQL) con mismo usageStartDate=dayAr.',
         }
       : {
+          comparable: false,
           messageCountDelta: null,
+          reason: countComparison.reason || 'not_evaluated',
           note:
             status === 'partial_truncated'
               ? 'Conciliación omitida: paginación truncada.'
               : status === 'partial_billing'
-                ? 'Conciliación omitida: facturación incompleta (mezcla granularidad, categorías desconocidas, etc.).'
+                ? 'Conciliación omitida: cobertura contable no verificada.'
                 : status === 'inconclusive'
-                  ? 'Conciliación omitida: sin conteos comparables.'
+                  ? `Conciliación omitida: ${countComparison.reason || 'conteos no equivalentes'}.`
                   : 'Sin usage para comparar.',
         },
     doubleCountingGuard:
@@ -377,7 +449,7 @@ export async function getWhatsAppCostAudit(options = {}) {
         adjustmentWhatsappUsd: usage.summary.adjustmentWhatsappUsd,
         billingCompleteness: usage.summary.billingCompleteness,
         billingComplete:
-          usage.summary.billingCompleteness === 'complete_daily_components'
+          isVerifiedDailyAccounting(usage.summary.billingCompleteness)
           && usageQuality !== 'partial_truncated',
         paginationComplete: usage.fetchCompleteness === 'complete_within_page_limit',
       }

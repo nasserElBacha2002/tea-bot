@@ -5,9 +5,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '../config.js';
 import { config } from '../config.js';
-import { getWhatsAppCostAudit, resolveReconciliationStatus } from './whatsapp-cost-audit.service.js';
+import {
+  assessOutboundMessageCountComparison,
+  getWhatsAppCostAudit,
+  resolveReconciliationStatus,
+} from './whatsapp-cost-audit.service.js';
 import { parseWhatsAppCostAuditQuery } from './whatsapp-cost-audit-query.js';
 import { resetRateCardCache } from './whatsapp-rate-card.js';
+import { summarizeUsageRecords } from './twilio-usage.client.js';
 
 const usageFixture = JSON.parse(
   readFileSync(
@@ -71,6 +76,8 @@ test('cost audit combina usage confirmado sin doble conteo ni meta inferido desd
   assert.equal(report.costs.providerDaily.length, 1);
   assert.equal(report.costs.providerPeriod.length, 1);
   assert.equal(report.costs.providerMonthlyByUsageMonth[0].whatsappSubtotalUsd, 1.7);
+  assert.equal(report.costs.providerMonthlyByUsageMonth[0].accountingCoverage, 'partial_or_unknown');
+  assert.equal(report.reconciliation.countComparison.comparable, false);
   assert.equal(report.costs.daily[0].costs.metaEstimatedUsd, null);
   assert.equal(report.costs.daily[0].costs.metaEstimatedQuality, 'non_determinable');
   assert.equal(report.costs.daily[0].costs.twilioEstimatedUsd, null);
@@ -146,7 +153,7 @@ test('partial_truncated se propaga a conciliación y dataQuality', async () => {
   config.monitoringTwilioEnabled = prevTwilio;
 });
 
-test('compared solo con billing complete_daily_components y paginación completa', async () => {
+test('compared solo con billing verificado y conteos outbound equivalentes', async () => {
   const prevTwilio = config.monitoringTwilioEnabled;
   config.monitoringTwilioEnabled = true;
   config.twilioAccountSid = config.twilioAccountSid || 'AC_test';
@@ -179,16 +186,63 @@ test('compared solo con billing complete_daily_components y paginación completa
     usageRequest: async () => ({ status: 200, data: dailyOnlyFixture }),
   });
   assert.equal(report.reconciliation.status, 'compared');
-  assert.equal(report.reconciliation.variance.messageCountDelta, 0);
+  assert.equal(report.reconciliation.countComparison.messageCountDelta, 0);
+  assert.equal(report.reconciliation.countComparison.sqlWhatsappOutboundCount, 5);
   assert.equal(report.costs.providerTotals.billingComplete, true);
+  assert.equal(report.costs.providerMonthlyByUsageMonth[0].accountingCoverage, 'verified');
   config.monitoringTwilioEnabled = prevTwilio;
+});
+
+test('conteos no equivalentes dejan reconciliación inconclusive sin delta', () => {
+  const cmp = assessOutboundMessageCountComparison(
+    { daily: [{ dayAr: '2026-10-10', inbound: 3, whatsappOutbound: 5 }] },
+    summarizeUsageRecords([
+      {
+        category: 'channels-whatsapp-outbound',
+        count: '5',
+        price: '1.00',
+        start_date: '2026-10-10',
+        end_date: '2026-10-10',
+      },
+    ]),
+  );
+  assert.equal(cmp.comparable, true);
+  assert.equal(cmp.messageCountDelta, 0);
+
+  const inconclusive = assessOutboundMessageCountComparison(
+    { daily: [{ dayAr: '2026-10-11', inbound: 0, whatsappOutbound: 5 }] },
+    summarizeUsageRecords([
+      {
+        category: 'channels-whatsapp-outbound',
+        count: '5',
+        price: '1.00',
+        start_date: '2026-10-10',
+        end_date: '2026-10-10',
+      },
+    ]),
+  );
+  assert.equal(inconclusive.comparable, false);
+  const status = resolveReconciliationStatus(
+    { ok: true, truncated: false, fetchCompleteness: 'complete_within_page_limit' },
+    summarizeUsageRecords([
+      {
+        category: 'channels-whatsapp-outbound',
+        count: '5',
+        price: '1.00',
+        start_date: '2026-10-10',
+        end_date: '2026-10-10',
+      },
+    ]),
+    inconclusive,
+  );
+  assert.equal(status, 'inconclusive');
 });
 
 test('resolveReconciliationStatus no marca compared con paginación completa pero billing incompleto', () => {
   const status = resolveReconciliationStatus(
     { ok: true, truncated: false, fetchCompleteness: 'complete_within_page_limit' },
     { billingCompleteness: 'partial_mixed_granularity' },
-    10,
+    { comparable: true, messageCountDelta: 0 },
   );
   assert.equal(status, 'partial_billing');
 });
