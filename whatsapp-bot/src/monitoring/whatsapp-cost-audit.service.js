@@ -107,12 +107,58 @@ function mergeDailyMessageAndEstimates(messageDaily, estimates) {
 
 function usageFetchQuality(usage) {
   if (!usage?.ok) return usage?.error === 'twilio_usage_disabled' ? 'disabled' : 'unavailable';
-  if (usage.truncated || usage.completeness === 'partial_truncated') return 'partial_truncated';
+  if (usage.truncated || usage.fetchCompleteness === 'partial_truncated') return 'partial_truncated';
   return 'confirmed_provider';
 }
 
+export function resolveReconciliationStatus(usageFetch, usageSummary, usageCount) {
+  if (!usageSummary) return 'pending_usage';
+  if (usageFetchQuality(usageFetch) === 'partial_truncated') return 'partial_truncated';
+  if (usageSummary.billingCompleteness !== 'complete_daily_components') {
+    return 'partial_billing';
+  }
+  if (usageCount == null) return 'inconclusive';
+  return 'compared';
+}
+
+function providerTotalsByUsageMonth(usageSummary) {
+  if (!usageSummary?.daily?.length) return [];
+  const months = new Map();
+  for (const row of usageSummary.daily) {
+    const key = String(row.usageStartDate || '').slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) continue;
+    const slot = months.get(key) || {
+      usageMonth: key,
+      twilioUsd: 0,
+      metaUsd: 0,
+      whatsappSubtotalUsd: 0,
+      hasTwilio: false,
+      hasMeta: false,
+    };
+    if (Number.isFinite(row.twilioUsd)) {
+      slot.twilioUsd += row.twilioUsd;
+      slot.hasTwilio = true;
+    }
+    if (Number.isFinite(row.metaUsd)) {
+      slot.metaUsd += row.metaUsd;
+      slot.hasMeta = true;
+    }
+    slot.whatsappSubtotalUsd += row.whatsappSubtotalUsd ?? 0;
+    months.set(key, slot);
+  }
+  return [...months.values()]
+    .sort((a, b) => a.usageMonth.localeCompare(b.usageMonth))
+    .map((slot) => ({
+      usageMonth: slot.usageMonth,
+      twilioUsd: slot.hasTwilio ? round4(slot.twilioUsd) : null,
+      metaUsd: slot.hasMeta ? round4(slot.metaUsd) : null,
+      whatsappSubtotalUsd: round4(slot.whatsappSubtotalUsd),
+      scopeNote: 'Mes calendario de usageStartDate (Twilio); no día civil Argentina.',
+    }));
+}
+
 function buildReconciliation(metrics, usageSummary, usageFetch) {
-  const partial = usageFetchQuality(usageFetch) === 'partial_truncated';
+  const fetchPartial = usageFetchQuality(usageFetch) === 'partial_truncated';
   const sqlOutbound = metrics.daily.reduce((sum, row) => sum + row.whatsappOutbound, 0);
   const sqlInbound = metrics.daily.reduce((sum, row) => sum + row.inbound, 0);
   const botSynthetic = metrics.daily.reduce((sum, row) => sum + row.outboundBot, 0);
@@ -122,14 +168,13 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
     ?.filter((row) => row.bucket === 'twilio_whatsapp' && row.dailyGranular && !row.aggregated)
     .reduce((sum, row) => sum + (row.count || 0), 0) ?? null;
 
-  let status = 'pending_usage';
-  if (usageSummary) {
-    status = partial ? 'partial_truncated' : 'compared';
-  }
+  const status = resolveReconciliationStatus(usageFetch, usageSummary, usageCount);
+  const countComparisonAllowed = status === 'compared';
 
   return {
     status,
-    usageCompleteness: usageFetch?.completeness || null,
+    fetchCompleteness: usageFetch?.fetchCompleteness || null,
+    billingCompleteness: usageSummary?.billingCompleteness || null,
     usageQuality: usageFetchQuality(usageFetch),
     sql: {
       inboundPersisted: sqlInbound,
@@ -140,19 +185,24 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
     },
     provider: usageSummary
       ? {
-          quality: partial ? 'partial_truncated' : 'confirmed_provider',
-          confirmedTwilioUsd: usageSummary.confirmedTwilioUsd,
-          confirmedMetaUsd: usageSummary.confirmedMetaUsd,
-          totalControlUsd: usageSummary.confirmedTotalControlUsd,
+          quality: fetchPartial ? 'partial_truncated' : 'confirmed_provider',
+          accountTotalUsd: usageSummary.accountTotalUsd,
+          whatsappSubtotalUsd: usageSummary.whatsappSubtotalUsd,
+          whatsappTwilioPlatformUsd: usageSummary.whatsappTwilioPlatformUsd,
+          whatsappMetaPassthroughUsd: usageSummary.whatsappMetaPassthroughUsd,
           componentTwilioUsd: usageSummary.componentTwilioUsd,
           componentMetaUsd: usageSummary.componentMetaUsd,
           periodAggregateWhatsappUsd: usageSummary.periodAggregateWhatsappUsd,
+          adjustmentWhatsappUsd: usageSummary.adjustmentWhatsappUsd,
           prepaidRechargeUsd: usageSummary.prepaidRechargeUsd,
           excludedNonWhatsappUsd: usageSummary.excludedNonWhatsappUsd,
           excludedUnknownWhatsappUsd: usageSummary.excludedUnknownWhatsappUsd,
           whatsappMessagingUnits: usageCount,
           dailyGranularityAvailable: usageSummary.dailyGranularityAvailable,
+          billingCompleteness: usageSummary.billingCompleteness,
           rollupPolicy: usageSummary.rollupPolicy,
+          accountVsWhatsappNote:
+            'accountTotalUsd (totalprice) es total de cuenta en el registro; whatsappSubtotalUsd suma solo componentes WhatsApp confirmados.',
         }
       : null,
     nonReconcilable: {
@@ -163,19 +213,24 @@ function buildReconciliation(metrics, usageSummary, usageFetch) {
       dailyCrossTimezone:
         'No conciliar usage.daily (fecha Twilio) con messages.daily (día AR) sin mapeo validado.',
     },
-    variance: usageSummary && !partial
+    variance: countComparisonAllowed
       ? {
-          messageCountDelta: usageCount == null ? null : usageCount - (sqlInbound + sqlOutbound),
-          note: 'Diferencia esperada por TwiML, mensajes fuera de SQL o granularidad usage.',
+          messageCountDelta: usageCount - (sqlInbound + sqlOutbound),
+          note: 'Solo con paginación completa, billing complete_daily_components y conteos diarios Twilio outbound.',
         }
       : {
           messageCountDelta: null,
-          note: partial
-            ? 'Conciliación de conteos omitida: usage parcial/truncado.'
-            : 'Sin usage para comparar.',
+          note:
+            status === 'partial_truncated'
+              ? 'Conciliación omitida: paginación truncada.'
+              : status === 'partial_billing'
+                ? 'Conciliación omitida: facturación incompleta (mezcla granularidad, categorías desconocidas, etc.).'
+                : status === 'inconclusive'
+                  ? 'Conciliación omitida: sin conteos comparables.'
+                  : 'Sin usage para comparar.',
         },
     doubleCountingGuard:
-      'Usar totalControlUsd como control. No sumar agregados de período con componentes diarios ni con estimaciones SQL.',
+      'accountTotalUsd no sustituye whatsappSubtotalUsd. No sumar periodAggregateWhatsappUsd con componentes diarios.',
   };
 }
 
@@ -229,8 +284,8 @@ function monthlyTotalsByCalendarMonth(dailyMerged, metricsWindow, usageQuality) 
           : 'partial_month_window',
       note:
         coverage.coverage === 'partial_month'
-          ? 'La ventana consultada no cubre el mes civil completo.'
-          : null,
+          ? 'La ventana consultada no cubre el mes civil completo (métricas SQL día AR).'
+          : 'Solo métricas SQL por día Argentina; costos confirmados del proveedor están en providerDaily/providerTotals.',
     };
   });
 }
@@ -302,14 +357,35 @@ export async function getWhatsAppCostAudit(options = {}) {
   const providerUsage = usage?.ok
     ? {
       quality: usageQuality,
-      completeness: usage.completeness,
+      fetchCompleteness: usage.fetchCompleteness,
       truncated: usage.truncated,
+      billingCompleteness: usage.summary?.billingCompleteness ?? null,
       ...usage.summary,
     }
-    : {
-      quality: usageQuality,
-      error: usage?.error || 'not_fetched',
-    };
+  : {
+    quality: usageQuality,
+    error: usage?.error || 'not_fetched',
+  };
+
+  const providerTotals = usage?.ok && usage.summary
+    ? {
+        accountTotalUsd: usage.summary.accountTotalUsd,
+        whatsappSubtotalUsd: usage.summary.whatsappSubtotalUsd,
+        whatsappTwilioPlatformUsd: usage.summary.whatsappTwilioPlatformUsd,
+        whatsappMetaPassthroughUsd: usage.summary.whatsappMetaPassthroughUsd,
+        periodAggregateWhatsappUsd: usage.summary.periodAggregateWhatsappUsd,
+        adjustmentWhatsappUsd: usage.summary.adjustmentWhatsappUsd,
+        billingCompleteness: usage.summary.billingCompleteness,
+        billingComplete:
+          usage.summary.billingCompleteness === 'complete_daily_components'
+          && usageQuality !== 'partial_truncated',
+        paginationComplete: usage.fetchCompleteness === 'complete_within_page_limit',
+      }
+    : null;
+
+  const providerMonthlyByUsageMonth = usage?.ok && usage.summary
+    ? providerTotalsByUsageMonth(usage.summary)
+    : [];
 
   return {
     generatedAt: new Date().toISOString(),
@@ -328,6 +404,10 @@ export async function getWhatsAppCostAudit(options = {}) {
     costs: {
       daily,
       monthlyByCalendar,
+      providerDaily: usage?.ok ? usage.summary?.daily ?? [] : [],
+      providerPeriod: usage?.ok ? usage.summary?.byUsagePeriod ?? [] : [],
+      providerTotals,
+      providerMonthlyByUsageMonth,
       providerUsage,
     },
     prepaidBalance: balance,

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '../config.js';
 import { config } from '../config.js';
-import { getWhatsAppCostAudit } from './whatsapp-cost-audit.service.js';
+import { getWhatsAppCostAudit, resolveReconciliationStatus } from './whatsapp-cost-audit.service.js';
 import { parseWhatsAppCostAuditQuery } from './whatsapp-cost-audit-query.js';
 import { resetRateCardCache } from './whatsapp-rate-card.js';
 
@@ -62,9 +62,15 @@ test('cost audit combina usage confirmado sin doble conteo ni meta inferido desd
   });
 
   assert.equal(report.templates.available, false);
-  assert.equal(report.reconciliation.status, 'compared');
-  assert.equal(report.costs.providerUsage.confirmedTotalControlUsd, 1.7);
+  assert.equal(report.reconciliation.status, 'partial_billing');
+  assert.equal(report.costs.providerUsage.accountTotalUsd, 1.7);
+  assert.equal(report.costs.providerUsage.whatsappSubtotalUsd, 1.7);
+  assert.equal(report.costs.providerTotals.billingComplete, false);
+  assert.equal(report.costs.providerTotals.paginationComplete, true);
   assert.equal(report.costs.providerUsage.excludedNonWhatsappUsd, 3.5);
+  assert.equal(report.costs.providerDaily.length, 1);
+  assert.equal(report.costs.providerPeriod.length, 1);
+  assert.equal(report.costs.providerMonthlyByUsageMonth[0].whatsappSubtotalUsd, 1.7);
   assert.equal(report.costs.daily[0].costs.metaEstimatedUsd, null);
   assert.equal(report.costs.daily[0].costs.metaEstimatedQuality, 'non_determinable');
   assert.equal(report.costs.daily[0].costs.twilioEstimatedUsd, null);
@@ -138,6 +144,53 @@ test('partial_truncated se propaga a conciliación y dataQuality', async () => {
   assert.equal(report.reconciliation.usageQuality, 'partial_truncated');
   assert.equal(report.costs.providerUsage.quality, 'partial_truncated');
   config.monitoringTwilioEnabled = prevTwilio;
+});
+
+test('compared solo con billing complete_daily_components y paginación completa', async () => {
+  const prevTwilio = config.monitoringTwilioEnabled;
+  config.monitoringTwilioEnabled = true;
+  config.twilioAccountSid = config.twilioAccountSid || 'AC_test';
+  config.twilioAuthToken = config.twilioAuthToken || 'test_token';
+  const dailyOnlyFixture = {
+    usage_records: [
+      {
+        category: 'channels-whatsapp-outbound',
+        count: '5',
+        price: '0.50',
+        start_date: '2026-10-10',
+        end_date: '2026-10-10',
+      },
+    ],
+  };
+  const report = await getWhatsAppCostAudit({
+    days: 3,
+    fetchUsage: true,
+    metricsOverride: {
+      window: {
+        startDayAr: '2026-10-08',
+        endDayAr: '2026-10-10',
+        startUtc: new Date('2026-10-08T03:00:00.000Z'),
+        endUtcExclusive: new Date('2026-10-11T03:00:00.000Z'),
+      },
+      daily: [{ dayAr: '2026-10-10', inbound: 0, outbound: 5, outboundBot: 5, outboundAgent: 0, outboundSystem: 0, whatsappOutbound: 5, uniqueConversations: 1 }],
+      deliveryByDay: [],
+      definitions: {},
+    },
+    usageRequest: async () => ({ status: 200, data: dailyOnlyFixture }),
+  });
+  assert.equal(report.reconciliation.status, 'compared');
+  assert.equal(report.reconciliation.variance.messageCountDelta, 0);
+  assert.equal(report.costs.providerTotals.billingComplete, true);
+  config.monitoringTwilioEnabled = prevTwilio;
+});
+
+test('resolveReconciliationStatus no marca compared con paginación completa pero billing incompleto', () => {
+  const status = resolveReconciliationStatus(
+    { ok: true, truncated: false, fetchCompleteness: 'complete_within_page_limit' },
+    { billingCompleteness: 'partial_mixed_granularity' },
+    10,
+  );
+  assert.equal(status, 'partial_billing');
 });
 
 test('parseWhatsAppCostAuditQuery valida fechas y días', () => {
