@@ -25,5 +25,11 @@ export function isInboundUserMessage(msg: ConversationMessage): boolean {
 export function messageDisplayBody(msg: ConversationMessage): string {
   const body = msg.body?.trim();
   if (body) return body;
+  if (msg.attachments?.length) return '';
   return '—';
+}
+
+export function messageHasVisibleBody(msg: ConversationMessage): boolean {
+  const body = msg.body?.trim();
+  return Boolean(body) || (!msg.attachments?.length && !body);
 }

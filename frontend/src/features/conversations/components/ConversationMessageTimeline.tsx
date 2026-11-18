@@ -4,9 +4,12 @@ import type { ConversationMessage } from '../types/conversation.types';
 import { messageEventLabel, senderTypeLabel } from '../utils/conversationUiLabels';
 import {
   messageDisplayBody,
+  messageHasVisibleBody,
   resolveMessageBubbleRole,
   type MessageBubbleRole,
 } from '../utils/conversationMessageDisplay';
+import { MessageInboundAttachments } from './MessageInboundAttachments';
+import { MessageOutboundDelivery } from './MessageOutboundDelivery';
 import {
   findFirstUnreadMessage,
   getReadThroughAt,
@@ -285,9 +288,13 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
                             borderBottomRightRadius: !isUser && !isSystem && !isLastInGroup ? 6 : undefined,
                           }}
                         >
-                          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', lineHeight: 1.45 }}>
-                            {messageDisplayBody(msg)}
-                          </Typography>
+                          {messageHasVisibleBody(msg) && (
+                            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', lineHeight: 1.45 }}>
+                              {messageDisplayBody(msg)}
+                            </Typography>
+                          )}
+                          <MessageInboundAttachments message={msg} />
+                          {!isUser && !isSystem && <MessageOutboundDelivery message={msg} />}
                         </Paper>
                       </Box>
                     );

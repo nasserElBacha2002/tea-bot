@@ -1,11 +1,12 @@
+import { createReadStream } from 'node:fs';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+import attachmentRepository from '../repositories/conversation-message-attachment.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
 import conversationService from './conversation.service.js';
 import conversationBotLifecycleService from './conversation-bot-lifecycle.service.js';
 import sessionService from './session.service.js';
-import twilioWhatsAppService from './twilio-whatsapp.service.js';
 import { ensureConversationDbReady } from '../db/conversation-db-health.js';
 import { withTransaction } from '../db/index.js';
 import {
@@ -15,6 +16,16 @@ import {
   mapMessagePublic,
   mapSessionPublic,
 } from '../utils/conversation-inbox.mapper.js';
+import {
+  absoluteStoragePath,
+  resolveInboundMediaRoot,
+  verifyInboundMediaObject,
+} from '../utils/inbound-media-storage.js';
+import { normalizeInboundMimeType } from '../utils/inbound-media-policy.js';
+import {
+  attachmentDownloadFilename,
+  buildContentDispositionHeader,
+} from '../utils/http-content-disposition.js';
 import {
   notifyConversationAssigned,
   notifyConversationMessageCreated,
@@ -34,6 +45,8 @@ import conversationTakeoverService, {
   describeTakeoverAccess,
   isManualTakeoverEnabled,
 } from './conversation-takeover.service.js';
+import agentOutboundSendService from './agent-outbound-send.service.js';
+import twilioMessageDeliveryService from './twilio-message-delivery.service.js';
 
 function requireReturnActor(actor) {
   if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
@@ -44,6 +57,16 @@ function requireReturnActor(actor) {
     );
   }
   return actor;
+}
+
+function groupAttachmentsByMessageId(rows) {
+  const map = new Map();
+  for (const row of rows || []) {
+    const list = map.get(row.messageId) || [];
+    list.push(row);
+    map.set(row.messageId, list);
+  }
+  return map;
 }
 
 function humanAttentionReplyAllowed(locked, viewer) {
@@ -180,13 +203,132 @@ export class ConversationInboxService {
       conversationMessageRepository.countByConversationId(conversationId),
     ]);
 
+    const attachmentMap = groupAttachmentsByMessageId(
+      await attachmentRepository.findByMessageIds(messages.map((m) => m.id)),
+    );
+    const deliveryMap = await twilioMessageDeliveryService.buildDeliveryStatusMapForMessages(messages);
+
     return {
-      items: messages.map((m) => mapMessagePublic(m)),
+      items: twilioMessageDeliveryService.mapMessagesPublicWithDelivery(
+        messages,
+        attachmentMap,
+        deliveryMap,
+      ),
       total,
       limit,
       offset,
       order,
     };
+  }
+
+  async openMessageAttachmentContent(conversationId, messageId, attachmentId, { download = false } = {}) {
+    await this.ensureReady();
+    const conversation = await conversationRepository.getConversationById(conversationId);
+    if (!conversation) {
+      throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
+    }
+
+    const attachment = await attachmentRepository.findById(attachmentId);
+    if (
+      !attachment
+      || attachment.conversationId !== conversationId
+      || attachment.messageId !== messageId
+    ) {
+      throw appError('NOT_FOUND', 'Adjunto no encontrado', 404);
+    }
+
+    if (attachment.status !== 'stored' || !attachment.storageKey) {
+      throw appError('ATTACHMENT_NOT_AVAILABLE', 'El adjunto no está disponible', 404);
+    }
+
+    const rootDir = resolveInboundMediaRoot();
+    let readable = false;
+    try {
+      readable = await verifyInboundMediaObject(rootDir, attachment.storageKey);
+    } catch {
+      readable = false;
+    }
+    if (!readable) {
+      throw appError('NOT_FOUND', 'Archivo no encontrado', 404);
+    }
+
+    const mimeType = normalizeInboundMimeType(attachment.mimeType) || 'application/octet-stream';
+    const isImage = mimeType === 'image/jpeg' || mimeType === 'image/png';
+    const disposition = download || !isImage ? 'attachment' : 'inline';
+
+    return {
+      absolutePath: absoluteStoragePath(rootDir, attachment.storageKey),
+      mimeType,
+      disposition,
+      filename: attachmentDownloadFilename(attachment),
+      byteSize: attachment.byteSize,
+    };
+  }
+
+  async streamMessageAttachmentContent(conversationId, messageId, attachmentId, res, { download = false } = {}) {
+    const file = await this.openMessageAttachmentContent(
+      conversationId,
+      messageId,
+      attachmentId,
+      { download },
+    );
+
+    if (res.destroyed || res.writableEnded) {
+      const err = new Error('Cliente desconectado');
+      err.code = 'CLIENT_CLOSED';
+      err.httpStatus = 499;
+      throw err;
+    }
+
+    let completed = false;
+    let fileStream = null;
+
+    const cleanup = () => {
+      if (fileStream && !fileStream.destroyed) fileStream.destroy();
+    };
+
+    return new Promise((resolve, reject) => {
+      const fail = (error) => {
+        if (completed) return;
+        completed = true;
+        cleanup();
+        if (!res.headersSent) reject(error);
+        else {
+          res.destroy();
+          resolve();
+        }
+      };
+
+      res.on('close', () => {
+        if (!completed) cleanup();
+      });
+
+      try {
+        res.setHeader('Content-Type', file.mimeType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader(
+          'Content-Disposition',
+          buildContentDispositionHeader(file.disposition, file.filename),
+        );
+        if (file.byteSize != null && file.byteSize >= 0) {
+          res.setHeader('Content-Length', String(file.byteSize));
+        }
+      } catch (error) {
+        fail(error);
+        return;
+      }
+
+      fileStream = createReadStream(file.absolutePath);
+      fileStream.on('error', () => {
+        fail(appError('NOT_FOUND', 'Archivo no encontrado', 404));
+      });
+      fileStream.on('end', () => {
+        completed = true;
+        resolve();
+      });
+      fileStream.pipe(res);
+    });
   }
 
   async claimConversation(conversationId, agentId, actor = null) {
@@ -258,22 +400,61 @@ export class ConversationInboxService {
     return updated;
   }
 
-  async sendAgentMessage(conversationId, body, agentId, actor = null) {
-    if (isManualTakeoverEnabled()) {
-      return this._sendOwnedAgentMessage(conversationId, body, actor);
+  async sendAgentMessage(conversationId, body, agentId, actor = null, options = {}) {
+    const ctx = await this._buildAgentOutboundContext(conversationId, agentId, actor);
+    if (Array.isArray(options.attachments) && options.attachments.length > 0) {
+      return agentOutboundSendService.sendBatch(ctx, {
+        body,
+        attachments: options.attachments,
+        batchClientRequestId: options.batchClientRequestId || options.clientRequestId || null,
+      });
     }
-    return this._sendSharedAgentMessage(conversationId, body, agentId);
+
+    const hasAttachment = Boolean(
+      options.attachment?.contentBase64
+      || options.attachment?.buffer
+      || options.attachment?.mimeType,
+    );
+    if (hasAttachment) {
+      const result = await agentOutboundSendService.sendSingleItem(ctx, {
+        body,
+        attachment: options.attachment,
+        clientRequestId: options.clientRequestId || options.attachment?.clientRequestId,
+        includeBody: true,
+      });
+      if (!result.ok) {
+        throw appError(
+          result.error?.code || 'TWILIO_SEND_FAILED',
+          result.error?.message || 'No se pudo enviar el archivo.',
+          502,
+          { deliveryState: result.deliveryState, message: result.message },
+        );
+      }
+      return {
+        message: result.message,
+        conversation: result.conversation,
+        idempotent: result.idempotent,
+      };
+    }
+
+    return agentOutboundSendService.sendTextOnly(ctx, {
+      body,
+      clientRequestId: options.clientRequestId,
+    });
   }
 
-  async _sendOwnedAgentMessage(conversationId, body, actor) {
+  async _buildAgentOutboundContext(conversationId, agentId, actor) {
+    if (isManualTakeoverEnabled()) {
+      return this._buildOwnedAgentOutboundContext(conversationId, actor);
+    }
+    return this._buildSharedAgentOutboundContext(conversationId, agentId);
+  }
+
+  async _buildOwnedAgentOutboundContext(conversationId, actor) {
     await this.ensureReady();
     const viewer = actorFromAdminUser(actor);
     if (!viewer) {
       throw appError('FORBIDDEN', 'No tenés permiso para responder esta conversación.', 403);
-    }
-    const trimmed = String(body || '').trim();
-    if (!trimmed) {
-      throw appError('EMPTY_BODY', 'El mensaje no puede estar vacío', 400);
     }
 
     let conversation = await conversationRepository.getConversationById(conversationId);
@@ -307,107 +488,36 @@ export class ConversationInboxService {
       return locked;
     });
 
-    let providerMessageId = null;
-    const isSeedConversation = await this._isSeedConversation(authorized.id);
-    if (
-      authorized.channel === 'whatsapp'
-      && authorized.provider === 'twilio'
-      && !isSeedConversation
-    ) {
-      if (!authorized.phoneNumber) {
-        throw appError(
-          'MISSING_PHONE',
-          'La conversación no tiene número de teléfono para enviar por WhatsApp',
-          400,
-        );
-      }
-      providerMessageId = await this._deliverWhatsApp(authorized.phoneNumber, trimmed);
-    }
-
-    const settled = await withTransaction(async (transaction) => {
-      const locked = await conversationRepository.findByIdForUpdate(conversationId, { transaction });
-      const stillReplyable = Boolean(locked) && humanAttentionReplyAllowed(locked, viewer);
-      const stillOwner = stillReplyable
-        && agentsMatch(locked.assignedAgentId, viewer.agentId);
-      if (!stillReplyable && !providerMessageId) {
-        throw appError(
-          'CONVERSATION_OWNED',
-          'La conversación cambió de dueño antes del envío.',
-          409,
-          { assignedAgentId: locked?.assignedAgentId || null },
-        );
-      }
-      const message = await conversationMessageRepository.createMessage({
-        conversationId,
-        direction: 'outbound',
-        senderType: 'agent',
-        body: trimmed,
-        provider: authorized.provider,
-        providerMessageId,
-        metadataJson: {
-          generatedBy: 'agent_inbox',
-          agentId: viewer.agentId,
-          providerAccepted: Boolean(providerMessageId),
-          ownershipLostBeforePersist: stillReplyable && !stillOwner,
-        },
-      }, { transaction });
-      const updatedConversation = await conversationRepository.updateConversation(
-        conversationId,
-        stillReplyable
-          ? { status: 'assigned', assignedAgentId: locked.assignedAgentId, lastMessageAt: new Date() }
-          : { lastMessageAt: new Date() },
-        { transaction },
-      );
-      const ownershipLost = !stillReplyable && !stillOwner;
-      return { message, conversation: updatedConversation || locked, ownershipLost };
-    });
-
-    notifyConversationMessageCreated(settled.conversation, settled.message);
-    if (settled.ownershipLost) {
-      throw appError(
-        'CONVERSATION_OWNED',
-        'Twilio aceptó el mensaje, pero la conversación cambió de dueño antes de registrarlo. El envío quedó trazado y no se reasigna.',
-        409,
-        { providerMessageId, providerAccepted: true },
-      );
-    }
     return {
-      message: mapMessagePublic(settled.message),
-      conversation: mapConversationPublic(settled.conversation),
+      conversation: authorized,
+      actorAgentId: viewer.agentId,
+      viewer,
+      touchConversationInTransaction: async (id, ctx, { transaction } = {}) => {
+        const locked = await conversationRepository.findByIdForUpdate(id, { transaction });
+        const stillReplyable = Boolean(locked) && humanAttentionReplyAllowed(locked, ctx.viewer);
+        return conversationRepository.updateConversation(
+          id,
+          stillReplyable
+            ? { status: 'assigned', assignedAgentId: locked.assignedAgentId, lastMessageAt: new Date() }
+            : { lastMessageAt: new Date() },
+          { transaction },
+        ) || locked;
+      },
+      touchConversationAfterSend: async (id, ctx) => {
+        const current = await conversationRepository.getConversationById(id);
+        const stillReplyable = Boolean(current) && humanAttentionReplyAllowed(current, ctx.viewer);
+        return conversationRepository.updateConversation(
+          id,
+          stillReplyable
+            ? { status: 'assigned', assignedAgentId: current.assignedAgentId, lastMessageAt: new Date() }
+            : { lastMessageAt: new Date() },
+        ) || current;
+      },
     };
   }
 
-  async _deliverWhatsApp(phoneNumber, body) {
-    try {
-      twilioWhatsAppService.assertConfigured();
-      const sent = await twilioWhatsAppService.sendWhatsAppMessage({ to: phoneNumber, body });
-      return sent.sid;
-    } catch (error) {
-      if (error.code === 'TWILIO_NOT_CONFIGURED') {
-        throw appError(
-          'TWILIO_NOT_CONFIGURED',
-          'Twilio no está configurado. Verificá TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_FROM.',
-          503,
-        );
-      }
-      if (error.code === 'TWILIO_SEND_FAILED') {
-        throw appError(
-          'TWILIO_SEND_FAILED',
-          'No se pudo enviar el mensaje por Twilio. Verificá la configuración o intentá nuevamente.',
-          502,
-        );
-      }
-      throw error;
-    }
-  }
-
-  async _sendSharedAgentMessage(conversationId, body, agentId) {
+  async _buildSharedAgentOutboundContext(conversationId, agentId) {
     await this.ensureReady();
-    const trimmed = String(body || '').trim();
-    if (!trimmed) {
-      throw appError('EMPTY_BODY', 'El mensaje no puede estar vacío', 400);
-    }
-
     let conversation = await conversationRepository.getConversationById(conversationId);
     if (!conversation) {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
@@ -436,72 +546,20 @@ export class ConversationInboxService {
       throw appError('INVALID_STATE', 'Estado de conversación no compatible con respuesta manual', 409);
     }
 
-    let providerMessageId = null;
-    const isSeedConversation = await this._isSeedConversation(conversation.id);
-
-    if (
-      conversation.channel === 'whatsapp'
-      && conversation.provider === 'twilio'
-      && !isSeedConversation
-    ) {
-      if (!conversation.phoneNumber) {
-        throw appError(
-          'MISSING_PHONE',
-          'La conversación no tiene número de teléfono para enviar por WhatsApp',
-          400,
-        );
-      }
-      try {
-        twilioWhatsAppService.assertConfigured();
-        const sent = await twilioWhatsAppService.sendWhatsAppMessage({
-          to: conversation.phoneNumber,
-          body: trimmed,
-        });
-        providerMessageId = sent.sid;
-      } catch (error) {
-        if (error.code === 'TWILIO_NOT_CONFIGURED') {
-          throw appError(
-            'TWILIO_NOT_CONFIGURED',
-            'Twilio no está configurado. Verificá TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN y TWILIO_WHATSAPP_FROM.',
-            503,
-          );
-        }
-        if (error.code === 'TWILIO_SEND_FAILED') {
-          throw appError(
-            'TWILIO_SEND_FAILED',
-            'No se pudo enviar el mensaje por Twilio. Verificá la configuración o intentá nuevamente.',
-            502,
-          );
-        }
-        throw error;
-      }
-    }
-
-    const message = await conversationMessageRepository.createMessage({
-      conversationId: conversation.id,
-      direction: 'outbound',
-      senderType: 'agent',
-      body: trimmed,
-      provider: conversation.provider,
-      providerMessageId,
-      metadataJson: {
-        generatedBy: 'agent_inbox',
-        agentId,
-      },
-    });
-
-    const updatedConversation = await conversationRepository.updateConversation(conversation.id, {
+    const patchAssigned = {
       status: 'assigned',
       assignedAgentId: agentId,
       lastMessageAt: new Date(),
-    });
-
-    const result = {
-      message: mapMessagePublic(message),
-      conversation: mapConversationPublic(updatedConversation),
     };
-    notifyConversationMessageCreated(updatedConversation, message);
-    return result;
+
+    return {
+      conversation,
+      actorAgentId: agentId,
+      touchConversationInTransaction: async (id, _ctx, { transaction } = {}) =>
+        conversationRepository.updateConversation(id, patchAssigned, { transaction }) || conversation,
+      touchConversationAfterSend: async (id) =>
+        conversationRepository.updateConversation(id, patchAssigned) || conversation,
+    };
   }
 
   async _returnConversationToBot(conversationId, {

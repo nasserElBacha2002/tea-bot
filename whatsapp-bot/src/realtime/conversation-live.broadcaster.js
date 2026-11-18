@@ -70,6 +70,14 @@ export function publishConversationMessageCreated(conversationId, data = {}) {
   });
 }
 
+export function publishConversationMessageUpdated(conversationId, data = {}) {
+  publishConversationLiveEvent({
+    type: CONVERSATION_LIVE_EVENT_TYPES.MESSAGE_UPDATED,
+    conversationId,
+    data,
+  });
+}
+
 export function publishConversationAssigned(conversationId, data = {}) {
   publishConversationLiveEvent({
     type: CONVERSATION_LIVE_EVENT_TYPES.ASSIGNED,

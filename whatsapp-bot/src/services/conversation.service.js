@@ -392,7 +392,7 @@ class ConversationService {
     return result.conversation;
   }
 
-  async persistInboundMessage(conversation, event, extraMetadata = {}) {
+  async persistInboundMessage(conversation, event, extraMetadata = {}, options = {}) {
     const message = await conversationMessageRepository.createMessage({
       conversationId: conversation.id,
       direction: 'inbound',
@@ -410,7 +410,9 @@ class ConversationService {
 
     await conversationRepository.touchLastMessage(conversation.id);
     const refreshed = await this.reloadConversation(conversation);
-    notifyConversationMessageCreated(refreshed, message);
+    if (!options.deferNotify) {
+      notifyConversationMessageCreated(refreshed, message);
+    }
     return message;
   }
 }

@@ -19,7 +19,21 @@ function createHarness({ batches = [], onDelete, resetImpl } = {}) {
       },
     },
     runTransaction: async (fn) => fn(null),
+    attachmentRepo: {
+      listStoredKeysByConversationIds: async (ids) => ids.map((id) => `file-${id}.jpg`),
+    },
+    mediaService: {
+      deleteStoredObjects: async () => ({ deleted: 1, failed: 0 }),
+    },
     conversationRepo: {
+      listInactiveBatchIdsBefore: async (cutoff, { limit } = {}) => {
+        if (onDelete) {
+          const preview = await Promise.resolve(onDelete({ cutoff, limit, preview: true }));
+          return (preview || []).map((row) => row.id);
+        }
+        const batch = queue[0] || [];
+        return batch.slice(0, limit).map((row) => row.id);
+      },
       deleteInactiveBatchBefore: async (cutoff, { limit } = {}) => {
         calls.delete += 1;
         if (onDelete) return onDelete({ cutoff, limit, call: calls.delete });
@@ -68,7 +82,7 @@ test('runSweep elimina inactivas en batch y resetea sesiones runtime', async () 
     assert.equal(result.runtimeCleanupFailed, 0);
     assert.deepEqual(deletedIds, ['c1', 'c2', 'c3']);
     assert.deepEqual(resetUsers, ['user:c1', 'user:c2', 'user:c3']);
-    assert.equal(calls.delete, 3);
+    assert.equal(calls.delete, 2);
   });
 });
 
@@ -79,7 +93,9 @@ test('batchSize configurado 1000 con tope 500 procesa todas las filas', async ()
       externalUserId: `user:c${i}`,
     }));
     const { service } = createHarness({
-      onDelete: ({ limit }) => remaining.splice(0, limit),
+      onDelete: ({ limit, preview }) => (
+        preview ? remaining.slice(0, limit) : remaining.splice(0, limit)
+      ),
     });
     const result = await service.runSweep();
     assert.equal(result.conversationsDeleted, 1200);
@@ -95,7 +111,7 @@ test('segunda ejecución es idempotente (no encuentra filas)', async () => {
     assert.equal(first.conversationsDeleted, 0);
     assert.equal(second.conversationsDeleted, 0);
     assert.equal(deletedIds.length, 0);
-    assert.equal(calls.delete, 2);
+    assert.equal(calls.delete, 0);
   });
 });
 
@@ -122,11 +138,12 @@ test('deleteInactiveBatchBefore no borra si lastMessageAt se refrescó', async (
       lastMessageAt: new Date('2026-08-01T00:00:00.000Z'),
     };
     const { service } = createHarness({
-      onDelete: ({ cutoff }) => {
-        if (new Date(conversation.lastMessageAt) < cutoff) {
-          return [{ id: conversation.id, externalUserId: conversation.externalUserId }];
-        }
-        return [];
+      onDelete: ({ cutoff, preview }) => {
+        const eligible = new Date(conversation.lastMessageAt) < cutoff
+          ? [{ id: conversation.id, externalUserId: conversation.externalUserId }]
+          : [];
+        if (preview) return eligible;
+        return eligible;
       },
     });
     conversation.lastMessageAt = new Date();

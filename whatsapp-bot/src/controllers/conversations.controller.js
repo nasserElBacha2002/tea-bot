@@ -79,6 +79,21 @@ export const getConversationMessages = async (req, res) => {
   }
 };
 
+export const getMessageAttachmentContent = async (req, res) => {
+  try {
+    const download = String(req.query.download || '') === '1' || req.query.download === 'true';
+    await conversationInboxService.streamMessageAttachmentContent(
+      req.params.conversationId,
+      req.params.messageId,
+      req.params.attachmentId,
+      res,
+      { download },
+    );
+  } catch (error) {
+    return handleServiceError(res, error);
+  }
+};
+
 export const claimConversation = async (req, res) => {
   try {
     const actor = requireConversationOperator(req);
@@ -101,8 +116,18 @@ export const sendAgentMessage = async (req, res) => {
       req.body?.body,
       actor.agentId,
       req.adminUser,
+      {
+        attachment: req.body?.attachment,
+        attachments: req.body?.attachments,
+        clientRequestId: req.body?.clientRequestId,
+        batchClientRequestId: req.body?.batchClientRequestId,
+      },
     );
-    return sendSuccess(res, data, HTTP_STATUS.CREATED);
+    const isBatch = Array.isArray(req.body?.attachments) && req.body.attachments.length > 0;
+    const status = isBatch
+      ? HTTP_STATUS.OK
+      : HTTP_STATUS.CREATED;
+    return sendSuccess(res, data, status);
   } catch (error) {
     return handleServiceError(res, error);
   }

@@ -25,16 +25,25 @@ export const startSimulation = async (req, res) => {
  * Enviar mensaje a una simulación activa.
  */
 export const sendMessage = async (req, res) => {
-  const { sessionId, text } = req.body;
+  const { sessionId, text, attachment } = req.body ?? {};
 
   if (!sessionId) return sendError(res, 'sessionId es requerido', HTTP_STATUS.BAD_REQUEST);
-  if (text === undefined) return sendError(res, 'text es requerido', HTTP_STATUS.BAD_REQUEST);
+  if (text === undefined && !attachment?.contentBase64) {
+    return sendError(res, 'text o attachment es requerido', HTTP_STATUS.BAD_REQUEST);
+  }
 
   try {
-    const result = await simulatorService.sendMessage({ sessionId, text });
+    const result = await simulatorService.sendMessage({
+      sessionId,
+      text: text ?? '',
+      attachment,
+    });
     return sendSuccess(res, result);
   } catch (error) {
-    return sendError(res, error.message);
+    const message = error?.message || 'Error en simulador';
+    const validation = ['mime_not_allowed', 'size_limit_exceeded', 'content_empty', 'content_invalid']
+      .includes(message);
+    return sendError(res, message, validation ? HTTP_STATUS.BAD_REQUEST : HTTP_STATUS.INTERNAL_ERROR);
   }
 };
 

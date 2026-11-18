@@ -69,6 +69,31 @@ describe('ConversationMessageTimeline', () => {
     expect(screen.getAllByText(/Bot/)).toHaveLength(1);
   });
 
+  it('renderiza mensaje inbound con adjunto e imagen', () => {
+    const withMedia: ConversationMessage[] = [
+      {
+        ...messages[0],
+        id: 'media-1',
+        body: 'mirá',
+        attachments: [{
+          id: 'att-1',
+          ordinal: 0,
+          mimeType: 'image/png',
+          byteSize: 800,
+          originalName: 'captura.png',
+          status: 'stored',
+        }],
+      },
+    ];
+    render(
+      <ThemeProvider theme={theme}>
+        <ConversationMessageTimeline messages={withMedia} />
+      </ThemeProvider>,
+    );
+    expect(screen.getByText('mirá')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'captura.png' })).toBeInTheDocument();
+  });
+
   it('renderiza inputs cortos del usuario (1, humano, menú)', () => {
     const inputs: ConversationMessage[] = [
       { ...messages[0], id: 'u1', body: '1' },

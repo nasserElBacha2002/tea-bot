@@ -14,7 +14,9 @@ import {
   notifyConversationUpdated,
 } from '../realtime/conversation-live.notify.js';
 import conversationReopenService from './conversation-reopen.service.js';
-import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
+import { mapHumanHandoffPublic, mapMessagePublic } from '../utils/conversation-inbox.mapper.js';
+import inboundMediaService from './inbound-media.service.js';
+import attachmentRepository from '../repositories/conversation-message-attachment.repository.js';
 import {
   isConversationInHumanMode,
   isEngineHumanHandoffResult,
@@ -109,9 +111,9 @@ class SimulatorPersistenceService {
     return { conversation: created, created: true };
   }
 
-  async persistInboundUserMessage(conversation, sessionId, text) {
+  async persistInboundUserMessage(conversation, sessionId, text, { allowEmptyBody = false } = {}) {
     const trimmed = String(text ?? '').trim();
-    if (!trimmed) return null;
+    if (!trimmed && !allowEmptyBody) return null;
     return conversationMessageRepository.createMessage({
       conversationId: conversation.id,
       direction: 'inbound',
@@ -122,22 +124,29 @@ class SimulatorPersistenceService {
     });
   }
 
-  async emitUserInbound(conversation, inbound) {
+  async emitUserInbound(conversation, inbound, attachments = []) {
     if (!inbound) return;
     const updated = await conversationRepository.updateConversation(conversation.id, {
       lastMessageAt: new Date(),
     });
-    notifyConversationMessageCreated(updated, inbound);
+    notifyConversationMessageCreated(updated, inbound, { attachments });
   }
 
   /**
    * Persiste entrada del usuario ANTES de ejecutar FlowEngine y emite WebSocket.
    */
-  async persistUserInputBeforeEngine({ sessionId, text, flowId = null, flowVersion = null }) {
+  async persistUserInputBeforeEngine({
+    sessionId,
+    text,
+    flowId = null,
+    flowVersion = null,
+    attachment = null,
+  }) {
     if (!(await this.ensureReady())) return null;
 
     const trimmed = String(text ?? '').trim();
-    if (!trimmed) return null;
+    const hasAttachment = Boolean(attachment?.contentBase64);
+    if (!trimmed && !hasAttachment) return null;
 
     let conversation = await this.findBySessionId(sessionId);
     let created = false;
@@ -152,10 +161,33 @@ class SimulatorPersistenceService {
       conversation = reopened.conversation;
     }
 
-    const inbound = await this.persistInboundUserMessage(conversation, sessionId, trimmed);
-    await this.emitUserInbound(conversation, inbound);
+    const inbound = await this.persistInboundUserMessage(conversation, sessionId, trimmed, {
+      allowEmptyBody: hasAttachment,
+    });
+    let attachments = [];
+    if (inbound && hasAttachment) {
+      const buffer = Buffer.from(String(attachment.contentBase64), 'base64');
+      await inboundMediaService.storeSimulatorUpload({
+        conversation,
+        message: inbound,
+        buffer,
+        mimeType: attachment.mimeType,
+        originalName: attachment.fileName,
+      });
+      attachments = await attachmentRepository.findByMessageId(inbound.id);
+    }
+    await this.emitUserInbound(conversation, inbound, attachments);
 
-    return { conversation, created, inbound };
+    return {
+      conversation,
+      created,
+      inbound,
+      attachments,
+      mediaOnly: hasAttachment && !trimmed,
+      inboundMessage: inbound
+        ? mapMessagePublic(inbound, { attachments })
+        : null,
+    };
   }
 
   async syncDbSession(conversation, engineResult, flowVersion) {
@@ -311,21 +343,44 @@ class SimulatorPersistenceService {
     });
   }
 
-  async persistHumanModeInbound(sessionId, text) {
+  async persistHumanModeInbound(sessionId, text, attachment = null) {
     if (!(await this.ensureReady())) return null;
     const conversation = await this.findActiveBySessionId(sessionId);
     if (!conversation) return null;
 
-    const inbound = await this.persistInboundUserMessage(conversation, sessionId, text);
+    const hasAttachment = Boolean(attachment?.contentBase64);
+    const trimmed = String(text ?? '').trim();
+    if (!trimmed && !hasAttachment) return null;
+
+    const inbound = await this.persistInboundUserMessage(conversation, sessionId, trimmed, {
+      allowEmptyBody: hasAttachment,
+    });
     if (!inbound) return null;
+
+    let attachments = [];
+    if (hasAttachment) {
+      const buffer = Buffer.from(String(attachment.contentBase64), 'base64');
+      await inboundMediaService.storeSimulatorUpload({
+        conversation,
+        message: inbound,
+        buffer,
+        mimeType: attachment.mimeType,
+        originalName: attachment.fileName,
+      });
+      attachments = await attachmentRepository.findByMessageId(inbound.id);
+    }
 
     const updated = await conversationRepository.updateConversation(conversation.id, {
       displayName: displayNameForSimulatorStatus(conversation.status),
       lastMessageAt: new Date(),
     });
-    notifyConversationMessageCreated(updated, inbound);
+    notifyConversationMessageCreated(updated, inbound, { attachments });
     await this.notifyWithHandoff(updated);
-    return { conversationId: updated.id };
+    return {
+      conversationId: updated.id,
+      inboundMessage: mapMessagePublic(inbound, { attachments }),
+      mediaOnly: hasAttachment && !trimmed,
+    };
   }
 }
 

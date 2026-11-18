@@ -4,6 +4,10 @@ import {
   clampRetentionBatchSize,
   parsePositiveInt,
 } from './utils/conversation-retention.js';
+import {
+  parseAllowedInboundMimeCsv,
+  parseInboundMediaMaxBytes,
+} from './utils/inbound-media-policy.js';
 
 dotenv.config();
 
@@ -296,6 +300,16 @@ export const config = {
   conversationClassificationReconciliationEnabled: ['1', 'true', 'yes', 'on'].includes(
     String(process.env.CONVERSATION_CLASSIFICATION_RECONCILIATION_ENABLED || 'false').trim().toLowerCase(),
   ),
+  inboundMediaEnabled: envFlag('INBOUND_MEDIA_ENABLED', true),
+  inboundMediaStorageDir: (process.env.INBOUND_MEDIA_STORAGE_DIR || '').trim(),
+  inboundMediaMaxBytes: parseInboundMediaMaxBytes(process.env.INBOUND_MEDIA_MAX_BYTES),
+  inboundMediaDownloadTimeoutMs: parsePositiveInt(process.env.INBOUND_MEDIA_DOWNLOAD_TIMEOUT_MS, 30_000),
+  inboundMediaAllowedMimeTypes: parseAllowedInboundMimeCsv(process.env.INBOUND_MEDIA_ALLOWED_MIME_TYPES),
+  inboundMediaMaxRetries: parsePositiveInt(process.env.INBOUND_MEDIA_MAX_RETRIES, 5),
+  inboundMediaRetryBaseMs: parsePositiveInt(process.env.INBOUND_MEDIA_RETRY_BASE_MS, 5_000),
+  inboundMediaSweepIntervalSeconds: parsePositiveInt(process.env.INBOUND_MEDIA_SWEEP_INTERVAL_SECONDS, 15),
+  inboundMediaSweepBatchSize: parsePositiveInt(process.env.INBOUND_MEDIA_SWEEP_BATCH_SIZE, 10),
+  inboundMediaStuckDownloadingSeconds: parsePositiveInt(process.env.INBOUND_MEDIA_STUCK_DOWNLOADING_SECONDS, 300),
   dbServer: (process.env.DB_SERVER || '').trim(),
   dbPort: Number(process.env.DB_PORT || 1433),
   dbName: (process.env.DB_NAME || 'tea_bot').trim(),

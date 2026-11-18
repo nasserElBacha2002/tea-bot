@@ -29,3 +29,14 @@ test('assertConfigured falla sin variables Twilio', () => {
   if (prev.TWILIO_AUTH_TOKEN) process.env.TWILIO_AUTH_TOKEN = prev.TWILIO_AUTH_TOKEN;
   if (prev.TWILIO_WHATSAPP_FROM) process.env.TWILIO_WHATSAPP_FROM = prev.TWILIO_WHATSAPP_FROM;
 });
+
+test('sendWhatsAppMessage exige body o mediaUrl', async () => {
+  process.env.TWILIO_ACCOUNT_SID = 'ACtest';
+  process.env.TWILIO_AUTH_TOKEN = 'token';
+  process.env.TWILIO_WHATSAPP_FROM = 'whatsapp:+14155238886';
+  const service = new TwilioWhatsAppService();
+  await assert.rejects(
+    () => service.sendWhatsAppMessage({ to: '+5491155551234', body: '', mediaUrl: null }),
+    (err) => err.code === 'TWILIO_EMPTY_PAYLOAD',
+  );
+});

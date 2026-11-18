@@ -30,21 +30,30 @@ export class TwilioWhatsAppService {
   }
 
   /**
-   * @param {{ to: string, body: string }} params
+   * @param {{ to: string, body?: string, mediaUrl?: string | null }} params
    * @returns {Promise<{ sid: string | null }>}
    */
-  async sendWhatsAppMessage({ to, body }) {
+  async sendWhatsAppMessage({ to, body, mediaUrl = null }) {
     this.assertConfigured();
 
     const toAddress = String(to).startsWith('whatsapp:')
       ? to
       : toTwilioWhatsAppAddress(to);
 
+    const trimmedBody = String(body || '').trim();
+    const media = String(mediaUrl || '').trim();
+    if (!trimmedBody && !media) {
+      const err = new Error('Twilio requiere body o media');
+      err.code = 'TWILIO_EMPTY_PAYLOAD';
+      throw err;
+    }
+
     const url = `https://api.twilio.com/2010-04-01/Accounts/${config.twilioAccountSid}/Messages.json`;
     const payload = new URLSearchParams();
     payload.append('To', toAddress);
     payload.append('From', config.twilioWhatsappFrom);
-    payload.append('Body', body);
+    if (trimmedBody) payload.append('Body', trimmedBody);
+    if (media) payload.append('MediaUrl', media);
 
     try {
       const { data } = await axios.post(url, payload.toString(), {

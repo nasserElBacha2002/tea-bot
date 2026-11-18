@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { conversationsApi } from '../api/conversationsApi';
+import { conversationsApi, type SendAgentMessageInput } from '../api/conversationsApi';
 import type { ConversationListFilters, InboxConversationItem } from '../types/conversation.types';
 
 export const conversationKeys = {
@@ -79,8 +79,11 @@ export function useClaimConversation(filters: ConversationListFilters) {
 export function useSendAgentMessage(filters: ConversationListFilters) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ conversationId, body }: { conversationId: string; body: string }) =>
-      conversationsApi.sendMessage(conversationId, body),
+    mutationFn: ({
+      conversationId,
+      ...input
+    }: { conversationId: string } & SendAgentMessageInput) =>
+      conversationsApi.sendMessage(conversationId, input),
     onSuccess: (_data, { conversationId }) => {
       queryClient.invalidateQueries({ queryKey: conversationKeys.list(filters) });
       queryClient.invalidateQueries({ queryKey: conversationKeys.detail(conversationId) });

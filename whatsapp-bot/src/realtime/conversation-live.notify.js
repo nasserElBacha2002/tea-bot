@@ -1,4 +1,5 @@
 import {
+  mapAttachmentPublic,
   mapConversationPublic,
   mapHumanHandoffPublic,
   mapLastMessagePublic,
@@ -10,6 +11,7 @@ import {
   publishConversationClosed,
   publishConversationCreated,
   publishConversationMessageCreated,
+  publishConversationMessageUpdated,
   publishConversationReturnedToBot,
   publishConversationUpdated,
 } from './conversation-live.broadcaster.js';
@@ -38,11 +40,32 @@ export function notifyConversationUpdated(conversation, extras = {}) {
 }
 
 export function notifyConversationMessageCreated(conversation, message, extras = {}) {
+  const { attachments: attachmentRows = [], ...safeExtras } = extras;
+  const rows = Array.isArray(attachmentRows) ? attachmentRows : [];
   publishConversationMessageCreated(conversation.id, {
-    message: mapMessagePublic(message),
+    message: mapMessagePublic(message, {
+      attachments: rows.map((row) => mapAttachmentPublic(row)).filter(Boolean),
+    }),
     lastMessage: mapLastMessagePublic(message),
     conversation: conversationPayload(conversation),
-    ...extras,
+    ...safeExtras,
+  });
+}
+
+export function notifyConversationMessageUpdated(conversation, message, extras = {}) {
+  const {
+    attachments: attachmentRows = [],
+    whatsappDelivery = undefined,
+    ...safeExtras
+  } = extras;
+  const rows = Array.isArray(attachmentRows) ? attachmentRows : [];
+  publishConversationMessageUpdated(conversation.id, {
+    message: mapMessagePublic(message, {
+      attachments: rows.map((row) => mapAttachmentPublic(row)).filter(Boolean),
+      whatsappDelivery,
+    }),
+    conversation: conversationPayload(conversation),
+    ...safeExtras,
   });
 }
 

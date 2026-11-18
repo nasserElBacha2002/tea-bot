@@ -1,5 +1,8 @@
 import { processCanonicalTwilioInbound } from '../services/twilio-inbound-pipeline.js';
-import { toCanonicalTwilioInboundEvent } from '../adapters/twilio/twilio-inbound.adapter.js';
+import {
+  inboundEventHasProcessableContent,
+  toCanonicalTwilioInboundEvent,
+} from '../adapters/twilio/twilio-inbound.adapter.js';
 import {
   buildEmptyTwimlResponse,
   buildTwimlMessage,
@@ -65,6 +68,7 @@ export async function settleTwilioInbound({
     userIdMasked: maskId(event.userId),
     messageIdMasked: maskId(event.messageId),
     inboundLength: event.text?.length || 0,
+    inboundMediaCount: event.media?.length || 0,
   });
 
   let gate;
@@ -99,7 +103,7 @@ export async function settleTwilioInbound({
 
   try {
     let processed = null;
-    if (event.text) {
+    if (inboundEventHasProcessableContent(event)) {
       processed = await processInbound(event, {
         perfContext,
         lease: gate?.id ? { id: gate.id, attempts: gate.attempts } : null,

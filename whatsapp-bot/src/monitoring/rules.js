@@ -138,11 +138,18 @@ export function reconcileMessageSets({ twilioSids = [], dbSids = [], queryFailed
   return { status, missingInDb, dbOnly };
 }
 
+export function isExactDeliveryStatusDuplicate(current, next) {
+  const incoming = String(next || '').toLowerCase();
+  const previous = String(current || '').toLowerCase();
+  return Boolean(previous && incoming === previous);
+}
+
 export function shouldApplyDeliveryStatus(current, next) {
   const incoming = String(next || '').toLowerCase();
   if (!incoming) return false;
   const previous = String(current || '').toLowerCase();
   if (!previous) return true;
+  if (isExactDeliveryStatusDuplicate(previous, incoming)) return false;
   if (previous === 'read') return false;
   if (previous === 'delivered') return incoming === 'read';
   if (FAILURE_STATUSES.has(previous)) return false;

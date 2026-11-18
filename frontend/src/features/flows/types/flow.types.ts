@@ -1,3 +1,5 @@
+import type { ConversationMessage } from '../../conversations/types/conversation.types';
+
 export type FlowNodeDataType = 'message' | 'capture' | 'redirect' | 'end';
 
 export type FlowTransitionType = 'match' | 'matchAny' | 'matchIncludes' | 'default';
@@ -61,12 +63,21 @@ export interface SimulatorSession {
   variables: Record<string, unknown>;
 }
 
+export interface SimulatorAttachmentPayload {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
 export interface SimulatorResponse {
   sessionId: string;
   reply: string;
   flowId: string;
   currentNodeId: string;
   variables: Record<string, unknown>;
+  conversationId?: string | null;
+  inboundMessage?: ConversationMessage | null;
+  mediaOnly?: boolean;
 }
 
 export interface PublishedVersionMeta {

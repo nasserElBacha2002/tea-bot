@@ -252,6 +252,7 @@ test('getConversationMessages devuelve mensajes ordenados', async () => {
   assert.equal(msgs.items.length, 1);
   assert.equal(msgs.items[0].direction, 'inbound');
   assert.deepEqual(msgs.items[0].metadata, { botSkipped: true });
+  assert.deepEqual(msgs.items[0].attachments, []);
 });
 
 test('listInboxConversations respeta filtros en repositorio', async () => {

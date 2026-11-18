@@ -1,4 +1,8 @@
+import { hasInboundMedia } from '../adapters/twilio/twilio-inbound.adapter.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+import attachmentRepository from '../repositories/conversation-message-attachment.repository.js';
+import inboundMediaService from './inbound-media.service.js';
+import inboundMediaFetchService from './inbound-media-fetch.service.js';
 import { twilioTurnOutboundId } from '../monitoring/webhook-events.service.js';
 import conversationService from './conversation.service.js';
 import humanHandoffService from './human-handoff.service.js';
@@ -10,6 +14,7 @@ import { isConversationInHumanMode, resolveHandoffConfirmationMessage } from '..
 import { shouldBlockBotFlow } from '../utils/conversation-handoff-policy.js';
 import { isConversationDbEnabled } from '../db/index.js';
 import { conversationTurnGuard } from './conversation-turn-guard.service.js';
+import { notifyConversationMessageCreated } from '../realtime/conversation-live.notify.js';
 
 function inboundSkipMetadata(conversation, activeHandoff = null) {
   if (conversation.status === 'assigned') {
@@ -33,6 +38,24 @@ function inboundSkipMetadata(conversation, activeHandoff = null) {
 class MessagePersistenceService {
   isEnabled() {
     return conversationService.isEnabled();
+  }
+
+  async persistInboundWithMedia(conversation, event, extraMetadata = {}) {
+    const message = await conversationService.persistInboundMessage(
+      conversation,
+      event,
+      extraMetadata,
+      { deferNotify: true },
+    );
+    let attachments = [];
+    if (inboundMediaService.isEnabled() && hasInboundMedia(event)) {
+      await inboundMediaService.ensureInboundAttachmentRows({ conversation, message, event });
+      inboundMediaFetchService.scheduleNudge();
+      attachments = await attachmentRepository.findByMessageId(message.id);
+    }
+    const refreshed = await conversationService.reloadConversation(conversation);
+    notifyConversationMessageCreated(refreshed, message, { attachments });
+    return message;
   }
 
   /**
@@ -78,7 +101,7 @@ class MessagePersistenceService {
     const outboundId = twilioTurnOutboundId(event.messageId);
 
     if (isConversationInHumanMode(conversation)) {
-      await conversationService.persistInboundMessage(
+      await this.persistInboundWithMedia(
         conversation,
         event,
         inboundSkipMetadata(conversation),
@@ -90,7 +113,7 @@ class MessagePersistenceService {
       conversation.id,
     );
     if (shouldBlockBotFlow(conversation, activeHandoff)) {
-      await conversationService.persistInboundMessage(
+      await this.persistInboundWithMedia(
         conversation,
         event,
         inboundSkipMetadata(conversation, activeHandoff),
@@ -98,8 +121,12 @@ class MessagePersistenceService {
       return { conversation, dbSession: null, skipFlowEngine: true };
     }
 
-    await conversationService.persistInboundMessage(conversation, event);
+    await this.persistInboundWithMedia(conversation, event);
     conversation = await conversationService.reloadConversation(conversation);
+
+    if (!String(event.text || '').trim() && hasInboundMedia(event)) {
+      return { conversation, dbSession: null, skipFlowEngine: true, mediaOnly: true };
+    }
 
     const reentry = await conversationReentryService.consumeInbound(conversation, event.text || '', {
       providerMessageId: event.messageId || null,

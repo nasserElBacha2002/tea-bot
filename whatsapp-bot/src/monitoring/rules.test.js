@@ -10,6 +10,7 @@ import {
   evaluateAlertConditions,
   isFailureRateHigh,
   reconcileMessageSets,
+  isExactDeliveryStatusDuplicate,
   shouldApplyDeliveryStatus,
   shouldEmitAlert,
 } from './rules.js';
@@ -163,7 +164,10 @@ test('clasificador: provider issue, DB, cuenta Twilio y healthy', () => {
 });
 
 test('delivery status no pisa un estado final', () => {
+  assert.equal(isExactDeliveryStatusDuplicate('sent', 'sent'), true);
+  assert.equal(isExactDeliveryStatusDuplicate('sent', 'delivered'), false);
   assert.equal(shouldApplyDeliveryStatus(null, 'queued'), true);
+  assert.equal(shouldApplyDeliveryStatus('sent', 'sent'), false);
   assert.equal(shouldApplyDeliveryStatus('sent', 'delivered'), true);
   assert.equal(shouldApplyDeliveryStatus('delivered', 'sent'), false);
   assert.equal(shouldApplyDeliveryStatus('delivered', 'failed'), false);

@@ -4,6 +4,8 @@ import conversationRepository from '../repositories/conversation.repository.js';
 import sessionService from './session.service.js';
 import { computeRetentionCutoff } from '../utils/conversation-retention.js';
 import { noteRetentionSignal } from '../monitoring/job-status.store.js';
+import attachmentRepository from '../repositories/conversation-message-attachment.repository.js';
+import inboundMediaService from './inbound-media.service.js';
 
 function logRetention(event, payload = {}) {
   console.log(JSON.stringify({
@@ -30,6 +32,8 @@ export class ConversationRetentionService {
   /**
    * @param {{
    *   conversationRepo?: typeof conversationRepository,
+   *   attachmentRepo?: typeof attachmentRepository,
+   *   mediaService?: typeof inboundMediaService,
    *   runtimeSession?: typeof sessionService,
    *   runTransaction?: typeof withTransaction,
    *   dbEnabled?: () => boolean,
@@ -37,6 +41,8 @@ export class ConversationRetentionService {
    */
   constructor(deps = {}) {
     this.conversationRepo = deps.conversationRepo || conversationRepository;
+    this.attachmentRepo = deps.attachmentRepo || attachmentRepository;
+    this.mediaService = deps.mediaService || inboundMediaService;
     this.runtimeSession = deps.runtimeSession || sessionService;
     this.runTransaction = deps.runTransaction || withTransaction;
     this.dbEnabled = deps.dbEnabled || isConversationDbEnabled;
@@ -44,6 +50,8 @@ export class ConversationRetentionService {
     this.running = false;
     /** @type {Map<string, { conversationId: string, externalUserId: string }>} */
     this.pendingRuntimeCleanup = new Map();
+    /** @type {Set<string>} */
+    this.pendingMediaDeletes = new Set();
   }
 
   isEnabled() {
@@ -141,23 +149,39 @@ export class ConversationRetentionService {
       const pendingRetry = await this._retryPendingRuntimeCleanup();
       runtimeCleaned += pendingRetry.cleaned;
       runtimeCleanupFailed += pendingRetry.failed;
+      await this._retryPendingMediaDeletes();
 
       while (true) {
-        const deleted = await this.runTransaction(async (transaction) => (
-          this.conversationRepo.deleteInactiveBatchBefore(cutoff, {
+        const deleted = await this.runTransaction(async (transaction) => {
+          const conversationIds = await this.conversationRepo.listInactiveBatchIdsBefore(cutoff, {
             limit: batchSize,
             transaction,
-          })
-        ));
-        if (deleted.length === 0) break;
+          });
+          if (conversationIds.length === 0) return { rows: [], storageKeys: [] };
+          const storageKeys = await this.attachmentRepo.listStoredKeysByConversationIds(
+            conversationIds,
+            { transaction },
+          );
+          const rows = await this.conversationRepo.deleteInactiveBatchBefore(cutoff, {
+            limit: batchSize,
+            transaction,
+          });
+          return { rows, storageKeys };
+        });
+        const removed = deleted.rows || [];
+        if (removed.length === 0) break;
+        for (const key of deleted.storageKeys || []) {
+          this.pendingMediaDeletes.add(key);
+        }
 
-        conversationsFound += deleted.length;
-        conversationsDeleted += deleted.length;
-        for (const row of deleted) {
+        conversationsFound += removed.length;
+        conversationsDeleted += removed.length;
+        for (const row of removed) {
           logRetention('sql_deleted', { conversationId: row.id });
         }
 
-        const cleanup = await this._cleanupRuntimeSessions(deleted);
+        await this._flushPendingMediaDeletes();
+        const cleanup = await this._cleanupRuntimeSessions(removed);
         runtimeCleaned += cleanup.cleaned;
         runtimeCleanupFailed += cleanup.failed;
       }
@@ -228,6 +252,27 @@ export class ConversationRetentionService {
       }
     }
     return { cleaned, failed };
+  }
+
+  async _flushPendingMediaDeletes() {
+    let deleted = 0;
+    let failed = 0;
+    for (const key of [...this.pendingMediaDeletes]) {
+      const result = await this.mediaService.deleteStoredObjects([key]);
+      if (result.deleted > 0) {
+        this.pendingMediaDeletes.delete(key);
+        deleted += 1;
+      } else if (result.failed > 0) {
+        failed += 1;
+      } else {
+        this.pendingMediaDeletes.delete(key);
+      }
+    }
+    return { deleted, failed };
+  }
+
+  async _retryPendingMediaDeletes() {
+    return this._flushPendingMediaDeletes();
   }
 }
 

@@ -10,6 +10,7 @@ import conversationsRouter from './routes/conversations.routes.js';
 import devConversationsRouter from './routes/dev-conversations.routes.js';
 import flowManagementRouter from './routes/flow-management.routes.js';
 import monitoringRouter from './routes/monitoring.routes.js';
+import outboundMediaRouter from './routes/outbound-media.routes.js';
 import compositeFlowLoader from './loaders/composite-flow-loader.js';
 import {
   rememberUrlencodedBody,
@@ -23,20 +24,25 @@ import {
 export function createApp() {
   const app = express();
   const JSON_BODY_LIMIT = process.env.EXPRESS_JSON_LIMIT ?? '2mb';
+  const SIMULATOR_JSON_LIMIT = process.env.SIMULATOR_JSON_LIMIT ?? '24mb';
+  const INBOX_JSON_LIMIT = process.env.INBOX_JSON_LIMIT ?? SIMULATOR_JSON_LIMIT;
 
+  app.use(createCorsMiddleware());
+  app.use('/api/conversations', express.json({ limit: INBOX_JSON_LIMIT }));
+  app.use('/api/simulator', express.json({ limit: SIMULATOR_JSON_LIMIT }));
+  app.use('/api/simulator', simulatorRouter);
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(express.urlencoded({
     extended: false,
     limit: JSON_BODY_LIMIT,
     verify: rememberUrlencodedBody,
   }));
-  app.use(createCorsMiddleware());
 
   app.use('/webhook', webhookRouter);
   app.use('/webhooks/twilio', twilioWebhookRouter);
+  app.use('/media', outboundMediaRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/flows', flowAdminRouter);
-  app.use('/api/simulator', simulatorRouter);
   app.use('/api/conversations', conversationsRouter);
   app.use('/api/dev/conversations', devConversationsRouter);
   app.use('/api/flow-management', flowManagementRouter);

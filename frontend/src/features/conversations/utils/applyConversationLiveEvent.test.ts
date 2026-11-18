@@ -513,4 +513,155 @@ describe('applyConversationLiveEvent', () => {
     expect(detail?.conversation.canForceReturn).toBe(false);
     expect(detail?.conversation.takeoverBlock).toBe('shared_inbox');
   });
+
+  it('conversation.message.updated fusiona attachments en cache', () => {
+    const qc = new QueryClient();
+    const msgKey = conversationKeys.messages('c1');
+    qc.setQueryData<ConversationMessagesResponse>(msgKey, {
+      items: [{
+        id: 'm1',
+        conversationId: 'c1',
+        direction: 'inbound',
+        senderType: 'user',
+        body: '',
+        provider: 'twilio',
+        providerMessageId: null,
+        metadata: null,
+        createdAt: '1',
+        attachments: [{ id: 'a1', ordinal: 0, mimeType: 'image/jpeg', byteSize: null, originalName: null, status: 'pending' }],
+      }],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.message.updated',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          message: {
+            id: 'm1',
+            conversationId: 'c1',
+            direction: 'inbound',
+            senderType: 'user',
+            body: '',
+            provider: 'twilio',
+            providerMessageId: null,
+            metadata: null,
+            createdAt: '1',
+            attachments: [{
+              id: 'a1',
+              ordinal: 0,
+              mimeType: 'image/jpeg',
+              byteSize: 120,
+              originalName: 'foto.jpg',
+              status: 'stored',
+            }],
+          },
+        },
+      },
+      'c1',
+    );
+
+    const data = qc.getQueryData<ConversationMessagesResponse>(msgKey);
+    expect(data?.items[0]?.attachments?.[0]?.status).toBe('stored');
+  });
+
+  it('conversation.message.updated actualiza whatsappDelivery del mensaje abierto', () => {
+    const qc = new QueryClient();
+    const msgKey = conversationKeys.messages('c1');
+    qc.setQueryData<ConversationMessagesResponse>(msgKey, {
+      items: [{
+        id: 'm-out',
+        conversationId: 'c1',
+        direction: 'outbound',
+        senderType: 'agent',
+        body: 'hola',
+        provider: 'twilio',
+        providerMessageId: 'SM9',
+        metadata: null,
+        createdAt: '1',
+        dispatch: { state: 'confirmed' },
+        whatsappDelivery: { status: 'sent' },
+      }],
+      total: 1,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.message.updated',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          message: {
+            id: 'm-out',
+            conversationId: 'c1',
+            direction: 'outbound',
+            senderType: 'agent',
+            body: 'hola',
+            provider: 'twilio',
+            providerMessageId: 'SM9',
+            metadata: null,
+            createdAt: '1',
+            dispatch: { state: 'confirmed' },
+            whatsappDelivery: { status: 'delivered' },
+          },
+        },
+      },
+      'c1',
+    );
+
+    const data = qc.getQueryData<ConversationMessagesResponse>(msgKey);
+    expect(data?.items[0]?.whatsappDelivery?.status).toBe('delivered');
+  });
+
+  it('conversation.message.updated fuera de cache invalida mensajes sin inflar total', () => {
+    const qc = new QueryClient();
+    const invalidateSpy = vi.spyOn(qc, 'invalidateQueries');
+    const msgKey = conversationKeys.messages('c1');
+    qc.setQueryData<ConversationMessagesResponse>(msgKey, {
+      items: [],
+      total: 0,
+      limit: 200,
+      offset: 0,
+      order: 'asc',
+    });
+
+    applyConversationLiveEvent(
+      qc,
+      {
+        type: 'conversation.message.updated',
+        conversationId: 'c1',
+        occurredAt: new Date().toISOString(),
+        data: {
+          message: {
+            id: 'm-missing',
+            conversationId: 'c1',
+            direction: 'outbound',
+            senderType: 'agent',
+            body: 'hola',
+            provider: 'twilio',
+            providerMessageId: 'SM-9',
+            metadata: null,
+            createdAt: '1',
+            whatsappDelivery: { status: 'delivered' },
+          },
+        },
+      },
+      'c1',
+    );
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: msgKey });
+    const data = qc.getQueryData<ConversationMessagesResponse>(msgKey);
+    expect(data?.total).toBe(0);
+    expect(data?.items).toHaveLength(0);
+  });
 });

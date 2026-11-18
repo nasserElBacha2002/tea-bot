@@ -102,7 +102,7 @@ export const SimulatorPanel: React.FC<SimulatorPanelProps> = ({
             loading={sim.loading}
             started={sim.started}
             sending={sim.sending}
-            onSend={text => void sim.sendMessage(text)}
+            onSend={(text, file) => void sim.sendMessage(text, file)}
             showEmptyHint={sim.messages.length === 0}
           />
           <Box sx={{ mt: 1, flexShrink: 0 }}>

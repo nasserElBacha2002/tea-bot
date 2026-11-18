@@ -7,6 +7,7 @@ export type ConversationLiveEventType =
   | 'conversation.created'
   | 'conversation.updated'
   | 'conversation.message.created'
+  | 'conversation.message.updated'
   | 'conversation.assigned'
   | 'conversation.closed'
   | 'conversation.returned_to_bot';

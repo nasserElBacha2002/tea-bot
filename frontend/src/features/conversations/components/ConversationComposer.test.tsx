@@ -27,7 +27,9 @@ describe('ConversationComposer', () => {
     const input = screen.getByPlaceholderText(/escribí una respuesta/i);
     await user.type(input, 'Hola desde el equipo');
     await user.click(screen.getByRole('button', { name: /^enviar$/i }));
-    expect(onSend).toHaveBeenCalledWith('Hola desde el equipo');
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Hola desde el equipo', files: [] }),
+    );
   });
 
   it('owned_by_other sigue bloqueando agentes sin permiso del panel', () => {
@@ -60,7 +62,9 @@ describe('ConversationComposer', () => {
     const input = screen.getByPlaceholderText(/escribí una respuesta/i);
     await user.type(input, 'Continúo la atención');
     await user.click(screen.getByRole('button', { name: /^enviar$/i }));
-    expect(onSend).toHaveBeenCalledWith('Continúo la atención');
+    expect(onSend).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Continúo la atención', files: [] }),
+    );
   });
 
   it('closed muestra mensaje de no responder', () => {

@@ -41,6 +41,51 @@ function buildParams(filters: ConversationListFilters): Record<string, string | 
 export interface SendMessageResponse {
   message: ConversationMessage;
   conversation: InboxConversationItem;
+  idempotent?: boolean;
+}
+
+export interface AgentOutboundAttachment {
+  fileName: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
+export interface OutboundAttachmentItem extends AgentOutboundAttachment {
+  clientRequestId: string;
+  includeBody?: boolean;
+}
+
+export interface SendAgentMessageInput {
+  body?: string;
+  attachment?: AgentOutboundAttachment;
+  attachments?: OutboundAttachmentItem[];
+  clientRequestId?: string;
+  batchClientRequestId?: string;
+}
+
+export interface SendMessageBatchResponse {
+  results: Array<{
+    clientRequestId: string;
+    ok: boolean;
+    message?: ConversationMessage;
+    error?: { code?: string; message?: string };
+    deliveryState?: string;
+    idempotent?: boolean;
+  }>;
+  partial: boolean;
+  allSucceeded: boolean;
+  conversation: InboxConversationItem;
+}
+
+export function conversationAttachmentContentUrl(
+  conversationId: string,
+  messageId: string,
+  attachmentId: string,
+  options: { download?: boolean } = {},
+): string {
+  const base = `${API_ORIGIN}/api/conversations/${conversationId}/messages/${messageId}/attachments/${attachmentId}/content`;
+  if (options.download) return `${base}?download=1`;
+  return base;
 }
 
 export const conversationsApi = {
@@ -77,9 +122,15 @@ export const conversationsApi = {
 
   sendMessage: async (
     conversationId: string,
-    body: string,
-  ): Promise<SendMessageResponse> => {
-    const { data } = await client.post(`/${conversationId}/messages`, { body });
+    input: SendAgentMessageInput,
+  ): Promise<SendMessageResponse | SendMessageBatchResponse> => {
+    const { data } = await client.post(`/${conversationId}/messages`, {
+      body: input.body ?? '',
+      attachment: input.attachment,
+      attachments: input.attachments,
+      clientRequestId: input.clientRequestId,
+      batchClientRequestId: input.batchClientRequestId,
+    });
     return data.data;
   },
 

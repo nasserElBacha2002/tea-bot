@@ -81,6 +81,45 @@ export interface ConversationDetailResponse {
   humanHandoff: ConversationHumanHandoff | null;
 }
 
+export type ConversationMessageAttachmentStatus =
+  | 'pending'
+  | 'downloading'
+  | 'stored'
+  | 'failed';
+
+export interface ConversationMessageAttachment {
+  id: string;
+  ordinal: number;
+  mimeType: string | null;
+  byteSize: number | null;
+  originalName: string | null;
+  status: ConversationMessageAttachmentStatus;
+}
+
+export type OutboundDispatchState = 'pending' | 'confirmed' | 'failed' | 'uncertain';
+
+export interface OutboundDispatch {
+  state: OutboundDispatchState;
+  error?: string | null;
+}
+
+export type WhatsappDeliveryStatus =
+  | 'queued'
+  | 'sending'
+  | 'accepted'
+  | 'sent'
+  | 'delivered'
+  | 'read'
+  | 'failed'
+  | 'undelivered';
+
+export interface WhatsappDelivery {
+  status: WhatsappDeliveryStatus;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  statusAt?: string | null;
+}
+
 export interface ConversationMessage {
   id: string;
   conversationId: string;
@@ -91,6 +130,9 @@ export interface ConversationMessage {
   providerMessageId: string | null;
   metadata: Record<string, unknown> | null;
   createdAt: string;
+  attachments?: ConversationMessageAttachment[];
+  dispatch?: OutboundDispatch | null;
+  whatsappDelivery?: WhatsappDelivery | null;
 }
 
 export interface ConversationMessagesResponse {

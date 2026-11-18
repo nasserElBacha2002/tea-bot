@@ -396,6 +396,20 @@ class ConversationRepository {
    * El DELETE revalida el cutoff para no borrar actividad nueva (cierra TOCTOU).
    * UPDLOCK + READPAST: no espera filas que inbound está actualizando.
    */
+  async listInactiveBatchIdsBefore(cutoff, { limit = 100, transaction } = {}) {
+    const safeLimit = clampRetentionBatchSize(limit);
+    const { rows } = await query(
+      `SELECT TOP ($2) id
+       FROM dbo.conversations WITH (UPDLOCK, READPAST, ROWLOCK)
+       WHERE (last_message_at IS NOT NULL AND last_message_at < $1)
+          OR (last_message_at IS NULL AND started_at < $1)
+       ORDER BY COALESCE(last_message_at, started_at) ASC`,
+      [cutoff, safeLimit],
+      { transaction },
+    );
+    return (rows || []).map((row) => row.id);
+  }
+
   async deleteInactiveBatchBefore(cutoff, { limit = 100, transaction } = {}) {
     const safeLimit = clampRetentionBatchSize(limit);
     const { rows } = await query(

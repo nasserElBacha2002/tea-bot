@@ -255,12 +255,33 @@ export function applyConversationLiveEvent(
       const prev = queryClient.getQueryData<ConversationMessagesResponse>(msgKey);
       if (prev) {
         const exists = prev.items.some((m) => m.id === message.id);
-        if (!exists) {
+        if (!exists && event.type === 'conversation.message.created') {
           queryClient.setQueryData(msgKey, {
             ...prev,
             items: [...prev.items, message],
             total: prev.total + 1,
           });
+        } else if (exists && event.type === 'conversation.message.updated') {
+          queryClient.setQueryData(msgKey, {
+            ...prev,
+            items: prev.items.map((m) => (
+              m.id === message.id
+                ? {
+                    ...m,
+                    ...message,
+                    attachments: message.attachments ?? m.attachments,
+                    dispatch: Object.prototype.hasOwnProperty.call(message, 'dispatch')
+                      ? message.dispatch
+                      : m.dispatch,
+                    whatsappDelivery: Object.prototype.hasOwnProperty.call(message, 'whatsappDelivery')
+                      ? message.whatsappDelivery
+                      : m.whatsappDelivery,
+                  }
+                : m
+            )),
+          });
+        } else if (!exists && event.type === 'conversation.message.updated') {
+          void queryClient.invalidateQueries({ queryKey: msgKey });
         }
       }
     }

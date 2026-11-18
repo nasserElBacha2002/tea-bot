@@ -19,7 +19,11 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import type { ConversationDetailResponse } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
 import { ConversationMessageTimeline } from './ConversationMessageTimeline';
-import { ConversationComposer } from './ConversationComposer';
+import {
+  ConversationComposer,
+  type ComposerSendPayload,
+  type ComposerSendResult,
+} from './ConversationComposer';
 import { ContactNameEditor } from './ContactNameEditor';
 import type { ConversationMessage } from '../types/conversation.types';
 import {
@@ -46,7 +50,7 @@ interface Props {
   successMessage?: string | null;
   readAt?: string | null;
   onCaughtUp?: (readThroughAt: string) => void;
-  onSend: (body: string) => Promise<void>;
+  onSend: (payload: ComposerSendPayload) => Promise<ComposerSendResult | void>;
   onClaim: () => Promise<void>;
   onTakeover?: () => Promise<void>;
   onClose: () => Promise<void>;

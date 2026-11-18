@@ -7,6 +7,7 @@ import { getFlowStorageMode } from './config/flow-storage.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import conversationRetentionService from './services/conversationRetention.service.js';
+import inboundMediaFetchService from './services/inbound-media-fetch.service.js';
 import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
 import { probeReentryColumn } from './services/conversation-reentry.service.js';
@@ -27,6 +28,7 @@ validateConfig();
     await sessionService.loadSessions();
     conversationAbandonmentService.start();
     conversationRetentionService.start();
+    inboundMediaFetchService.start();
     monitoringService.start();
 
     if (isConversationDbEnabled()) {

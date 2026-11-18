@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { Flow, SimulatorResponse } from '../types/flow.types';
+import type { Flow, SimulatorAttachmentPayload, SimulatorResponse } from '../types/flow.types';
 
 const API_ORIGIN = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
   ? String(import.meta.env.VITE_API_BASE_URL).replace(/\/$/, '')
@@ -29,7 +29,9 @@ export const simulatorApi = {
     return data.data;
   },
 
-  message: async (params: { sessionId: string, text: string }): Promise<SimulatorResponse> => {
+  message: async (
+    params: { sessionId: string; text: string; attachment?: SimulatorAttachmentPayload },
+  ): Promise<SimulatorResponse> => {
     const { data } = await client.post('/message', params);
     return data.data;
   },

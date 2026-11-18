@@ -20,10 +20,10 @@ import {
   isFailureRateHigh,
   isRetentionStale,
   reconcileMessageSets,
-  shouldApplyDeliveryStatus,
   shouldEmitAlert,
 } from './rules.js';
 import { collectTwilioSnapshot, listRecentTwilioMessageSids } from './twilio-monitor.client.js';
+import twilioMessageDeliveryService from '../services/twilio-message-delivery.service.js';
 
 const ACTIVITY_CACHE_MS = 30 * 1000;
 const MINUTE_MS = 60 * 1000;
@@ -502,26 +502,7 @@ export class MonitoringService {
   }
 
   async recordDeliveryStatus(body) {
-    if (!config.monitoringEnabled || !isConversationDbEnabled()) return { applied: false };
-    const providerMessageId = body?.MessageSid || body?.SmsSid || null;
-    const status = body?.MessageStatus || body?.SmsStatus || null;
-    if (!providerMessageId || !status) return { applied: false };
-    const previous = await repository.getDeliveryStatus('twilio', providerMessageId);
-    if (!shouldApplyDeliveryStatus(previous, status)) return { applied: false, previous };
-    const errorCode = body?.ErrorCode ? String(body.ErrorCode).slice(0, 64) : null;
-    const errorMessage = body?.ErrorMessage ? String(body.ErrorMessage).slice(0, 400) : null;
-    await repository.upsertDeliveryStatus({
-      provider: 'twilio',
-      providerMessageId,
-      status: String(status).toLowerCase(),
-      errorCode,
-      errorMessage,
-      statusAt: new Date(),
-    });
-    if (String(status).toLowerCase() === 'failed' || String(status).toLowerCase() === 'undelivered') {
-      noteActivity('lastErrorAt', errorCode || status);
-    }
-    return { applied: true, previous };
+    return twilioMessageDeliveryService.processStatusCallback(body || {});
   }
 }
 

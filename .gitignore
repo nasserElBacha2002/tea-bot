@@ -16,6 +16,8 @@ whatsapp-bot/flows/
 backups/
 
 # Generated implementation review artifacts
+git-review/*
+!git-review/README.md
 implementation-*-diff.txt
 implementation-*-diffstat.txt
 implementation-*-status.txt

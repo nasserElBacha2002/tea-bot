@@ -30,6 +30,9 @@ import { conversationUiDensity } from '../constants/conversationUiDensity';
 import { useResizableSidebarWidth } from '../hooks/useResizableSidebarWidth';
 import { ConversationSidebarResizeHandle } from '../components/ConversationSidebarResizeHandle';
 import { clientRequestIdFor, completeClientRequest, takeoverRequestKey } from '../utils/clientRequestId';
+import { buildInboxAttachmentPayload } from '../utils/inboxAttachmentPayload';
+import type { ComposerSendPayload, ComposerSendResult } from '../components/ConversationComposer';
+import type { SendMessageBatchResponse } from '../api/conversationsApi';
 
 export const ConversationsPage: React.FC = () => {
   const theme = useTheme();
@@ -498,12 +501,63 @@ export const ConversationsPage: React.FC = () => {
             }
             actionError={actionError}
             successMessage={successMessage}
-            onSend={(body) =>
-              runAction(
-                () => sendMutation.mutateAsync({ conversationId: selectedId!, body }),
-                'Mensaje enviado correctamente.',
-              )
-            }
+            onSend={async (payload: ComposerSendPayload): Promise<ComposerSendResult | void> => {
+              setActionError(null);
+              setSuccessMessage(null);
+              try {
+                if (payload.files.length === 0) {
+                  await sendMutation.mutateAsync({
+                    conversationId: selectedId!,
+                    body: payload.body,
+                    clientRequestId: payload.batchClientRequestId,
+                  });
+                  setSuccessMessage('Mensaje enviado correctamente.');
+                  await handleRefresh();
+                  return;
+                }
+                const attachments = [];
+                for (const item of payload.files) {
+                  const built = await buildInboxAttachmentPayload(item.file);
+                  attachments.push({
+                    ...built,
+                    clientRequestId: item.clientRequestId,
+                    includeBody: item.includeBody === true,
+                  });
+                }
+                const data = (await sendMutation.mutateAsync({
+                  conversationId: selectedId!,
+                  body: payload.body,
+                  attachments,
+                  batchClientRequestId: payload.batchClientRequestId,
+                })) as SendMessageBatchResponse;
+                await handleRefresh();
+                if (data.allSucceeded) {
+                  setSuccessMessage(
+                    data.results.length > 1 ? 'Lote enviado correctamente.' : 'Mensaje enviado correctamente.',
+                  );
+                } else if (data.partial) {
+                  const okCount = data.results.filter((row) => row.ok).length;
+                  setActionError(
+                    `Envío parcial: ${okCount} de ${data.results.length} archivos se enviaron.`,
+                  );
+                } else {
+                  setActionError('No se pudo enviar ningún archivo.');
+                }
+                return { results: data.results };
+              } catch (e) {
+                const info = extractApiError(e);
+                setActionError(info.message);
+                if (payload.files.length > 0) {
+                  return {
+                    results: payload.files.map((item) => ({
+                      clientRequestId: item.clientRequestId,
+                      ok: false,
+                      error: { message: info.message },
+                    })),
+                  };
+                }
+              }
+            }}
             onClaim={() =>
               runAction(
                 () => claimMutation.mutateAsync(selectedId!),

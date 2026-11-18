@@ -1,4 +1,5 @@
-import { query } from '../db/index.js';
+import { query, withTransaction } from '../db/index.js';
+import { shouldApplyDeliveryStatus } from './rules.js';
 
 function isUniqueViolation(error) {
   const number = error?.number || error?.originalError?.info?.number;
@@ -390,25 +391,115 @@ export async function getDeliveryStatus(provider, providerMessageId) {
   return rows[0]?.status || null;
 }
 
-export async function upsertDeliveryStatus(row) {
-  const existing = await getDeliveryStatus(row.provider, row.providerMessageId);
-  if (!existing) {
-    await query(
-      `INSERT INTO dbo.message_delivery_status (
-        provider, provider_message_id, status, error_code, error_message, status_at, updated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, SYSUTCDATETIME())`,
-      [row.provider, row.providerMessageId, row.status, row.errorCode, row.errorMessage, row.statusAt],
-    );
-    return { applied: true, previous: null };
-  }
-  await query(
-    `UPDATE dbo.message_delivery_status
-     SET status = $3, error_code = $4, error_message = $5, status_at = $6, updated_at = SYSUTCDATETIME()
+function mapDeliveryRow(row) {
+  if (!row) return null;
+  return {
+    provider: row.provider,
+    providerMessageId: row.provider_message_id,
+    status: row.status,
+    errorCode: row.error_code ?? null,
+    errorMessage: row.error_message ?? null,
+    statusAt: row.status_at ?? null,
+  };
+}
+
+export async function getDeliveryStatusRow(provider, providerMessageId) {
+  const { rows } = await query(
+    `SELECT provider, provider_message_id, status, error_code, error_message, status_at
+     FROM dbo.message_delivery_status
      WHERE provider = $1 AND provider_message_id = $2`,
-    [row.provider, row.providerMessageId, row.status, row.errorCode, row.errorMessage, row.statusAt],
+    [provider, providerMessageId],
   );
-  return { applied: true, previous: existing };
+  return mapDeliveryRow(rows[0]);
+}
+
+export async function listDeliveryStatusRows(provider, providerMessageIds = []) {
+  const ids = [...new Set((providerMessageIds || []).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const placeholders = ids.map((_, index) => `$${index + 2}`).join(', ');
+  const { rows } = await query(
+    `SELECT provider, provider_message_id, status, error_code, error_message, status_at
+     FROM dbo.message_delivery_status
+     WHERE provider = $1 AND provider_message_id IN (${placeholders})`,
+    [provider, ...ids],
+  );
+  const map = new Map();
+  for (const row of rows) {
+    map.set(row.provider_message_id, mapDeliveryRow(row));
+  }
+  return map;
+}
+
+/**
+ * Avanza el estado de entrega bajo UPDLOCK/ROWLOCK. No retrocede ni duplica rank.
+ */
+export async function applyDeliveryStatusAdvance(row, { attempt = 0 } = {}) {
+  try {
+    return await withTransaction(async (transaction) => {
+      const { rows } = await query(
+        `SELECT status FROM dbo.message_delivery_status WITH (UPDLOCK, ROWLOCK)
+         WHERE provider = $1 AND provider_message_id = $2`,
+        [row.provider, row.providerMessageId],
+        { transaction },
+      );
+      let previous = rows[0]?.status || null;
+      if (!shouldApplyDeliveryStatus(previous, row.status)) {
+        return { applied: false, previous, reason: 'stale_or_duplicate' };
+      }
+
+      if (!previous) {
+        try {
+          await query(
+            `INSERT INTO dbo.message_delivery_status (
+              provider, provider_message_id, status, error_code, error_message, status_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, SYSUTCDATETIME())`,
+            [
+              row.provider,
+              row.providerMessageId,
+              row.status,
+              row.errorCode,
+              row.errorMessage,
+              row.statusAt,
+            ],
+            { transaction },
+          );
+          return { applied: true, previous: null };
+        } catch (error) {
+          if (!isUniqueViolation(error)) throw error;
+          const retry = await query(
+            `SELECT status FROM dbo.message_delivery_status WITH (UPDLOCK, ROWLOCK)
+             WHERE provider = $1 AND provider_message_id = $2`,
+            [row.provider, row.providerMessageId],
+            { transaction },
+          );
+          previous = retry.rows[0]?.status || null;
+          if (!previous) throw error;
+          if (!shouldApplyDeliveryStatus(previous, row.status)) {
+            return { applied: false, previous, reason: 'stale_or_duplicate' };
+          }
+        }
+      }
+
+      await query(
+        `UPDATE dbo.message_delivery_status
+         SET status = $3, error_code = $4, error_message = $5, status_at = $6, updated_at = SYSUTCDATETIME()
+         WHERE provider = $1 AND provider_message_id = $2`,
+        [row.provider, row.providerMessageId, row.status, row.errorCode, row.errorMessage, row.statusAt],
+        { transaction },
+      );
+      return { applied: true, previous };
+    });
+  } catch (error) {
+    if (attempt < 1 && isUniqueViolation(error)) {
+      return applyDeliveryStatusAdvance(row, { attempt: attempt + 1 });
+    }
+    throw error;
+  }
+}
+
+export async function upsertDeliveryStatus(row) {
+  return applyDeliveryStatusAdvance(row);
 }
 
 export async function deliveryWindowCounts(since) {

@@ -10,7 +10,7 @@ export interface SimulatorChatProps {
   started: boolean;
   sending: boolean;
   composerDisabled?: boolean;
-  onSend: (text: string) => void;
+  onSend: (text: string, file?: File | null) => void;
   showEmptyHint?: boolean;
 }
 

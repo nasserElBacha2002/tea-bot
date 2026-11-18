@@ -122,6 +122,15 @@ class ConversationMessageRepository {
     return mapRow(rows[0]);
   }
 
+  async findById(messageId, { transaction } = {}) {
+    const { rows } = await query(
+      `SELECT TOP (1) * FROM dbo.conversation_messages WHERE id = $1`,
+      [messageId],
+      { transaction },
+    );
+    return mapRow(rows[0]);
+  }
+
   async listByConversationId(conversationId, options = {}) {
     const limit = Math.min(Math.max(Number(options.limit) || 100, 1), 500);
     const offset = Math.max(Number(options.offset) || 0, 0);

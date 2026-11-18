@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Flow } from '../../types/flow.types';
 import { simulatorApi } from '../../api/simulatorApi';
+import type { ConversationMessageAttachment } from '../../../conversations/types/conversation.types';
+import { buildSimulatorAttachmentPayload } from '../utils/simulatorAttachmentPayload';
 import type { ConversationViewModel } from '../model/conversationViewModel';
 
-export type SimulatorChatMessage = { role: 'bot' | 'user'; text: string };
+export type SimulatorChatMessage = {
+  role: 'bot' | 'user';
+  text: string;
+  conversationId?: string;
+  messageId?: string;
+  attachments?: ConversationMessageAttachment[];
+};
 
 /** Firma estable del borrador para detectar cambios sin reiniciar la simulación. */
 export function stableDraftSignature(flow: Flow): string {
@@ -108,19 +116,53 @@ export function useConversationSimulator({
   }, [flowId, bootstrap, enabled]);
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, file?: File | null) => {
       const t = text.trim();
-      if (!t || !started || sending) return;
+      if ((!t && !file) || !started || sending) return;
       setSending(true);
       setError(null);
-      setMessages(m => [...m, { role: 'user', text: t }]);
+      const pendingUser: SimulatorChatMessage = { role: 'user', text: t };
+      setMessages((m) => [...m, pendingUser]);
       try {
-        const res = await simulatorApi.message({ sessionId: sessionIdRef.current, text: t });
-        setMessages(m => [...m, { role: 'bot', text: res.reply ?? '' }]);
+        const attachment = file ? await buildSimulatorAttachmentPayload(file) : undefined;
+        const res = await simulatorApi.message({
+          sessionId: sessionIdRef.current,
+          text: t,
+          attachment,
+        });
+        if (res.inboundMessage) {
+          setMessages((m) => {
+            const next = [...m];
+            let idx = -1;
+            for (let i = next.length - 1; i >= 0; i -= 1) {
+              if (next[i].role === 'user') {
+                idx = i;
+                break;
+              }
+            }
+            if (idx >= 0) {
+              next[idx] = {
+                ...next[idx],
+                conversationId: res.inboundMessage?.conversationId,
+                messageId: res.inboundMessage?.id,
+                attachments: res.inboundMessage?.attachments,
+              };
+            }
+            return next;
+          });
+        }
+        if (res.reply?.trim()) {
+          setMessages((m) => [...m, { role: 'bot', text: res.reply ?? '' }]);
+        }
         setCurrentNodeId(res.currentNodeId ?? null);
         setVariables(res.variables ?? {});
-      } catch {
-        setError('No se pudo enviar el mensaje. Intenta nuevamente.');
+      } catch (err) {
+        const code = err instanceof Error ? err.message : '';
+        if (code === 'mime_not_allowed') {
+          setError('Solo se permiten archivos JPEG, PNG o PDF.');
+        } else {
+          setError('No se pudo enviar el mensaje. Intenta nuevamente.');
+        }
       } finally {
         setSending(false);
       }

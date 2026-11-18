@@ -8,6 +8,7 @@ import humanHandoffRepository from '../repositories/human-handoff.repository.js'
 import sessionService from './session.service.js';
 import conversationReentryService, { REENTRY_PROMPT } from './conversation-reentry.service.js';
 import messagePersistence from './message-persistence.service.js';
+import flowEngine from './flow-engine.service.js';
 import { conversationTurnGuard } from './conversation-turn-guard.service.js';
 
 const INSCRIPTION_TEXT =
@@ -454,6 +455,38 @@ test('una toma que commitea durante el turno anula el TwiML del bot', async () =
     conversationBotLifecycleService.normalizeLegacyBotStateIfNeeded = prevNormalize;
     restore();
     await sessionService.resetSession(userId);
+  }
+});
+
+test('solo adjunto no ejecuta flowEngine', async () => {
+  let engineCalls = 0;
+  const prevEngine = flowEngine.resolveIncomingMessage;
+  flowEngine.resolveIncomingMessage = async () => {
+    engineCalls += 1;
+    return { reply: 'no', flowId: 'main-menu', currentNodeId: 'fallback' };
+  };
+  const prevInbound = messagePersistence.handleInbound;
+  messagePersistence.handleInbound = async () => ({
+    conversation: { id: 'conv-media', status: 'bot', statusVersion: 1 },
+    dbSession: null,
+    skipFlowEngine: true,
+    mediaOnly: true,
+  });
+  try {
+    const processed = await processCanonicalTwilioInbound({
+      userId: 'twilio:whatsapp:+5491100002222',
+      flowId: 'main-menu',
+      text: '',
+      messageId: 'SM-media-only',
+      provider: 'twilio',
+      media: [{ index: 0, url: 'https://api.twilio.com/media/x', contentType: 'image/png', fileName: null }],
+    });
+    assert.equal(engineCalls, 0);
+    assert.equal(processed.kind, 'human_mode_skip');
+    assert.equal(processed.shouldSendTwiml, false);
+  } finally {
+    flowEngine.resolveIncomingMessage = prevEngine;
+    messagePersistence.handleInbound = prevInbound;
   }
 });
 

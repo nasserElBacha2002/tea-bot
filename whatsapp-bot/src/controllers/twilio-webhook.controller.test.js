@@ -88,6 +88,31 @@ function body(messageId, text = 'hola') {
   };
 }
 
+test('mensaje solo media entra al pipeline sin TwiML de texto', async () => {
+  const repo = createRepo();
+  let turns = 0;
+  const deps = harness(repo, async () => {
+    turns += 1;
+    return { kind: 'human_mode_skip', reply: null, replyAuthorized: false };
+  });
+  const bodyOnlyMedia = {
+    MessageSid: 'SM-MEDIA-ONLY',
+    Body: '',
+    From: 'whatsapp:+5491100001111',
+    NumMedia: '1',
+    MediaUrl0: 'https://api.twilio.com/media/x',
+    MediaContentType0: 'image/jpeg',
+  };
+  const result = await settleTwilioInbound({
+    flowId: 'main-menu',
+    body: bodyOnlyMedia,
+    ...deps,
+  });
+  assert.equal(result.httpStatus, 200);
+  assert.equal(turns, 1);
+  assert.match(result.twiml, /<Response><\/Response>/);
+});
+
 test('T07 el mismo MessageSid tiene un solo turno y el retry reproduce el TwiML', async () => {
   const repo = createRepo();
   let turns = 0;

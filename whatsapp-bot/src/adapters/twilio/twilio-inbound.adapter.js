@@ -11,9 +11,38 @@ export { normalizeTwilioWhatsappNumber };
  *   phone: string,
  *   text: string,
  *   messageId: string,
+ *   media: Array<{ index: number, url: string, contentType: string, fileName: string | null }>,
  *   rawPayload: object
  * }
  */
+export function parseTwilioInboundMedia(body) {
+  const count = Number.parseInt(String(body?.NumMedia ?? '0'), 10);
+  if (!Number.isFinite(count) || count <= 0) return [];
+  const capped = Math.min(count, 10);
+  const items = [];
+  for (let index = 0; index < capped; index += 1) {
+    const url = typeof body?.[`MediaUrl${index}`] === 'string' ? body[`MediaUrl${index}`].trim() : '';
+    if (!url) continue;
+    const contentType = typeof body?.[`MediaContentType${index}`] === 'string'
+      ? body[`MediaContentType${index}`].trim()
+      : '';
+    const fileName = typeof body?.[`MediaFilename${index}`] === 'string'
+      ? body[`MediaFilename${index}`].trim()
+      : typeof body?.[`MediaFileName${index}`] === 'string'
+        ? body[`MediaFileName${index}`].trim()
+        : null;
+    items.push({ index, url, contentType, fileName: fileName || null });
+  }
+  return items;
+}
+
+export function hasInboundMedia(event) {
+  return Array.isArray(event?.media) && event.media.length > 0;
+}
+
+export function inboundEventHasProcessableContent(event) {
+  return Boolean(String(event?.text ?? '').trim()) || hasInboundMedia(event);
+}
 export function normalizeTwilioWhatsappPhone(from) {
   const normalized = normalizeTwilioWhatsappNumber(from);
   if (normalized) return normalized;
@@ -38,6 +67,7 @@ export function toCanonicalTwilioInboundEvent({ body, flowId }) {
     phone,
     text: bodyText,
     messageId: messageSid,
+    media: parseTwilioInboundMedia(body),
     rawPayload: body,
   };
 }
