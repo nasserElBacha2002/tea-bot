@@ -6,6 +6,17 @@ function webCrypto(): Crypto | undefined {
   return globalThis.crypto;
 }
 
+/** randomUUID solo en contexto seguro (HTTPS); el admin en HTTP debe usar getRandomValues. */
+function shouldUseNativeRandomUuid(): boolean {
+  if (typeof globalThis.isSecureContext === 'boolean') {
+    return globalThis.isSecureContext;
+  }
+  if (typeof window !== 'undefined' && window.location?.protocol) {
+    return window.location.protocol === 'https:';
+  }
+  return false;
+}
+
 function uuidFromBytes(bytes: Uint8Array): string {
   const next = new Uint8Array(bytes);
   next[6] = (next[6] & 0x0f) | 0x40;
@@ -16,7 +27,7 @@ function uuidFromBytes(bytes: Uint8Array): string {
 
 export function createClientRequestId(): string {
   const cryptoApi = webCrypto();
-  if (typeof cryptoApi?.randomUUID === 'function') {
+  if (shouldUseNativeRandomUuid() && typeof cryptoApi?.randomUUID === 'function') {
     const native = cryptoApi.randomUUID();
     if (UUID_V4.test(native)) return native;
   }

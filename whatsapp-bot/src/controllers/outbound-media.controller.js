@@ -7,6 +7,35 @@ import {
 } from '../utils/inbound-media-storage.js';
 import { verifyOutboundMediaGrant } from '../utils/outbound-media-grant.js';
 import { HTTP_STATUS, sendApiError } from '../utils/http-errors.js';
+import {
+  extensionForInboundMime,
+  normalizeInboundMimeType,
+  sanitizeAttachmentDisplayName,
+} from '../utils/inbound-media-policy.js';
+import { buildContentDispositionHeader } from '../utils/http-content-disposition.js';
+
+function dispositionForOutboundMime(mimeType) {
+  const normalized = normalizeInboundMimeType(mimeType);
+  if (normalized === 'image/jpeg' || normalized === 'image/png') return 'inline';
+  return 'attachment';
+}
+
+function filenameForOutboundGrant(grant) {
+  const safeName = sanitizeAttachmentDisplayName(grant.originalName);
+  if (safeName) return safeName;
+  const ext = extensionForInboundMime(grant.mimeType) || '.bin';
+  return `adjunto${ext}`;
+}
+
+function applyOutboundFileHeaders(res, file) {
+  const filename = filenameForOutboundGrant(file.grant);
+  const disposition = dispositionForOutboundMime(file.grant.mimeType);
+  res.setHeader('Content-Type', file.grant.mimeType);
+  res.setHeader('Content-Length', String(file.byteSize));
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('Content-Disposition', buildContentDispositionHeader(disposition, filename));
+}
 
 async function openGrantedFile(token) {
   const grant = verifyOutboundMediaGrant(token);
@@ -48,10 +77,7 @@ export async function headOutboundMediaForTwilio(req, res) {
   }
   try {
     const file = await openGrantedFile(req.params.token);
-    res.setHeader('Content-Type', file.grant.mimeType);
-    res.setHeader('Content-Length', String(file.byteSize));
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'private, no-store');
+    applyOutboundFileHeaders(res, file);
     res.status(HTTP_STATUS.OK).end();
   } catch (error) {
     return handleGrantError(res, error);
@@ -68,10 +94,7 @@ export async function streamOutboundMediaForTwilio(req, res) {
   }
   try {
     const file = await openGrantedFile(req.params.token);
-    res.setHeader('Content-Type', file.grant.mimeType);
-    res.setHeader('Content-Length', String(file.byteSize));
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'private, no-store');
+    applyOutboundFileHeaders(res, file);
     const stream = createReadStream(file.absolutePath);
     stream.on('error', () => {
       if (!res.headersSent) {

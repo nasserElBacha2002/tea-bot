@@ -724,7 +724,11 @@ class AgentOutboundSendService {
     let mediaUrl = null;
     const attachmentRow = persisted.attachmentRow;
     if (attachmentRow?.storageKey && attachmentRow?.mimeType) {
-      mediaUrl = buildTwilioMediaUrlForStoredObject(attachmentRow.storageKey, attachmentRow.mimeType);
+      mediaUrl = buildTwilioMediaUrlForStoredObject(
+        attachmentRow.storageKey,
+        attachmentRow.mimeType,
+        attachmentRow.originalName,
+      );
     }
 
     let providerMessageId = null;

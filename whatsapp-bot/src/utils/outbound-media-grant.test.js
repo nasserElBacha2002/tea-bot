@@ -15,9 +15,18 @@ test('grant round-trip y expiración', () => {
     mimeType: 'image/png',
     expiresAtMs: exp,
   });
+  const withName = createOutboundMediaGrant({
+    storageKey: 'c'.repeat(32),
+    mimeType: 'application/pdf',
+    originalName: 'factura-marzo.pdf',
+  });
+  const named = verifyOutboundMediaGrant(withName.token);
+  assert.equal(named.originalName, 'factura-marzo.pdf');
+
   const parsed = verifyOutboundMediaGrant(token);
   assert.equal(parsed.storageKey, 'a'.repeat(32));
   assert.equal(parsed.mimeType, 'image/png');
+  assert.equal(parsed.originalName, null);
   assert.throws(() => verifyOutboundMediaGrant(token.replace(/.$/, 'x')), /grant_invalid/);
   const expired = createOutboundMediaGrant({
     storageKey: 'b'.repeat(32),

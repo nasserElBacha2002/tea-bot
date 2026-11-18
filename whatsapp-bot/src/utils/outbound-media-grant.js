@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { config, planTwilioPublicUrl } from '../config.js';
+import { sanitizeAttachmentDisplayName } from './inbound-media-policy.js';
 
 const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
@@ -14,7 +15,7 @@ function grantSecret() {
 }
 
 /**
- * @param {{ storageKey: string, mimeType: string, expiresAtMs?: number }} input
+ * @param {{ storageKey: string, mimeType: string, originalName?: string | null, expiresAtMs?: number }} input
  */
 export function createOutboundMediaGrant(input) {
   const storageKey = String(input.storageKey || '').replace(/[/\\]/g, '');
@@ -23,7 +24,10 @@ export function createOutboundMediaGrant(input) {
   const expiresAtMs = Number.isFinite(input.expiresAtMs)
     ? Number(input.expiresAtMs)
     : Date.now() + DEFAULT_TTL_MS;
-  const payload = JSON.stringify({ sk: storageKey, mt: mimeType, exp: expiresAtMs });
+  const originalName = sanitizeAttachmentDisplayName(input.originalName);
+  const body = { sk: storageKey, mt: mimeType, exp: expiresAtMs };
+  if (originalName) body.fn = originalName;
+  const payload = JSON.stringify(body);
   const payloadB64 = Buffer.from(payload, 'utf8').toString('base64url');
   const sig = crypto.createHmac('sha256', grantSecret()).update(payloadB64).digest('base64url');
   return { token: `${payloadB64}.${sig}`, expiresAtMs };
@@ -31,7 +35,7 @@ export function createOutboundMediaGrant(input) {
 
 /**
  * @param {string} token
- * @returns {{ storageKey: string, mimeType: string, expiresAtMs: number }}
+ * @returns {{ storageKey: string, mimeType: string, expiresAtMs: number, originalName: string | null }}
  */
 export function verifyOutboundMediaGrant(token) {
   const value = String(token || '').trim();
@@ -55,7 +59,8 @@ export function verifyOutboundMediaGrant(token) {
   const expiresAtMs = Number(parsed?.exp);
   if (!storageKey || !mimeType || !Number.isFinite(expiresAtMs)) throw new Error('grant_invalid');
   if (Date.now() > expiresAtMs) throw new Error('grant_expired');
-  return { storageKey, mimeType, expiresAtMs };
+  const originalName = sanitizeAttachmentDisplayName(parsed?.fn) || null;
+  return { storageKey, mimeType, expiresAtMs, originalName };
 }
 
 /**

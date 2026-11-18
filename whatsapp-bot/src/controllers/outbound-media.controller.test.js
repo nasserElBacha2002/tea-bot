@@ -40,7 +40,11 @@ test('GET y HEAD en URL temporal de outbound media', async () => {
   const storageKey = 'aa'.repeat(32);
   const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]);
   await writeInboundMediaObject(tmp, storageKey, png);
-  const { token } = createOutboundMediaGrant({ storageKey, mimeType: 'image/png' });
+  const { token } = createOutboundMediaGrant({
+    storageKey,
+    mimeType: 'application/pdf',
+    originalName: 'comprobante.pdf',
+  });
   const expired = createOutboundMediaGrant({
     storageKey,
     mimeType: 'image/png',
@@ -53,7 +57,8 @@ test('GET y HEAD en URL temporal de outbound media', async () => {
     const pathOk = `/media/outbound/${encodeURIComponent(token)}`;
     const head = await request(server, { method: 'HEAD', path: pathOk });
     assert.equal(head.status, 200);
-    assert.equal(head.headers['content-type'], 'image/png');
+    assert.equal(head.headers['content-type'], 'application/pdf');
+    assert.match(String(head.headers['content-disposition'] || ''), /comprobante\.pdf/i);
     assert.equal(head.headers['content-length'], String(png.length));
 
     const get = await request(server, { path: pathOk });

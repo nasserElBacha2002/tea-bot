@@ -15,6 +15,7 @@ afterEach(() => {
     configurable: true,
     value: originalCrypto,
   });
+  Reflect.deleteProperty(globalThis, 'isSecureContext');
   resetClientRequestIdsForTests();
 });
 
@@ -26,7 +27,8 @@ function useCrypto(value: Crypto | undefined) {
 }
 
 describe('createClientRequestId', () => {
-  it('usa crypto.randomUUID cuando está disponible', () => {
+  it('usa crypto.randomUUID solo en contexto seguro (HTTPS)', () => {
+    Object.defineProperty(globalThis, 'isSecureContext', { configurable: true, value: true });
     useCrypto({
       randomUUID: () => '11111111-1111-4111-8111-111111111111',
       getRandomValues: () => {
@@ -35,6 +37,21 @@ describe('createClientRequestId', () => {
     } as unknown as Crypto);
 
     expect(createClientRequestId()).toBe('11111111-1111-4111-8111-111111111111');
+  });
+
+  it('en HTTP usa getRandomValues aunque exista randomUUID', () => {
+    Object.defineProperty(globalThis, 'isSecureContext', { configurable: true, value: false });
+    useCrypto({
+      randomUUID: () => {
+        throw new Error('randomUUID no debe usarse en HTTP');
+      },
+      getRandomValues: (bytes: Uint8Array) => {
+        bytes.fill(1);
+        return bytes;
+      },
+    } as unknown as Crypto);
+
+    expect(createClientRequestId()).toBe('01010101-0101-4101-8101-010101010101');
   });
 
   it('genera un UUID v4 con getRandomValues cuando randomUUID no existe', () => {
