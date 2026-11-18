@@ -150,15 +150,16 @@ test('integration: dos procesos toman la misma conversación en SQL TEST', async
       'reply',
     ]);
     assert.equal(reply.ok, true, reply.code);
-    const denied = await runWorker([
+    // Inbox compartido (post ba72bd9): un agente que perdió la toma exclusiva sigue
+    // pudiendo responder en assigned; la exclusividad aplica a takeover/reasignación.
+    const sharedReply = await runWorker([
       created.id,
       loser.username,
       loser.role,
-      `dist-reply-denied-${suffix}`,
+      `dist-reply-shared-${suffix}`,
       'reply',
     ]);
-    assert.equal(denied.ok, false);
-    assert.equal(denied.code, 'CONVERSATION_OWNED');
+    assert.equal(sharedReply.ok, true, sharedReply.code);
     const returned = await runWorker([
       created.id,
       winner.username,
@@ -180,7 +181,7 @@ test('integration: dos procesos toman la misma conversación en SQL TEST', async
          AND sender_type = 'agent'`,
       [created.id],
     );
-    assert.equal(Number(replies.rows[0].total), 1);
+    assert.equal(Number(replies.rows[0].total), 2);
   } finally {
     await cleanup(created.id);
   }
