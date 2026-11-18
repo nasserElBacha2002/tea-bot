@@ -6,6 +6,8 @@ test('rechaza HTTP y hosts no Twilio', () => {
   assert.throws(() => assertTwilioMediaUrl('http://api.twilio.com/x'), /url_not_allowed/);
   assert.throws(() => assertTwilioMediaUrl('https://evil.example/x'), /url_not_allowed/);
   assert.doesNotThrow(() => assertTwilioMediaUrl('https://api.twilio.com/2010-04-01/Accounts/AC/Media/x'));
+  assert.doesNotThrow(() => assertTwilioMediaUrl('https://mms.twiliocdn.com/signed/blob'));
+  assert.doesNotThrow(() => assertTwilioMediaUrl('https://media.twiliocdn.com/signed/blob'));
 });
 
 test('redirección fuera de Twilio se rechaza sin enviar credenciales al destino', async () => {

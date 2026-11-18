@@ -22,6 +22,7 @@ import {
   INBOX_MAX_OUTBOUND_FILES,
 } from '../utils/inboxAttachmentPayload';
 import { formatByteSize } from '../utils/formatByteSize';
+import { createClientRequestId } from '../utils/clientRequestId';
 
 export type ComposerFileStatus = 'idle' | 'sending' | 'ok' | 'error';
 
@@ -221,7 +222,7 @@ export const ConversationComposer: React.FC<Props> = ({
       next.push({
         id: `${file.name}-${file.size}-${file.lastModified}`,
         file,
-        clientRequestId: crypto.randomUUID(),
+        clientRequestId: createClientRequestId(),
         status: 'idle',
       });
     }
@@ -267,7 +268,7 @@ export const ConversationComposer: React.FC<Props> = ({
       const response = await onSend({
         body,
         files: queueWithCaption,
-        batchClientRequestId: crypto.randomUUID(),
+        batchClientRequestId: createClientRequestId(),
       });
       if (response?.results?.length) {
         const byClient = new Map(response.results.map((row) => [row.clientRequestId, row]));

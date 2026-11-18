@@ -153,4 +153,27 @@ describe('ConversationComposer', () => {
     expect(screen.getByText(/atención humana/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/escribí una respuesta/i)).toBeInTheDocument();
   });
+
+  it('adjuntar archivo sin crypto.randomUUID no rompe el selector', async () => {
+    const user = userEvent.setup();
+    const original = globalThis.crypto;
+    const getRandomValues = original?.getRandomValues?.bind(original);
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: getRandomValues ? { getRandomValues } : undefined,
+    });
+    try {
+      render(
+        <ThemeProvider theme={createTheme()}>
+          <ConversationComposer status="assigned" onSend={vi.fn()} />
+        </ThemeProvider>,
+      );
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+      const file = new File(['%PDF-1.4'], 'doc.pdf', { type: 'application/pdf' });
+      await user.upload(input, file);
+      expect(screen.getByText(/doc\.pdf/i)).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: original });
+    }
+  });
 });

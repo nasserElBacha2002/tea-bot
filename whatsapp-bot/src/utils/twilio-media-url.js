@@ -1,7 +1,14 @@
 const ALLOWED_HOSTS = new Set([
   'api.twilio.com',
   'media.twiliocdn.com',
+  'mms.twiliocdn.com',
 ]);
+
+function isAllowedTwilioMediaHost(host) {
+  const normalized = String(host || '').trim().toLowerCase();
+  if (ALLOWED_HOSTS.has(normalized)) return true;
+  return normalized.endsWith('.twiliocdn.com');
+}
 
 const MAX_REDIRECTS = 5;
 
@@ -29,8 +36,8 @@ export function assertTwilioMediaUrl(raw) {
   }
   if (parsed.protocol !== 'https:') throw new Error('url_not_allowed');
   if (parsed.username || parsed.password || parsed.hash) throw new Error('url_not_allowed');
-  const host = parsed.hostname.toLowerCase();
-  if (!ALLOWED_HOSTS.has(host)) throw new Error('url_not_allowed');
+  const host = parsed.hostname;
+  if (!isAllowedTwilioMediaHost(host)) throw new Error('url_not_allowed');
   return parsed.href;
 }
 
