@@ -157,10 +157,10 @@ describe('ConversationComposer', () => {
   it('adjuntar archivo sin crypto.randomUUID no rompe el selector', async () => {
     const user = userEvent.setup();
     const original = globalThis.crypto;
-    const getRandomValues = original?.getRandomValues?.bind(original);
+    const getRandomValues = original.getRandomValues.bind(original);
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
-      value: getRandomValues ? { getRandomValues } : undefined,
+      value: { getRandomValues },
     });
     try {
       render(
