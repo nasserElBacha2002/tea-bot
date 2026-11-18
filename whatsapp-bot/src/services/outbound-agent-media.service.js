@@ -98,5 +98,5 @@ export async function discardStoredOutboundAttachment(root, storageKey) {
  */
 export function buildTwilioMediaUrlForStoredObject(storageKey, mimeType, originalName = null) {
   const { token } = createOutboundMediaGrant({ storageKey, mimeType, originalName });
-  return buildTwilioFetchableOutboundMediaUrl(token);
+  return buildTwilioFetchableOutboundMediaUrl(token, { originalName, mimeType });
 }

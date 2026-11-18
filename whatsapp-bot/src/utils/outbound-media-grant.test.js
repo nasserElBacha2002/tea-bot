@@ -34,6 +34,11 @@ test('grant round-trip y expiración', () => {
     expiresAtMs: Date.now() - 1,
   });
   assert.throws(() => verifyOutboundMediaGrant(expired.token), /grant_expired/);
-  const url = buildTwilioFetchableOutboundMediaUrl(token);
+  const url = buildTwilioFetchableOutboundMediaUrl(token, {
+    originalName: 'factura-marzo.pdf',
+    mimeType: 'application/pdf',
+  });
   assert.match(url, /^http:\/\/127\.0\.0\.1:3000\/media\/outbound\//);
+  assert.match(url, /factura-marzo\.pdf/);
+  assert.doesNotMatch(url, /\/media\/outbound\/[^/]+\.$/);
 });

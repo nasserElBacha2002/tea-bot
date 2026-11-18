@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { config, planTwilioPublicUrl } from '../config.js';
-import { sanitizeAttachmentDisplayName } from './inbound-media-policy.js';
+import { extensionForInboundMime, sanitizeAttachmentDisplayName } from './inbound-media-policy.js';
 
 const DEFAULT_TTL_MS = 15 * 60 * 1000;
 
@@ -63,10 +63,19 @@ export function verifyOutboundMediaGrant(token) {
   return { storageKey, mimeType, expiresAtMs, originalName };
 }
 
+export function outboundMediaUrlFilename(originalName, mimeType) {
+  const safe = sanitizeAttachmentDisplayName(originalName);
+  if (safe) return safe;
+  const ext = extensionForInboundMime(mimeType) || '.bin';
+  return `adjunto${ext}`;
+}
+
 /**
+ * WhatsApp muestra el último segmento de la URL como nombre; incluir el archivo antes del token.
  * @param {string} token
+ * @param {{ originalName?: string | null, mimeType?: string | null }} [meta]
  */
-export function buildTwilioFetchableOutboundMediaUrl(token) {
+export function buildTwilioFetchableOutboundMediaUrl(token, meta = {}) {
   const plan = planTwilioPublicUrl();
   if (!plan.ok || !plan.origin) {
     const err = new Error('PUBLIC_URL_UNCONFIGURED');
@@ -74,6 +83,8 @@ export function buildTwilioFetchableOutboundMediaUrl(token) {
     throw err;
   }
   const prefix = plan.publicPrefix || '';
-  const encoded = encodeURIComponent(token);
-  return `${plan.origin}${prefix}/media/outbound/${encoded}`;
+  const encodedToken = encodeURIComponent(token);
+  const filename = outboundMediaUrlFilename(meta.originalName, meta.mimeType);
+  const encodedName = encodeURIComponent(filename);
+  return `${plan.origin}${prefix}/media/outbound/${encodedName}/${encodedToken}`;
 }

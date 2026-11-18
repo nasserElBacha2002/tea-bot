@@ -6,6 +6,8 @@ import {
 
 const router = express.Router();
 
+router.head('/outbound/:filename/:token', headOutboundMediaForTwilio);
+router.get('/outbound/:filename/:token', streamOutboundMediaForTwilio);
 router.head('/outbound/:token', headOutboundMediaForTwilio);
 router.get('/outbound/:token', streamOutboundMediaForTwilio);
 

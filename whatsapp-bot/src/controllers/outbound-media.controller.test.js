@@ -54,7 +54,7 @@ test('GET y HEAD en URL temporal de outbound media', async () => {
   const app = createApp();
   const server = await listen(app);
   try {
-    const pathOk = `/media/outbound/${encodeURIComponent(token)}`;
+    const pathOk = `/media/outbound/${encodeURIComponent('comprobante.pdf')}/${encodeURIComponent(token)}`;
     const head = await request(server, { method: 'HEAD', path: pathOk });
     assert.equal(head.status, 200);
     assert.equal(head.headers['content-type'], 'application/pdf');
