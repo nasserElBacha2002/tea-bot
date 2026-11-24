@@ -121,6 +121,8 @@ class MessagePersistenceService {
       return { conversation, dbSession: null, skipFlowEngine: true };
     }
 
+    const inactivityReferenceAt = conversation.lastMessageAt ?? conversation.createdAt ?? null;
+
     await this.persistInboundWithMedia(conversation, event);
     conversation = await conversationService.reloadConversation(conversation);
 
@@ -130,6 +132,7 @@ class MessagePersistenceService {
 
     const reentry = await conversationReentryService.consumeInbound(conversation, event.text || '', {
       providerMessageId: event.messageId || null,
+      inactivityReferenceAt,
     });
     if (reentry?.action && reentry.action !== 'delegate') {
       return this.finishReentry(reentry, null, { providerMessageId: outboundId });

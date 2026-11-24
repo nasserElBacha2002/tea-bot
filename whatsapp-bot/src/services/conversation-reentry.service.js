@@ -15,6 +15,7 @@ import { fenceInboundLease } from '../monitoring/inbound-lease.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import { isConversationInHumanMode, DEFAULT_HANDOFF_MESSAGE } from '../utils/handoff-detection.js';
+import { isFlowPresentedToUser } from '../utils/conversation-flow-lifecycle.js';
 import {
   MAX_INVALID_REENTRY_ATTEMPTS,
   REENTRY_PROMPT,
@@ -22,8 +23,10 @@ import {
   classifyReentryInput,
   decideResumeCompatibility,
   hasFlowProgressAfterReturn,
+  isPastReentryInactivityThreshold,
   normalizeFlowVersion,
   noteReentryColumn,
+  resolveReentryInactivityHours,
   resolveReentryPolicy,
 } from '../utils/conversation-reentry-policy.js';
 
@@ -177,13 +180,49 @@ export class ConversationReentryService {
    * @param {object} conversation
    * @param {string} text
    */
+  inactivityEligible(conversation, options = {}) {
+    if (this.policy() !== 'prompt') return false;
+    if (resolveReentryInactivityHours() <= 0) return false;
+    if (conversation?.status !== 'bot') return false;
+    if (isConversationInHumanMode(conversation)) return false;
+    const referenceAt = options.inactivityReferenceAt
+      ?? conversation.lastMessageAt
+      ?? conversation.createdAt;
+    if (!isPastReentryInactivityThreshold(referenceAt, options.now)) return false;
+    return isFlowPresentedToUser(conversation, null);
+  }
+
+  async inactivitySnapshot(locked, transaction, options = {}) {
+    if (!this.inactivityEligible(locked, options)) return null;
+    const openSession = await this.sessionRepo.findLatestOpenByConversationId(
+      locked.id,
+      { transaction },
+    );
+    if (!isFlowPresentedToUser(locked, openSession)) return null;
+    const memorySession = locked.externalUserId && typeof this.runtimeSession.getSession === 'function'
+      ? this.runtimeSession.getSession(locked.externalUserId)
+      : null;
+    return {
+      ...buildReentrySnapshot({
+        conversation: locked,
+        openSession,
+        memorySession,
+        capturedAt: new Date().toISOString(),
+      }),
+      source: 'inactivity',
+    };
+  }
+
   async consumeInbound(conversation, text, options = {}) {
     if (!conversation?.id) return null;
     if (!conversation.reentryJson) {
       if (this.policy() !== 'prompt') return null;
       const parked = await this.legacyParkedState(conversation.id);
-      if (!parked?.parked) return null;
-      return this.advance(conversation, text, options);
+      if (parked?.parked) return this.advance(conversation, text, options);
+      if (this.inactivityEligible(conversation, options)) {
+        return this.advance(conversation, text, options);
+      }
+      return null;
     }
     if (this.policy() === 'legacy') {
       return this.rollbackPending(conversation);
@@ -274,12 +313,18 @@ export class ConversationReentryService {
 
       let current = locked;
       let armedLegacy = false;
+      let armedInactivity = false;
       if (!current.reentryJson) {
-        const snapshot = await this.legacySnapshot(current, transaction);
+        let snapshot = await this.legacySnapshot(current, transaction);
+        if (snapshot) {
+          armedLegacy = true;
+        } else {
+          snapshot = await this.inactivitySnapshot(current, transaction, options);
+          if (snapshot) armedInactivity = true;
+        }
         if (!snapshot) return { action: 'delegate', conversation: current };
         await this.sessionRepo.endAllOpenForConversation(current.id, new Date(), { transaction });
         current = { ...current, reentryJson: snapshot, currentNodeKey: null };
-        armedLegacy = true;
       }
 
       const reentry = current.reentryJson;
@@ -295,6 +340,7 @@ export class ConversationReentryService {
       else if (decision === 'present') applied = await this.applyPrompt(current, transaction, text);
       else applied = await this.applyReprompt(current, transaction);
       if (armedLegacy && applied && !applied.reason) applied.reason = 'legacy_return';
+      if (armedInactivity && applied && !applied.reason) applied.reason = 'inactivity';
       await this.rememberTurnEffect(options.providerMessageId, applied, transaction);
       return applied;
     });

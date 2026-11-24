@@ -86,6 +86,31 @@ export function resolveReentryPolicy() {
   return 'prompt';
 }
 
+/**
+ * Horas sin actividad antes de ofrecer reentrada en conversaciones solo-bot.
+ * 0 o negativo desactiva. Default 12.
+ */
+export function resolveReentryInactivityHours() {
+  const raw = process.env.REENTRY_INACTIVITY_HOURS;
+  if (raw === undefined || String(raw).trim() === '') return 12;
+  const hours = Number(raw);
+  if (!Number.isFinite(hours) || hours <= 0) return 0;
+  return hours;
+}
+
+/**
+ * @param {Date | string | null | undefined} referenceAt último mensaje antes del inbound actual
+ * @param {Date} [now]
+ */
+export function isPastReentryInactivityThreshold(referenceAt, now = new Date()) {
+  const hours = resolveReentryInactivityHours();
+  if (hours <= 0) return false;
+  const ref = referenceAt instanceof Date ? referenceAt : new Date(referenceAt);
+  if (!Number.isFinite(ref.getTime())) return false;
+  const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
+  return nowMs - ref.getTime() >= hours * 60 * 60 * 1000;
+}
+
 export function normalizeFlowVersion(value) {
   const raw = String(value ?? '').trim().toLowerCase();
   if (!raw) return '';

@@ -950,3 +950,68 @@ test('el primer texto que dice continuar no se consume como elección', () => {
   assert.equal(classifyReentryInput('menú', 'pending'), 'fresh');
   assert.equal(classifyReentryInput('quiero hablar con una persona', 'pending'), 'human');
 });
+
+test('inactividad de 12h en solo-bot muestra el prompt de reentrada', async () => {
+  const previousHours = process.env.REENTRY_INACTIVITY_HOURS;
+  process.env.REENTRY_INACTIVITY_HOURS = '12';
+  try {
+    const staleAt = new Date(Date.now() - 13 * 60 * 60 * 1000);
+    const world = createWorld({
+      conversation: {
+        status: 'bot',
+        assignedAgentId: null,
+        currentNodeKey: 'fallback_global',
+        reentryJson: null,
+        lastMessageAt: staleAt,
+        createdAt: staleAt,
+      },
+      session: {
+        status: 'active',
+        currentNodeKey: 'fallback_global',
+        historyJson: ['welcome', 'no_presenciales_menu', 'fallback_global'],
+        trackingJson: {
+          visitedNodes: ['welcome', 'no_presenciales_menu', 'fallback_global'],
+          transitionTrail: [{ from: 'no_presenciales_menu', to: 'fallback_global' }],
+        },
+      },
+    });
+    const result = await world.reentry.consumeInbound(world.conversation, 'hola de nuevo', {
+      inactivityReferenceAt: staleAt,
+    });
+    assert.equal(result.action, 'prompt');
+    assert.equal(result.reply, REENTRY_PROMPT);
+    assert.equal(result.reason, 'inactivity');
+    assert.equal(world.conversation.reentryJson?.source, 'inactivity');
+    assert.equal(world.conversation.reentryJson?.resumeNodeKey, 'no_presenciales_menu');
+    assert.equal(/No pude entender/i.test(result.reply), false);
+  } finally {
+    if (previousHours === undefined) delete process.env.REENTRY_INACTIVITY_HOURS;
+    else process.env.REENTRY_INACTIVITY_HOURS = previousHours;
+  }
+});
+
+test('inactividad menor al umbral no arma reentrada', async () => {
+  const previousHours = process.env.REENTRY_INACTIVITY_HOURS;
+  process.env.REENTRY_INACTIVITY_HOURS = '12';
+  try {
+    const recentAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    const world = createWorld({
+      conversation: {
+        status: 'bot',
+        assignedAgentId: null,
+        currentNodeKey: 'fallback_global',
+        reentryJson: null,
+        lastMessageAt: recentAt,
+      },
+      session: { status: 'active', currentNodeKey: 'fallback_global' },
+    });
+    const result = await world.reentry.consumeInbound(world.conversation, 'hola', {
+      inactivityReferenceAt: recentAt,
+    });
+    assert.equal(result, null);
+    assert.equal(world.conversation.reentryJson, null);
+  } finally {
+    if (previousHours === undefined) delete process.env.REENTRY_INACTIVITY_HOURS;
+    else process.env.REENTRY_INACTIVITY_HOURS = previousHours;
+  }
+});
