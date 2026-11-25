@@ -235,7 +235,10 @@ class ConversationService {
       userId,
       dbSession.flowId,
       resumeNodeKey,
-      extra,
+      {
+        ...extra,
+        conversationId: conversation?.id ? String(conversation.id).toLowerCase() : undefined,
+      },
     );
 
     await sessionService.updateSession(userId, {
@@ -305,6 +308,8 @@ class ConversationService {
     }
 
     let activeSession = dbSession;
+    await sessionService.bindConversationId(userId, updated.id);
+
     if (!activeSession) {
       const created = await this.getOrCreateActiveSession(updated, {
         flowId,

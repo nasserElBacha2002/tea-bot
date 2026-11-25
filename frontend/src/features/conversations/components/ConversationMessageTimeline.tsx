@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { Box, Paper, Typography, Stack, CircularProgress, Alert, Button } from '@mui/material';
 import type { ConversationMessage } from '../types/conversation.types';
+import { highlightTermInPlainText } from '../utils/searchHighlight';
 import { messageEventLabel, senderTypeLabel } from '../utils/conversationUiLabels';
 import {
   messageDisplayBody,
   messageHasVisibleBody,
+  messageIsAttachmentOnly,
   resolveMessageBubbleRole,
   type MessageBubbleRole,
 } from '../utils/conversationMessageDisplay';
@@ -25,6 +27,19 @@ interface Props {
   readAt?: string | null;
   onCaughtUp?: (readThroughAt: string) => void;
   scrollFooter?: React.ReactNode;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
+  loadingOlder?: boolean;
+  loadingNewer?: boolean;
+  onLoadOlder?: () => Promise<boolean | void>;
+  onLoadNewer?: () => Promise<boolean | void>;
+  scrollTargetMessageId?: string | null;
+  onConsumeScrollTarget?: () => void;
+  highlightedMessageId?: string | null;
+  intraSearchTerm?: string;
+  historyPinned?: boolean;
+  onReturnToRecent?: () => void;
+  onCaughtUpWhenPinned?: boolean;
 }
 
 interface MessageGroup {
@@ -69,8 +84,25 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   readAt = null,
   onCaughtUp,
   scrollFooter,
+  hasMoreBefore,
+  hasMoreAfter,
+  loadingOlder,
+  loadingNewer,
+  onLoadOlder,
+  onLoadNewer,
+  scrollTargetMessageId = null,
+  onConsumeScrollTarget,
+  highlightedMessageId = null,
+  intraSearchTerm = '',
+  historyPinned = false,
+  onReturnToRecent,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const loadOlderLockRef = useRef(false);
+  const loadNewerLockRef = useRef(false);
+  const prevScrollHeightRef = useRef(0);
+  const scrollRestoreConvRef = useRef<string | null>(null);
+  const scrollTargetRafRef = useRef<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [showNewBanner, setShowNewBanner] = useState(false);
@@ -78,13 +110,19 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   const prevConvRef = useRef(conversationId);
   const initialAnchorDoneRef = useRef(false);
 
-  const sorted = useMemo(
-    () =>
-      [...messages].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      ),
-    [messages],
-  );
+  const sorted = useMemo(() => {
+    if (messages.length <= 1) return messages;
+    for (let i = 1; i < messages.length; i += 1) {
+      const prev = Date.parse(messages[i - 1].createdAt);
+      const cur = Date.parse(messages[i].createdAt);
+      if (cur < prev) {
+        return [...messages].sort(
+          (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id),
+        );
+      }
+    }
+    return messages;
+  }, [messages]);
 
   const groups = useMemo(() => groupMessages(sorted), [sorted]);
 
@@ -124,7 +162,29 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
     [sorted, readAt],
   );
 
+  useEffect(() => {
+    if (!scrollTargetMessageId) return;
+    if (scrollTargetRafRef.current != null) {
+      cancelAnimationFrame(scrollTargetRafRef.current);
+    }
+    scrollTargetRafRef.current = requestAnimationFrame(() => {
+      scrollTargetRafRef.current = null;
+      const el = messageRefs.current[scrollTargetMessageId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'auto', block: 'center' });
+      }
+      onConsumeScrollTarget?.();
+    });
+    return () => {
+      if (scrollTargetRafRef.current != null) {
+        cancelAnimationFrame(scrollTargetRafRef.current);
+        scrollTargetRafRef.current = null;
+      }
+    };
+  }, [scrollTargetMessageId, onConsumeScrollTarget]);
+
   const runInitialAnchor = useCallback(() => {
+    if (scrollTargetMessageId || historyPinned) return;
     if (!sorted.length) {
       setShowNewBanner(false);
       return;
@@ -138,7 +198,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
       setShowNewBanner(false);
       notifyCaughtUp();
     }
-  }, [sorted, readAt, scrollToFirstUnread, scrollToBottomOnly, notifyCaughtUp]);
+  }, [sorted, readAt, scrollToFirstUnread, scrollToBottomOnly, notifyCaughtUp, scrollTargetMessageId, historyPinned]);
 
   useEffect(() => {
     if (conversationId !== prevConvRef.current) {
@@ -161,6 +221,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   }, [loading, conversationId, sorted.length, runInitialAnchor]);
 
   useEffect(() => {
+    if (historyPinned || scrollTargetMessageId) return;
     if (!initialAnchorDoneRef.current || loading) return;
     const prevLen = prevLenRef.current;
     const grew = sorted.length > prevLen;
@@ -176,13 +237,57 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
         setShowNewBanner(true);
       }
     });
-  }, [sorted, loading, isNearBottom, scrollToBottomOnly, notifyCaughtUp]);
+  }, [sorted, loading, isNearBottom, scrollToBottomOnly, notifyCaughtUp, historyPinned, scrollTargetMessageId]);
 
   const handleScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (
+      el
+      && el.scrollTop < 48
+      && hasMoreBefore
+      && onLoadOlder
+      && !loadOlderLockRef.current
+      && !loadingOlder
+    ) {
+      loadOlderLockRef.current = true;
+      prevScrollHeightRef.current = el.scrollHeight;
+      scrollRestoreConvRef.current = conversationId ?? null;
+      void onLoadOlder()
+        .then((applied) => {
+          if (!applied) return;
+          requestAnimationFrame(() => {
+            const target = scrollRef.current;
+            if (!target || scrollRestoreConvRef.current !== conversationId) return;
+            target.scrollTop = target.scrollHeight - prevScrollHeightRef.current;
+          });
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          loadOlderLockRef.current = false;
+        });
+    }
+    if (
+      el
+      && hasMoreAfter
+      && onLoadNewer
+      && !loadNewerLockRef.current
+      && !loadingNewer
+    ) {
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      if (distanceFromBottom < 96) {
+        loadNewerLockRef.current = true;
+        void onLoadNewer()
+          .catch(() => undefined)
+          .finally(() => {
+            loadNewerLockRef.current = false;
+          });
+      }
+    }
+    if (historyPinned) return;
     if (!isNearBottom()) return;
     setShowNewBanner(false);
     notifyCaughtUp();
-  }, [isNearBottom, notifyCaughtUp]);
+  }, [isNearBottom, notifyCaughtUp, hasMoreBefore, hasMoreAfter, onLoadOlder, onLoadNewer, loadingOlder, loadingNewer, historyPinned]);
 
   const handleJumpToLatest = useCallback(() => {
     scrollToBottom('smooth');
@@ -230,6 +335,20 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
           </Typography>
         )}
 
+        {(loadingOlder || loadingNewer) && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+            <CircularProgress size={18} />
+          </Box>
+        )}
+
+        {historyPinned && onReturnToRecent && (
+          <Box sx={{ pb: 1, textAlign: 'center' }}>
+            <Button size="small" variant="outlined" onClick={onReturnToRecent}>
+              Volver a mensajes recientes
+            </Button>
+          </Box>
+        )}
+
         {!loading && !error && sorted.length > 0 && (
           <Stack spacing={conversationUiDensity.messageGapGroup}>
             {groups.map((group) => {
@@ -258,6 +377,10 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
                   </Typography>
                   {group.messages.map((msg, index) => {
                     const isLastInGroup = index === group.messages.length - 1;
+                    const isFocus = highlightedMessageId === msg.id;
+                    const attachmentOnly = messageIsAttachmentOnly(msg);
+                    const neutralAttachmentBubble =
+                      attachmentOnly && !isUser && !isSystem;
                     return (
                       <Box
                         key={msg.id}
@@ -269,28 +392,35 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
                         <Paper
                           elevation={0}
                           sx={{
-                            px: conversationUiDensity.bubblePaddingX,
-                            py: conversationUiDensity.bubblePaddingY,
-                            maxWidth: '78%',
+                            outline: isFocus ? '2px solid' : undefined,
+                            outlineColor: isFocus ? 'warning.main' : undefined,
+                            px: neutralAttachmentBubble ? 0.75 : conversationUiDensity.bubblePaddingX,
+                            py: neutralAttachmentBubble ? 0.5 : conversationUiDensity.bubblePaddingY,
+                            maxWidth: neutralAttachmentBubble ? 'min(78%, 360px)' : '78%',
                             width: 'fit-content',
                             bgcolor: isSystem
                               ? 'grey.200'
-                              : isUser
+                              : neutralAttachmentBubble || isUser
                                 ? 'background.paper'
                                 : isAgent
                                   ? 'success.light'
                                   : 'primary.light',
                             color:
-                              isUser || isSystem ? 'text.primary' : 'primary.contrastText',
-                            border: '1px solid',
+                              neutralAttachmentBubble || isUser || isSystem
+                                ? 'text.primary'
+                                : 'primary.contrastText',
+                            border: neutralAttachmentBubble ? 'none' : '1px solid',
                             borderColor: 'divider',
+                            boxShadow: neutralAttachmentBubble ? 1 : 0,
                             borderBottomLeftRadius: isUser && !isLastInGroup ? 6 : undefined,
                             borderBottomRightRadius: !isUser && !isSystem && !isLastInGroup ? 6 : undefined,
                           }}
                         >
                           {messageHasVisibleBody(msg) && (
                             <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem', lineHeight: 1.45 }}>
-                              {messageDisplayBody(msg)}
+                              {intraSearchTerm.trim().length >= 2
+                                ? highlightTermInPlainText(messageDisplayBody(msg), intraSearchTerm)
+                                : messageDisplayBody(msg)}
                             </Typography>
                           )}
                           <MessageInboundAttachments message={msg} />

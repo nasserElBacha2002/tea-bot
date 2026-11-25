@@ -5,16 +5,20 @@ import {
   CircularProgress,
   Dialog,
   DialogContent,
-  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined';
 import DownloadOutlinedIcon from '@mui/icons-material/DownloadOutlined';
 import BrokenImageOutlinedIcon from '@mui/icons-material/BrokenImageOutlined';
+import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import type { ConversationMessage, ConversationMessageAttachment } from '../types/conversation.types';
 import { conversationAttachmentContentUrl } from '../api/conversationsApi';
 import { formatByteSize } from '../utils/formatByteSize';
+import {
+  messageIsAttachmentOnly,
+  resolveMessageBubbleRole,
+} from '../utils/conversationMessageDisplay';
 
 interface Props {
   message: ConversationMessage;
@@ -36,12 +40,55 @@ function attachmentLabel(att: ConversationMessageAttachment): string {
   return 'Adjunto';
 }
 
+function fileKindLabel(mime: string | null | undefined): string {
+  if (isPdfMime(mime)) return 'PDF';
+  const value = String(mime || '').toLowerCase();
+  if (value.startsWith('image/')) return 'Imagen';
+  if (value.includes('spreadsheet') || value.includes('excel')) return 'Hoja de cálculo';
+  if (value.includes('word') || value.includes('document')) return 'Documento';
+  return 'Archivo';
+}
+
+/** Fondo del chip de documento según burbuja padre (texto vs solo adjunto). */
+function documentCardSurface(message: ConversationMessage): {
+  bgcolor: string;
+  border: string;
+  borderColor: string;
+  iconBg: string;
+  iconColor: 'error' | 'inherit';
+  metaColor: 'text.secondary' | 'inherit';
+} {
+  const role = resolveMessageBubbleRole(message);
+  const onColoredBubble =
+    !messageIsAttachmentOnly(message) && role !== 'user' && role !== 'system';
+
+  if (onColoredBubble) {
+    return {
+      bgcolor: 'rgba(255,255,255,0.14)',
+      border: '1px solid',
+      borderColor: 'rgba(255,255,255,0.22)',
+      iconBg: 'rgba(255,255,255,0.2)',
+      iconColor: 'inherit',
+      metaColor: 'inherit',
+    };
+  }
+
+  return {
+    bgcolor: 'grey.50',
+    border: 'none',
+    borderColor: 'transparent',
+    iconBg: 'background.paper',
+    iconColor: 'error',
+    metaColor: 'text.secondary',
+  };
+}
+
 const thumbSx = {
   display: 'block',
   maxWidth: '100%',
   width: 'auto',
   maxHeight: 220,
-  borderRadius: 1,
+  borderRadius: 1.5,
   cursor: 'pointer',
   objectFit: 'cover' as const,
 };
@@ -76,7 +123,7 @@ function ImageAttachment({
 
   return (
     <>
-      <Box sx={{ mt: 0.5 }}>
+      <Box sx={{ mt: 0.25 }}>
         <Box
           component="img"
           src={src}
@@ -91,7 +138,7 @@ function ImageAttachment({
           color="inherit"
           startIcon={<DownloadOutlinedIcon />}
           href={downloadUrl}
-          sx={{ mt: 0.5, minWidth: 0, px: 0.5, color: 'text.primary' }}
+          sx={{ mt: 0.5, minWidth: 0, px: 0.5, color: 'text.secondary' }}
         >
           Descargar
         </Button>
@@ -110,12 +157,14 @@ function ImageAttachment({
   );
 }
 
-function PdfAttachment({
+function DocumentAttachmentCard({
   message,
   attachment,
+  kind,
 }: {
   message: ConversationMessage;
   attachment: ConversationMessageAttachment;
+  kind: 'pdf' | 'file';
 }) {
   const downloadUrl = conversationAttachmentContentUrl(
     message.conversationId,
@@ -123,41 +172,66 @@ function PdfAttachment({
     attachment.id,
     { download: true },
   );
+  const surface = documentCardSurface(message);
+  const label = attachmentLabel(attachment);
+  const size = formatByteSize(attachment.byteSize);
+  const meta = size ? `${fileKindLabel(attachment.mimeType)} · ${size}` : fileKindLabel(attachment.mimeType);
+  const Icon = kind === 'pdf' ? PictureAsPdfOutlinedIcon : InsertDriveFileOutlinedIcon;
 
   return (
-    <Stack
-      direction="row"
-      spacing={1}
-      alignItems="center"
+    <Box
+      component="a"
+      href={downloadUrl}
+      download
+      aria-label={`Descargar ${label}`}
       sx={{
-        mt: 0.5,
-        px: 1,
-        py: 0.75,
-        borderRadius: 1,
-        border: '1px solid',
-        borderColor: 'divider',
-        bgcolor: 'background.paper',
+        mt: 0.25,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.25,
+        px: 1.25,
+        py: 1,
+        minWidth: { xs: 200, sm: 240 },
+        maxWidth: '100%',
+        borderRadius: 1.5,
+        textDecoration: 'none',
+        color: 'inherit',
+        bgcolor: surface.bgcolor,
+        border: surface.border,
+        borderColor: surface.borderColor,
+        transition: 'background-color 0.15s ease',
+        '&:hover': {
+          bgcolor:
+            surface.border === 'none' ? 'action.hover' : 'rgba(255,255,255,0.22)',
+        },
       }}
     >
-      <PictureAsPdfOutlinedIcon color="error" fontSize="small" />
+      <Box
+        sx={{
+          width: 40,
+          height: 40,
+          borderRadius: 1.25,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          bgcolor: surface.iconBg,
+          border: surface.border === 'none' ? '1px solid' : 'none',
+          borderColor: 'divider',
+        }}
+      >
+        <Icon fontSize="small" color={surface.iconColor} />
+      </Box>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body2" color="text.primary" noWrap title={attachmentLabel(attachment)}>
-          {attachmentLabel(attachment)}
+        <Typography variant="body2" fontWeight={500} noWrap title={label} sx={{ lineHeight: 1.35 }}>
+          {label}
         </Typography>
-        <Typography variant="caption" color="text.secondary">
-          PDF · {formatByteSize(attachment.byteSize)}
+        <Typography variant="caption" color={surface.metaColor} noWrap sx={{ display: 'block', mt: 0.15 }}>
+          {meta}
         </Typography>
       </Box>
-      <IconButton
-        component="a"
-        href={downloadUrl}
-        size="small"
-        aria-label="Descargar PDF"
-        sx={{ color: 'text.primary' }}
-      >
-        <DownloadOutlinedIcon fontSize="small" />
-      </IconButton>
-    </Stack>
+      <DownloadOutlinedIcon fontSize="small" sx={{ color: 'text.secondary', flexShrink: 0 }} />
+    </Box>
   );
 }
 
@@ -185,14 +259,7 @@ export const MessageInboundAttachments: React.FC<Props> = ({ message }) => {
   if (!items.length) return null;
 
   return (
-    <Stack
-      spacing={0.75}
-      sx={{
-        mt: message.body?.trim() ? 0.75 : 0,
-        // Burbujas outbound (agente/bot) fuerzan color claro; los chips usan fondo paper.
-        color: 'text.primary',
-      }}
-    >
+    <Stack spacing={0.5} sx={{ mt: message.body?.trim() ? 0.75 : 0, color: 'text.primary' }}>
       {items.map((attachment) => {
         if (attachment.status === 'pending' || attachment.status === 'downloading') {
           return <PendingAttachment key={attachment.id} />;
@@ -207,24 +274,22 @@ export const MessageInboundAttachments: React.FC<Props> = ({ message }) => {
           return <ImageAttachment key={attachment.id} message={message} attachment={attachment} />;
         }
         if (isPdfMime(attachment.mimeType)) {
-          return <PdfAttachment key={attachment.id} message={message} attachment={attachment} />;
+          return (
+            <DocumentAttachmentCard
+              key={attachment.id}
+              message={message}
+              attachment={attachment}
+              kind="pdf"
+            />
+          );
         }
         return (
-          <Button
+          <DocumentAttachmentCard
             key={attachment.id}
-            size="small"
-            color="inherit"
-            sx={{ color: 'text.primary', justifyContent: 'flex-start' }}
-            startIcon={<DownloadOutlinedIcon />}
-            href={conversationAttachmentContentUrl(
-              message.conversationId,
-              message.id,
-              attachment.id,
-              { download: true },
-            )}
-          >
-            {attachmentLabel(attachment)}
-          </Button>
+            message={message}
+            attachment={attachment}
+            kind="file"
+          />
         );
       })}
     </Stack>

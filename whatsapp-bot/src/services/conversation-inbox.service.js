@@ -1,6 +1,7 @@
 import { createReadStream } from 'node:fs';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
+import conversationSearchRepository from '../repositories/conversation-search.repository.js';
 import attachmentRepository from '../repositories/conversation-message-attachment.repository.js';
 import conversationSessionRepository from '../repositories/conversation-session.repository.js';
 import humanHandoffRepository from '../repositories/human-handoff.repository.js';
@@ -47,6 +48,7 @@ import conversationTakeoverService, {
 } from './conversation-takeover.service.js';
 import agentOutboundSendService from './agent-outbound-send.service.js';
 import twilioMessageDeliveryService from './twilio-message-delivery.service.js';
+import { isUuid } from '../utils/conversation-search.js';
 
 function requireReturnActor(actor) {
   if (!actor?.agentId || !canTakeoverConversation(actor.role)) {
@@ -67,6 +69,82 @@ function groupAttachmentsByMessageId(rows) {
     map.set(row.messageId, list);
   }
   return map;
+}
+
+async function hydrateMessagesPublic(messages) {
+  const attachmentMap = groupAttachmentsByMessageId(
+    await attachmentRepository.findByMessageIds(messages.map((m) => m.id)),
+  );
+  const deliveryMap = await twilioMessageDeliveryService.buildDeliveryStatusMapForMessages(messages);
+  return twilioMessageDeliveryService.mapMessagesPublicWithDelivery(
+    messages,
+    attachmentMap,
+    deliveryMap,
+  );
+}
+
+function parsePositiveInt(value, { fallback, min = 1, max }) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(Math.trunc(n), min), max);
+}
+
+function wantsTailLoad(query) {
+  const tail = String(query.tail ?? query.mode ?? '').toLowerCase();
+  return tail === '1' || tail === 'true' || tail === 'tail';
+}
+
+function optionalMessageId(value) {
+  if (value == null || value === '') return null;
+  const id = String(value).trim();
+  if (!isUuid(id)) {
+    throw appError('VALIDATION', 'Identificador de mensaje inválido', 400);
+  }
+  return id;
+}
+
+function parseConversationMessagesQuery(query = {}) {
+  if (query.limit != null && query.limit !== '' && !Number.isInteger(Number(query.limit))) {
+    throw appError('VALIDATION', 'limit debe ser un entero entre 1 y 500', 400);
+  }
+  const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
+  if (query.offset != null && query.offset !== '' && !Number.isInteger(Number(query.offset))) {
+    throw appError('VALIDATION', 'offset debe ser un entero mayor o igual a 0', 400);
+  }
+  const offset = Math.max(Number(query.offset) || 0, 0);
+  const order = String(query.order || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  const aroundMessageId = optionalMessageId(query.aroundMessageId);
+  const beforeMessageId = optionalMessageId(query.beforeMessageId);
+  const afterMessageId = optionalMessageId(query.afterMessageId);
+  const tail = wantsTailLoad(query);
+
+  const anchorCount = [aroundMessageId, beforeMessageId, afterMessageId].filter(Boolean).length;
+  if (anchorCount > 1) {
+    throw appError(
+      'VALIDATION',
+      'aroundMessageId, beforeMessageId y afterMessageId son mutuamente excluyentes',
+      400,
+    );
+  }
+  if (tail && anchorCount > 0) {
+    throw appError('VALIDATION', 'tail no combina con anclas de mensaje', 400);
+  }
+  if (tail && (offset > 0 || order === 'desc')) {
+    throw appError('VALIDATION', 'tail requiere offset 0 y order asc', 400);
+  }
+  if (anchorCount > 0 && offset > 0) {
+    throw appError('VALIDATION', 'offset no aplica con anclas de mensaje', 400);
+  }
+
+  return {
+    limit,
+    offset,
+    order,
+    aroundMessageId,
+    beforeMessageId,
+    afterMessageId,
+    tail,
+  };
 }
 
 function humanAttentionReplyAllowed(locked, viewer) {
@@ -194,26 +272,102 @@ export class ConversationInboxService {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
 
-    const limit = Math.min(Math.max(Number(query.limit) || 100, 1), 500);
-    const offset = Math.max(Number(query.offset) || 0, 0);
-    const order = String(query.order || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+    const {
+      limit,
+      offset,
+      order,
+      aroundMessageId,
+      beforeMessageId,
+      afterMessageId,
+      tail,
+    } = parseConversationMessagesQuery(query);
+
+    if (aroundMessageId) {
+      const before = parsePositiveInt(query.before, { fallback: 40, min: 0, max: 100 });
+      const after = parsePositiveInt(query.after, { fallback: 40, min: 0, max: 100 });
+      const window = await conversationSearchRepository.listAroundMessage(
+        conversationId,
+        aroundMessageId,
+        { before, after },
+      );
+      if (!window) {
+        throw appError('NOT_FOUND', 'Mensaje no encontrado en esta conversación', 404);
+      }
+      const items = await hydrateMessagesPublic(window.items);
+      return {
+        items,
+        focusMessageId: window.focusMessageId,
+        hasMoreBefore: window.hasMoreBefore,
+        hasMoreAfter: window.hasMoreAfter,
+        mode: 'around',
+        limit: before + after + 1,
+      };
+    }
+
+    if (beforeMessageId) {
+      const pageLimit = parsePositiveInt(query.limit, { fallback: 50, min: 1, max: 100 });
+      const page = await conversationSearchRepository.listBeforeMessage(
+        conversationId,
+        beforeMessageId,
+        pageLimit,
+      );
+      if (!page) {
+        throw appError('NOT_FOUND', 'Mensaje no encontrado en esta conversación', 404);
+      }
+      const items = await hydrateMessagesPublic(page.items);
+      return {
+        items,
+        hasMoreBefore: page.hasMoreBefore,
+        mode: 'before',
+        anchorMessageId: beforeMessageId,
+        limit: pageLimit,
+      };
+    }
+
+    if (afterMessageId) {
+      const pageLimit = parsePositiveInt(query.limit, { fallback: 50, min: 1, max: 100 });
+      const page = await conversationSearchRepository.listAfterMessage(
+        conversationId,
+        afterMessageId,
+        pageLimit,
+      );
+      if (!page) {
+        throw appError('NOT_FOUND', 'Mensaje no encontrado en esta conversación', 404);
+      }
+      const items = await hydrateMessagesPublic(page.items);
+      return {
+        items,
+        hasMoreAfter: page.hasMoreAfter,
+        mode: 'after',
+        anchorMessageId: afterMessageId,
+        limit: pageLimit,
+      };
+    }
+
+    if (tail) {
+      const tailLimit = Math.min(limit, 500);
+      const { items: messages, hasMoreBefore } = await conversationMessageRepository.listLatestTail(
+        conversationId,
+        tailLimit,
+      );
+      const items = await hydrateMessagesPublic(messages);
+      return {
+        items,
+        hasMoreBefore,
+        limit: tailLimit,
+        offset: 0,
+        order: 'asc',
+        mode: 'tail',
+      };
+    }
 
     const [messages, total] = await Promise.all([
       conversationMessageRepository.listByConversationId(conversationId, { limit, offset, order }),
       conversationMessageRepository.countByConversationId(conversationId),
     ]);
 
-    const attachmentMap = groupAttachmentsByMessageId(
-      await attachmentRepository.findByMessageIds(messages.map((m) => m.id)),
-    );
-    const deliveryMap = await twilioMessageDeliveryService.buildDeliveryStatusMapForMessages(messages);
-
     return {
-      items: twilioMessageDeliveryService.mapMessagesPublicWithDelivery(
-        messages,
-        attachmentMap,
-        deliveryMap,
-      ),
+      items: await hydrateMessagesPublic(messages),
       total,
       limit,
       offset,

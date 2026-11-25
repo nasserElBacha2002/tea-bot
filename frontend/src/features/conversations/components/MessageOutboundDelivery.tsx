@@ -7,6 +7,7 @@ import ErrorOutlineOutlinedIcon from '@mui/icons-material/ErrorOutlineOutlined';
 import HelpOutlineOutlinedIcon from '@mui/icons-material/HelpOutlineOutlined';
 import type { ConversationMessage } from '../types/conversation.types';
 import { resolveOutboundDeliveryUi } from '../utils/outboundDeliveryUi';
+import { messageIsAttachmentOnly } from '../utils/conversationMessageDisplay';
 
 interface Props {
   message: ConversationMessage;
@@ -16,7 +17,12 @@ export const MessageOutboundDelivery: React.FC<Props> = ({ message }) => {
   const ui = resolveOutboundDeliveryUi(message);
   if (ui.visual === 'none') return null;
 
-  const iconSx = { fontSize: '0.95rem', opacity: 0.9 };
+  const onNeutralBubble = messageIsAttachmentOnly(message);
+  const iconSx = {
+    fontSize: '0.95rem',
+    opacity: 0.9,
+    color: onNeutralBubble ? 'text.secondary' : undefined,
+  };
 
   let icon: React.ReactNode;
   let title = '';

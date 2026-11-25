@@ -540,11 +540,42 @@ export async function topDeliveryErrorCodes(since, limit = 5) {
   return rows.map((row) => ({ code: row.error_code, count: Number(row.total || 0) }));
 }
 
+/**
+ * Elimina estados de entrega ligados a mensajes de conversaciones que se retienen.
+ * No borra SIDs huérfanos (callbacks que aún no tienen fila en conversation_messages).
+ */
+export async function deleteDeliveryStatusForConversationIds(conversationIds, { transaction } = {}) {
+  const ids = [...new Set((conversationIds || []).filter(Boolean))];
+  if (ids.length === 0) return 0;
+  const placeholders = ids.map((_, index) => `$${index + 1}`).join(', ');
+  const { rows } = await query(
+    `DELETE d
+     OUTPUT DELETED.provider, DELETED.provider_message_id
+     FROM dbo.message_delivery_status AS d
+     INNER JOIN dbo.conversation_messages AS m
+       ON m.provider = d.provider
+      AND m.provider_message_id = d.provider_message_id
+     WHERE m.conversation_id IN (${placeholders})
+       AND m.provider_message_id IS NOT NULL
+       AND m.provider_message_id <> N''`,
+    ids,
+    { transaction },
+  );
+  return Number(rows?.length ?? 0);
+}
+
 export async function upsertJobStatus(jobName, fields) {
   const details = JSON.stringify({
     lastDeletedCount: fields.lastDeletedCount ?? null,
     lastRuntimeCleanupFailed: fields.lastRuntimeCleanupFailed ?? null,
     lastDurationMs: fields.lastDurationMs ?? null,
+    lastSuccessfulFinishedAt: fields.lastSuccessfulFinishedAt ?? null,
+    lastFailedAt: fields.lastFailedAt ?? null,
+    lastAttemptAt: fields.lastAttemptAt ?? null,
+    lastSkipReason: fields.lastSkipReason ?? null,
+    activeRunId: fields.activeRunId ?? null,
+    pendingRuntimeCleanup: fields.pendingRuntimeCleanup ?? null,
+    pendingMediaDeletes: fields.pendingMediaDeletes ?? null,
   });
   const params = [
     jobName,
@@ -597,6 +628,13 @@ export async function readJobStatus(jobName) {
     lastDeletedCount: details.lastDeletedCount ?? null,
     lastRuntimeCleanupFailed: details.lastRuntimeCleanupFailed ?? null,
     lastDurationMs: details.lastDurationMs ?? null,
+    lastSuccessfulFinishedAt: details.lastSuccessfulFinishedAt ?? null,
+    lastFailedAt: details.lastFailedAt ?? null,
+    lastAttemptAt: details.lastAttemptAt ?? null,
+    lastSkipReason: details.lastSkipReason ?? null,
+    activeRunId: details.activeRunId ?? null,
+    pendingRuntimeCleanup: details.pendingRuntimeCleanup ?? null,
+    pendingMediaDeletes: details.pendingMediaDeletes ?? null,
   };
 }
 

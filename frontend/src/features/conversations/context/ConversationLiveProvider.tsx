@@ -55,7 +55,10 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
     onNewConversation: (id) => handlersRef.current.onNewConversation?.(id),
     onHandoffWaiting: (id) => handlersRef.current.onHandoffWaiting?.(id),
     viewerAgentId: userContext.currentAgentId,
-    onLiveEvent: (event) => void onLiveEventRef.current(event),
+    onLiveEvent: (event) => {
+      handlersRef.current.onLiveEvent?.(event);
+      void onLiveEventRef.current(event);
+    },
   });
 
   const value = useMemo<ConversationLiveContextValue>(

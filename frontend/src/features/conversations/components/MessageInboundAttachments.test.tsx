@@ -83,7 +83,7 @@ describe('MessageInboundAttachments', () => {
   it('muestra nombre PDF legible en burbuja outbound de agente', () => {
     render(
       <ThemeProvider theme={theme}>
-        <Paper sx={{ bgcolor: 'success.light', color: 'primary.contrastText', p: 1 }}>
+        <Paper sx={{ bgcolor: 'background.paper', color: 'text.primary', p: 1 }}>
           <MessageInboundAttachments
             message={{
               ...base,
@@ -104,7 +104,7 @@ describe('MessageInboundAttachments', () => {
     );
     const label = screen.getByText('02-011-noti.pdf');
     expect(label).toBeVisible();
-    expect(label).not.toHaveStyle({ color: 'rgba(255, 255, 255, 1)' });
+    expect(screen.getByRole('link', { name: /Descargar 02-011-noti.pdf/i })).toBeInTheDocument();
   });
 
   it('muestra estado pendiente', () => {

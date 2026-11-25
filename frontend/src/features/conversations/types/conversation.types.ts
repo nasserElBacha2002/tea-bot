@@ -137,10 +137,60 @@ export interface ConversationMessage {
 
 export interface ConversationMessagesResponse {
   items: ConversationMessage[];
-  total: number;
+  total?: number;
   limit: number;
-  offset: number;
-  order: string;
+  offset?: number;
+  order?: string;
+  mode?: 'tail' | 'around' | 'before' | 'after' | string;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
+  focusMessageId?: string;
+  anchorMessageId?: string;
+}
+
+export interface ConversationSearchContactHit {
+  conversationId: string;
+  displayName: string | null;
+  phoneNumber: string | null;
+  matchKind: 'phone' | 'name' | string;
+  lastMessageAt: string | null;
+}
+
+export interface ConversationSearchMessageHit {
+  conversationId: string;
+  messageId: string;
+  displayName: string | null;
+  phoneNumber?: string | null;
+  direction: ConversationMessage['direction'];
+  senderType: ConversationMessage['senderType'];
+  createdAt: string;
+  snippet: string;
+  /** Coordenadas sobre `snippet` (no sobre el body completo). */
+  highlightStart: number;
+  /** Coordenadas sobre `snippet` (no sobre el body completo). */
+  highlightEnd: number;
+}
+
+export interface ConversationGlobalSearchResponse {
+  contacts: {
+    items: ConversationSearchContactHit[];
+    nextCursor: string | null;
+  };
+  messages: {
+    items: ConversationSearchMessageHit[];
+    nextCursor: string | null;
+  };
+}
+
+export interface ConversationIntraSearchResponse {
+  items: ConversationSearchMessageHit[];
+  nextCursor: string | null;
+}
+
+export interface ConversationMessageHighlight {
+  messageId: string;
+  start: number;
+  end: number;
 }
 
 export interface ConversationListFilters {

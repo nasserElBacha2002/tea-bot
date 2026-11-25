@@ -1,10 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { LiveConnectionStatus } from '../hooks/useConversationsLiveUpdates';
+import type { ConversationLiveEvent } from '../types/conversationLive.types';
 
 export interface ConversationLiveHandlers {
   onUnread?: (conversationId: string) => void;
   onNewConversation?: (conversationId: string) => void;
   onHandoffWaiting?: (conversationId: string) => void;
+  onLiveEvent?: (event: ConversationLiveEvent) => void;
 }
 
 export interface ConversationLiveContextValue {

@@ -50,6 +50,12 @@ describe('conversationUnread', () => {
     expect(conversationMatchesFilters(base, { status: 'closed' })).toBe(false);
     expect(conversationMatchesFilters(base, { search: 'test' })).toBe(true);
     expect(conversationMatchesFilters(base, { search: 'zzz' })).toBe(false);
+    expect(
+      conversationMatchesFilters(
+        { ...base, lastMessage: { ...base.lastMessage!, body: 'palabra oculta' } },
+        { search: 'palabra' },
+      ),
+    ).toBe(false);
     expect(conversationMatchesFilters(base, { channel: 'whatsapp' })).toBe(false);
     expect(conversationMatchesFilters(base, { channel: 'simulator' })).toBe(true);
   });

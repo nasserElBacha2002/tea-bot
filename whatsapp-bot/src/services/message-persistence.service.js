@@ -92,6 +92,7 @@ class MessagePersistenceService {
 
     const { conversation: initial } = await conversationService.findOrCreateTwilioConversation(event);
     let conversation = await conversationService.reloadConversation(initial);
+    await sessionService.bindConversationId(event.userId, conversation.id);
 
     if (conversation.status === 'closed') {
       conversation = await conversationService.reopenClosedConversationIfNeeded(conversation, {

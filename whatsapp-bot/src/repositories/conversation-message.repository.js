@@ -5,6 +5,11 @@ import {
   RETURN_TO_BOT_EVENT,
 } from '../utils/conversation-reentry-policy.js';
 
+export function mapMessageRecord(row) {
+  if (!row) return null;
+  return mapRow(row);
+}
+
 function mapRow(row) {
   if (!row) return null;
   return {
@@ -189,6 +194,21 @@ class ConversationMessageRepository {
       [conversationId],
     );
     return Number(rows[0]?.total ?? 0);
+  }
+
+  /** Últimos N mensajes en orden cronológico ascendente (sin COUNT global). */
+  async listLatestTail(conversationId, limit = 200) {
+    const bounded = Math.min(Math.max(Number(limit) || 200, 1), 500);
+    const { rows } = await query(
+      `SELECT TOP (${bounded + 1}) *
+       FROM dbo.conversation_messages
+       WHERE conversation_id = $1
+       ORDER BY created_at DESC, id DESC`,
+      [conversationId],
+    );
+    const hasMoreBefore = rows.length > bounded;
+    const slice = rows.slice(0, bounded).reverse();
+    return { items: slice.map(mapRow), hasMoreBefore };
   }
 
   /**

@@ -3,6 +3,8 @@ import { requireAuth } from '../middleware/require-auth.middleware.js';
 import { requireConversationsInbox } from '../middleware/require-conversations-inbox.middleware.js';
 import {
   listConversations,
+  searchConversations,
+  searchConversationMessages,
   getConversation,
   getConversationMessages,
   getMessageAttachmentContent,
@@ -14,6 +16,7 @@ import {
   updateConversationContact,
   returnConversationToBot,
 } from '../controllers/conversations.controller.js';
+import { conversationSearchRateLimit } from '../middleware/conversation-search-rate-limit.middleware.js';
 
 const router = express.Router();
 
@@ -21,12 +24,18 @@ router.use(requireAuth);
 router.use(requireConversationsInbox);
 
 router.get('/', listConversations);
+router.post('/search', conversationSearchRateLimit, searchConversations);
 router.post('/:conversationId/claim', claimConversation);
 router.post('/:conversationId/takeover', takeoverConversation);
 router.post('/:conversationId/transfer', transferConversation);
 router.post('/:conversationId/close', closeConversation);
 router.patch('/:conversationId/contact', updateConversationContact);
 router.post('/:conversationId/return-to-bot', returnConversationToBot);
+router.post(
+  '/:conversationId/messages/search',
+  conversationSearchRateLimit,
+  searchConversationMessages,
+);
 router.get('/:conversationId/messages', getConversationMessages);
 router.get(
   '/:conversationId/messages/:messageId/attachments/:attachmentId/content',

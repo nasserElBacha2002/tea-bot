@@ -6,6 +6,8 @@ import type {
   ConversationListResponse,
   ConversationMessage,
   ConversationMessagesResponse,
+  ConversationGlobalSearchResponse,
+  ConversationIntraSearchResponse,
   InboxConversationItem,
 } from '../types/conversation.types';
 import { resolveChannelForApi } from '../constants/conversationChannels';
@@ -101,9 +103,48 @@ export const conversationsApi = {
 
   getMessages: async (
     conversationId: string,
-    options: { limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
+    options: {
+      limit?: number;
+      offset?: number;
+      order?: 'asc' | 'desc';
+      tail?: string;
+      aroundMessageId?: string;
+      beforeMessageId?: string;
+      afterMessageId?: string;
+      before?: number;
+      after?: number;
+    } = {},
+    requestConfig: { signal?: AbortSignal } = {},
   ): Promise<ConversationMessagesResponse> => {
-    const { data } = await client.get(`/${conversationId}/messages`, { params: options });
+    const { data } = await client.get(`/${conversationId}/messages`, {
+      params: options,
+      signal: requestConfig.signal,
+    });
+    return data.data;
+  },
+
+  searchGlobal: async (
+    body: {
+      q: string;
+      limit?: number;
+      cursorContact?: string | null;
+      cursorMessage?: string | null;
+      groups?: 'both' | 'contacts' | 'messages';
+    },
+    requestConfig: { signal?: AbortSignal } = {},
+  ): Promise<ConversationGlobalSearchResponse> => {
+    const { data } = await client.post('/search', body, { signal: requestConfig.signal });
+    return data.data;
+  },
+
+  searchMessagesInConversation: async (
+    conversationId: string,
+    body: { q: string; limit?: number; cursor?: string | null },
+    requestConfig: { signal?: AbortSignal } = {},
+  ): Promise<ConversationIntraSearchResponse> => {
+    const { data } = await client.post(`/${conversationId}/messages/search`, body, {
+      signal: requestConfig.signal,
+    });
     return data.data;
   },
 
