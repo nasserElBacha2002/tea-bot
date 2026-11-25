@@ -9,6 +9,7 @@ import type {
 import type { ConversationLiveEvent } from '../types/conversationLive.types';
 import { conversationKeys } from '../hooks/useConversations';
 import { isInboundUserMessage } from './conversationMessageDisplay';
+import { scheduleConversationSearchInvalidation } from './scheduleConversationSearchInvalidation';
 
 function upsertListItem(
   items: InboxConversationItem[],
@@ -148,6 +149,49 @@ function isWaitingHumanHandoff(conv: InboxConversationItem | undefined): boolean
   return conv?.status === 'waiting_human';
 }
 
+function mergeLiveMessage(existing: ConversationMessage, message: ConversationMessage): ConversationMessage {
+  return {
+    ...existing,
+    ...message,
+    attachments: message.attachments ?? existing.attachments,
+    dispatch: Object.prototype.hasOwnProperty.call(message, 'dispatch')
+      ? message.dispatch
+      : existing.dispatch,
+    whatsappDelivery: Object.prototype.hasOwnProperty.call(message, 'whatsappDelivery')
+      ? message.whatsappDelivery
+      : existing.whatsappDelivery,
+  };
+}
+
+function patchMessageListCache(
+  queryClient: QueryClient,
+  cacheKey: readonly unknown[],
+  event: ConversationLiveEvent,
+  message: ConversationMessage,
+) {
+  const prev = queryClient.getQueryData<ConversationMessagesResponse>(cacheKey);
+  if (!prev) return;
+  const exists = prev.items.some((m) => m.id === message.id);
+  if (!exists && event.type === 'conversation.message.created') {
+    queryClient.setQueryData(cacheKey, {
+      ...prev,
+      items: [...prev.items, message],
+      total: (prev.total ?? prev.items.length) + 1,
+    });
+    return;
+  }
+  if (exists && event.type === 'conversation.message.updated') {
+    queryClient.setQueryData(cacheKey, {
+      ...prev,
+      items: prev.items.map((m) => (m.id === message.id ? mergeLiveMessage(m, message) : m)),
+    });
+    return;
+  }
+  if (!exists && event.type === 'conversation.message.updated') {
+    void queryClient.invalidateQueries({ queryKey: cacheKey });
+  }
+}
+
 export function applyConversationLiveEvent(
   queryClient: QueryClient,
   event: ConversationLiveEvent,
@@ -245,6 +289,7 @@ export function applyConversationLiveEvent(
   }
 
   if (message && event.conversationId) {
+    scheduleConversationSearchInvalidation(queryClient);
     const userInbound = isInboundUserMessage(message);
     if (selectedId !== event.conversationId && userInbound) {
       result.unreadConversationId = event.conversationId;
@@ -252,38 +297,9 @@ export function applyConversationLiveEvent(
 
     if (selectedId === event.conversationId) {
       const msgKey = conversationKeys.messages(event.conversationId);
-      const prev = queryClient.getQueryData<ConversationMessagesResponse>(msgKey);
-      if (prev) {
-        const exists = prev.items.some((m) => m.id === message.id);
-        if (!exists && event.type === 'conversation.message.created') {
-          queryClient.setQueryData(msgKey, {
-            ...prev,
-            items: [...prev.items, message],
-            total: prev.total + 1,
-          });
-        } else if (exists && event.type === 'conversation.message.updated') {
-          queryClient.setQueryData(msgKey, {
-            ...prev,
-            items: prev.items.map((m) => (
-              m.id === message.id
-                ? {
-                    ...m,
-                    ...message,
-                    attachments: message.attachments ?? m.attachments,
-                    dispatch: Object.prototype.hasOwnProperty.call(message, 'dispatch')
-                      ? message.dispatch
-                      : m.dispatch,
-                    whatsappDelivery: Object.prototype.hasOwnProperty.call(message, 'whatsappDelivery')
-                      ? message.whatsappDelivery
-                      : m.whatsappDelivery,
-                  }
-                : m
-            )),
-          });
-        } else if (!exists && event.type === 'conversation.message.updated') {
-          void queryClient.invalidateQueries({ queryKey: msgKey });
-        }
-      }
+      const tailKey = [...msgKey, 'tail'] as const;
+      patchMessageListCache(queryClient, tailKey, event, message);
+      patchMessageListCache(queryClient, msgKey, event, message);
     }
   }
 

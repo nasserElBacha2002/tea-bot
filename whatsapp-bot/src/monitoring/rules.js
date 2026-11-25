@@ -171,10 +171,14 @@ export function isRetentionStale({
   lastStatus,
   intervalHours,
   processStartedAt,
+  activeRunInProcess = false,
   now = new Date(),
 }) {
   if (!enabled) return false;
-  if (lastStatus === 'RUNNING') return false;
+  if (lastStatus === 'RUNNING') {
+    if (activeRunInProcess) return false;
+    return true;
+  }
   const intervalMs = Number(intervalHours) * 60 * 60 * 1000;
   if (!Number.isFinite(intervalMs) || intervalMs <= 0) return false;
   const limit = intervalMs * 1.5;

@@ -33,3 +33,7 @@ export function messageHasVisibleBody(msg: ConversationMessage): boolean {
   const body = msg.body?.trim();
   return Boolean(body) || (!msg.attachments?.length && !body);
 }
+
+export function messageIsAttachmentOnly(msg: ConversationMessage): boolean {
+  return Boolean(msg.attachments?.length) && !msg.body?.trim();
+}

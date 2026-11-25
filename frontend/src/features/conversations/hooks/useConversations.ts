@@ -9,10 +9,14 @@ export const conversationKeys = {
   messages: (id: string) => [...conversationKeys.all, 'messages', id] as const,
 };
 
-export function useConversations(filters: ConversationListFilters) {
+export function useConversations(
+  filters: ConversationListFilters,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: conversationKeys.list(filters),
     queryFn: () => conversationsApi.list(filters),
+    enabled: options.enabled !== false,
   });
 }
 
@@ -26,8 +30,8 @@ export function useConversationDetail(conversationId: string | null) {
 
 export function useConversationMessages(conversationId: string | null) {
   return useQuery({
-    queryKey: conversationKeys.messages(conversationId ?? ''),
-    queryFn: () => conversationsApi.getMessages(conversationId!, { limit: 200, order: 'asc' }),
+    queryKey: [...conversationKeys.messages(conversationId ?? ''), 'tail'],
+    queryFn: () => conversationsApi.getMessages(conversationId!, { limit: 200, order: 'asc', tail: '1' }),
     enabled: Boolean(conversationId),
   });
 }

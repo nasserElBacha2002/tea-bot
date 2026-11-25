@@ -25,6 +25,13 @@ interface Props {
   unreadCount?: number;
   isNew?: boolean;
   onSelect: (id: string) => void;
+  /** Si se define, reemplaza el preview de último mensaje (p. ej. snippet resaltado). */
+  previewSlot?: React.ReactNode;
+  /** Hora en meta derecha; por defecto `conversation.lastMessageAt`. */
+  metaTimeAt?: string | null;
+  /** Click custom (p. ej. abrir un mensaje en historial). */
+  onItemClick?: () => void;
+  disabled?: boolean;
 }
 
 function listItemBadge(
@@ -49,6 +56,10 @@ export const ConversationListItem: React.FC<Props> = ({
   unreadCount = 0,
   isNew = false,
   onSelect,
+  previewSlot,
+  metaTimeAt,
+  onItemClick,
+  disabled = false,
 }) => {
   const title = formatListItemPrimary(conversation.phoneNumber, conversation.displayName);
   const channel = channelLabel(conversation.channel);
@@ -58,7 +69,7 @@ export const ConversationListItem: React.FC<Props> = ({
     conversation.lastMessage?.direction,
     conversation.lastMessage?.senderType,
   );
-  const time = formatShortDateTime(conversation.lastMessageAt);
+  const time = formatShortDateTime(metaTimeAt !== undefined ? metaTimeAt : conversation.lastMessageAt);
   const accent = listPriorityAccent(conversation.status, unread || unreadCount > 0);
   const badge = listItemBadge(conversation.status, unread, unreadCount, isNew);
   const highlight = (unread || isNew) && !selected && conversation.status !== 'closed';
@@ -77,7 +88,8 @@ export const ConversationListItem: React.FC<Props> = ({
   return (
     <ListItemButton
       selected={selected}
-      onClick={() => onSelect(conversation.id)}
+      disabled={disabled}
+      onClick={() => (onItemClick ? onItemClick() : onSelect(conversation.id))}
       alignItems="flex-start"
       aria-label={ariaLabel}
       sx={{
@@ -137,16 +149,18 @@ export const ConversationListItem: React.FC<Props> = ({
               minWidth: 0,
             }}
           >
-            <Typography
-              variant="caption"
-              color={highlight ? 'text.primary' : 'text.secondary'}
-              noWrap
-              fontWeight={highlight ? 600 : 400}
-              sx={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', lineHeight: 1.35 }}
-            >
-              {prefix}
-              {preview}
-            </Typography>
+            {previewSlot ?? (
+              <Typography
+                variant="caption"
+                color={highlight ? 'text.primary' : 'text.secondary'}
+                noWrap
+                fontWeight={highlight ? 600 : 400}
+                sx={{ flex: 1, minWidth: 0, fontSize: '0.8125rem', lineHeight: 1.35 }}
+              >
+                {prefix}
+                {preview}
+              </Typography>
+            )}
             {metaRight && (
               <Typography
                 variant="caption"

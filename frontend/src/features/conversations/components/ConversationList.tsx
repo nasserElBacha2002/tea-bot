@@ -3,7 +3,7 @@ import { Box, CircularProgress, List, Typography, Alert } from '@mui/material';
 import type { InboxConversationItem } from '../types/conversation.types';
 import { ConversationListItem } from './ConversationListItem';
 
-const listScrollSx = {
+export const conversationListScrollSx = {
   flex: 1,
   minHeight: 0,
   overflowY: 'auto',
@@ -34,7 +34,7 @@ export const ConversationList: React.FC<Props> = ({
 }) => {
   if (loading) {
     return (
-      <Box sx={{ ...listScrollSx, display: 'flex', justifyContent: 'center', py: 4 }}>
+      <Box sx={{ ...conversationListScrollSx, display: 'flex', justifyContent: 'center', py: 4 }}>
         <CircularProgress size={28} />
       </Box>
     );
@@ -42,7 +42,7 @@ export const ConversationList: React.FC<Props> = ({
 
   if (error) {
     return (
-      <Box sx={listScrollSx}>
+      <Box sx={conversationListScrollSx}>
         <Box sx={{ p: 2 }}>
           <Alert severity="error">{error}</Alert>
         </Box>
@@ -52,14 +52,14 @@ export const ConversationList: React.FC<Props> = ({
 
   if (!conversations.length) {
     return (
-      <Box sx={{ ...listScrollSx, p: 3, textAlign: 'center' }}>
+      <Box sx={{ ...conversationListScrollSx, p: 3, textAlign: 'center' }}>
         <Typography color="text.secondary">No se encontraron conversaciones</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={listScrollSx} data-testid="conversation-list-scroll">
+    <Box sx={conversationListScrollSx} data-testid="conversation-list-scroll">
       <List disablePadding>
         {conversations.map((c) => (
           <ConversationListItem

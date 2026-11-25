@@ -4,9 +4,9 @@ import { useConversationLive, type ConversationLiveHandlers } from '../context/c
 /** Registers page-level unread/handoff handlers for the shared live socket. */
 export function useConversationLiveHandlers(handlers: ConversationLiveHandlers): void {
   const { registerHandlers } = useConversationLive();
-  const { onUnread, onNewConversation, onHandoffWaiting } = handlers;
+  const { onUnread, onNewConversation, onHandoffWaiting, onLiveEvent } = handlers;
 
   useEffect(() => {
-    return registerHandlers({ onUnread, onNewConversation, onHandoffWaiting });
-  }, [registerHandlers, onUnread, onNewConversation, onHandoffWaiting]);
+    return registerHandlers({ onUnread, onNewConversation, onHandoffWaiting, onLiveEvent });
+  }, [registerHandlers, onUnread, onNewConversation, onHandoffWaiting, onLiveEvent]);
 }

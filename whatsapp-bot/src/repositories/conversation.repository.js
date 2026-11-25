@@ -1,5 +1,7 @@
 import { query, isConversationDbEnabled, parseJsonColumn } from '../db/index.js';
 import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-lease.js';
+import { deleteDeliveryStatusForConversationIds } from '../monitoring/monitoring.repository.js';
+import { enqueuePendingStorageDeletes } from './retention-pending-storage.repository.js';
 import { clampRetentionBatchSize } from '../utils/conversation-retention.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 
@@ -411,28 +413,60 @@ class ConversationRepository {
   }
 
   async deleteInactiveBatchBefore(cutoff, { limit = 100, transaction } = {}) {
-    const safeLimit = clampRetentionBatchSize(limit);
-    const { rows } = await query(
-      `WITH stale AS (
-         SELECT TOP ($2) id
-         FROM dbo.conversations WITH (UPDLOCK, READPAST, ROWLOCK)
-         WHERE (last_message_at IS NOT NULL AND last_message_at < $1)
-            OR (last_message_at IS NULL AND started_at < $1)
-         ORDER BY COALESCE(last_message_at, started_at) ASC
-       )
-       DELETE c
-       OUTPUT DELETED.id, DELETED.external_user_id
-       FROM dbo.conversations AS c
-       INNER JOIN stale AS s ON s.id = c.id
-       WHERE (c.last_message_at IS NOT NULL AND c.last_message_at < $1)
-          OR (c.last_message_at IS NULL AND c.started_at < $1)`,
-      [cutoff, safeLimit],
+    const batch = await this.deleteInactiveRetentionBatch(cutoff, { limit, transaction });
+    return batch.rows;
+  }
+
+  /**
+   * Un solo batch transaccional: candidatos, adjuntos, delivery_status y DELETE revalidado.
+   */
+  async deleteInactiveRetentionBatch(cutoff, { limit = 100, transaction, attachmentRepo } = {}) {
+    const conversationIds = await this.listInactiveBatchIdsBefore(cutoff, { limit, transaction });
+    if (conversationIds.length === 0) {
+      return { rows: [], storageKeys: [], deliveryStatusDeleted: 0 };
+    }
+
+    let storageKeys = [];
+    if (attachmentRepo?.listStoredKeysByConversationIds) {
+      storageKeys = await attachmentRepo.listStoredKeysByConversationIds(conversationIds, { transaction });
+    }
+    if (storageKeys.length > 0) {
+      try {
+        await enqueuePendingStorageDeletes(storageKeys, { transaction });
+      } catch (error) {
+        const missingTable = /retention_pending_storage_deletes/i.test(String(error?.message || ''));
+        if (!missingTable) throw error;
+      }
+    }
+
+    const deliveryStatusDeleted = await deleteDeliveryStatusForConversationIds(
+      conversationIds,
       { transaction },
     );
-    return (rows || []).map((row) => ({
-      id: row.id,
-      externalUserId: row.external_user_id,
-    }));
+
+    const placeholders = conversationIds.map((_, index) => `$${index + 2}`).join(', ');
+    const { rows } = await query(
+      `DELETE c
+       OUTPUT DELETED.id, DELETED.external_user_id, DELETED.channel
+       FROM dbo.conversations AS c
+       WHERE c.id IN (${placeholders})
+         AND (
+           (c.last_message_at IS NOT NULL AND c.last_message_at < $1)
+           OR (c.last_message_at IS NULL AND c.started_at < $1)
+         )`,
+      [cutoff, ...conversationIds],
+      { transaction },
+    );
+
+    return {
+      rows: (rows || []).map((row) => ({
+        id: row.id,
+        externalUserId: row.external_user_id,
+        channel: row.channel,
+      })),
+      storageKeys,
+      deliveryStatusDeleted,
+    };
   }
 
   /**

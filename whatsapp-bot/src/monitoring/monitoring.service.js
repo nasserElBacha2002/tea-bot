@@ -24,6 +24,7 @@ import {
 } from './rules.js';
 import { collectTwilioSnapshot, listRecentTwilioMessageSids } from './twilio-monitor.client.js';
 import twilioMessageDeliveryService from '../services/twilio-message-delivery.service.js';
+import conversationRetentionService from '../services/conversationRetention.service.js';
 
 const ACTIVITY_CACHE_MS = 30 * 1000;
 const MINUTE_MS = 60 * 1000;
@@ -380,6 +381,7 @@ export class MonitoringService {
         lastStatus: retention.lastStatus,
         intervalHours: retention.intervalHours,
         processStartedAt: activity.processStartedAt,
+        activeRunInProcess: Boolean(conversationRetentionService.running),
       }),
       ...getMonitorJobView(),
     };

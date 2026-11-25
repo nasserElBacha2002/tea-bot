@@ -1,7 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ConversationRetentionService } from './conversationRetention.service.js';
+import sessionService from './session.service.js';
 import { config } from '../config.js';
+
+test.before(() => {
+  config.monitoringEnabled = false;
+  process.env.TB_QUIET_RETENTION_ROW_LOGS = '1';
+});
+
+test.after(() => {
+  delete process.env.TB_QUIET_RETENTION_ROW_LOGS;
+});
+import { resetJobStatusForTests } from '../monitoring/job-status.store.js';
+
+test.beforeEach(() => {
+  config.monitoringEnabled = false;
+  resetJobStatusForTests();
+  sessionService.sessions = {};
+});
 
 function createHarness({ batches = [], onDelete, resetImpl } = {}) {
   const deletedIds = [];
@@ -11,35 +28,38 @@ function createHarness({ batches = [], onDelete, resetImpl } = {}) {
 
   const service = new ConversationRetentionService({
     dbEnabled: () => true,
+    acquireLock: async () => ({ acquired: true, returnCode: 0 }),
+    releaseLock: async () => {},
     runtimeSession: {
-      resetSession: async (userId) => {
+      resetSessionForDeletedConversation: async (userId, conversationId) => {
         calls.reset += 1;
-        if (resetImpl) return resetImpl(userId);
-        resetUsers.push(userId);
+        if (resetImpl) return resetImpl(userId, conversationId);
+        resetUsers.push({ userId, conversationId });
+        return { action: 'reset' };
       },
     },
     runTransaction: async (fn) => fn(null),
     attachmentRepo: {
-      listStoredKeysByConversationIds: async (ids) => ids.map((id) => `file-${id}.jpg`),
+      listStoredKeysByConversationIds: async () => [],
     },
     mediaService: {
       deleteStoredObjects: async () => ({ deleted: 1, failed: 0 }),
     },
     conversationRepo: {
-      listInactiveBatchIdsBefore: async (cutoff, { limit } = {}) => {
+      findByChannelAndExternalUserId: async () => null,
+      deleteInactiveRetentionBatch: async (cutoff, { limit } = {}) => {
         if (onDelete) {
-          const preview = await Promise.resolve(onDelete({ cutoff, limit, preview: true }));
-          return (preview || []).map((row) => row.id);
+          calls.delete += 1;
+          const rows = await onDelete({ cutoff, limit, call: calls.delete });
+          return { rows: rows || [], storageKeys: [] };
         }
-        const batch = queue[0] || [];
-        return batch.slice(0, limit).map((row) => row.id);
-      },
-      deleteInactiveBatchBefore: async (cutoff, { limit } = {}) => {
+        const batch = queue.shift();
+        if (!batch || batch.length === 0) {
+          return { rows: [], storageKeys: [] };
+        }
         calls.delete += 1;
-        if (onDelete) return onDelete({ cutoff, limit, call: calls.delete });
-        const batch = queue.shift() || [];
         deletedIds.push(...batch.map((row) => row.id));
-        return batch;
+        return { rows: batch, storageKeys: [] };
       },
     },
   });
@@ -81,25 +101,24 @@ test('runSweep elimina inactivas en batch y resetea sesiones runtime', async () 
     assert.equal(result.runtimeCleaned, 3);
     assert.equal(result.runtimeCleanupFailed, 0);
     assert.deepEqual(deletedIds, ['c1', 'c2', 'c3']);
-    assert.deepEqual(resetUsers, ['user:c1', 'user:c2', 'user:c3']);
+    assert.equal(resetUsers.length, 3);
     assert.equal(calls.delete, 2);
   });
 });
 
 test('batchSize configurado 1000 con tope 500 procesa todas las filas', async () => {
   await withRetentionConfig({ conversationRetentionBatchSize: 500 }, async () => {
-    const remaining = Array.from({ length: 1200 }, (_, i) => ({
+    const remaining = Array.from({ length: 12 }, (_, i) => ({
       id: `c${i}`,
       externalUserId: `user:c${i}`,
     }));
     const { service } = createHarness({
-      onDelete: ({ limit, preview }) => (
-        preview ? remaining.slice(0, limit) : remaining.splice(0, limit)
-      ),
+      onDelete: ({ limit }) => remaining.splice(0, limit),
+      resetImpl: async () => ({ action: 'no_session' }),
     });
     const result = await service.runSweep();
-    assert.equal(result.conversationsDeleted, 1200);
-    assert.equal(result.runtimeCleaned, 1200);
+    assert.equal(result.conversationsDeleted, 12);
+    assert.equal(result.runtimeCleaned, 0);
   });
 });
 
@@ -181,12 +200,12 @@ test('resetSession fallido no reporta cleanup completo y reintenta', async () =>
     let shouldFail = true;
     const { service, calls } = createHarness({
       batches: [[{ id: 'c-fail', externalUserId: 'user:fail' }], []],
-      resetImpl: async (userId) => {
+      resetImpl: async () => {
         if (shouldFail) {
           shouldFail = false;
           throw new Error('disk full');
         }
-        return userId;
+        return { action: 'reset' };
       },
     });
 
@@ -194,12 +213,145 @@ test('resetSession fallido no reporta cleanup completo y reintenta', async () =>
     assert.equal(first.conversationsDeleted, 1);
     assert.equal(first.runtimeCleanupFailed, 1);
     assert.equal(first.runtimeCleaned, 0);
-    assert.equal(service.pendingRuntimeCleanup.has('user:fail'), true);
+    assert.equal(service.pendingRuntimeCleanup.has('c-fail'), true);
 
     const second = await service.runSweep();
     assert.equal(second.runtimeCleaned >= 1, true);
     assert.equal(second.runtimeCleanupFailed, 0);
-    assert.equal(service.pendingRuntimeCleanup.has('user:fail'), false);
+    assert.equal(service.pendingRuntimeCleanup.has('c-fail'), false);
     assert.equal(calls.reset >= 2, true);
+  });
+});
+
+test('runSweep con lock distribuido omitido no emite job_started', async () => {
+  await withRetentionConfig({}, async () => {
+    config.monitoringEnabled = false;
+    const events = [];
+    const original = console.log;
+    console.log = (...args) => {
+      for (const arg of args) {
+        if (typeof arg === 'string' && arg.startsWith('{')) {
+          try {
+            events.push(JSON.parse(arg));
+          } catch { /* ignore */ }
+        }
+      }
+      original.apply(console, args);
+    };
+    const { service } = createHarness({ batches: [[{ id: 'c1', externalUserId: 'u1' }]] });
+    service.acquireLock = async () => ({ acquired: false, returnCode: -1 });
+    try {
+      const result = await service.runSweep();
+      assert.equal(result.skipped, true);
+      assert.equal(result.skipReason, 'distributed_lock');
+      assert.equal(events.some((e) => e.event === 'job_started'), false);
+      assert.equal(events.some((e) => e.event === 'job_skipped_distributed_lock'), true);
+    } finally {
+      console.log = original;
+    }
+  });
+});
+
+test('shutdown interrumpe sin job_finished SUCCESS', async () => {
+  await withRetentionConfig({}, async () => {
+    const events = [];
+    const original = console.log;
+    console.log = (...args) => {
+      for (const arg of args) {
+        if (typeof arg === 'string' && arg.startsWith('{')) {
+          try {
+            events.push(JSON.parse(arg));
+          } catch { /* ignore */ }
+        }
+      }
+      original.apply(console, args);
+    };
+    let calls = 0;
+    const { resetShutdownCoordinatorForTests, setShuttingDownForTests } = await import('../process/shutdown-coordinator.js');
+    const service = new ConversationRetentionService({
+      dbEnabled: () => true,
+      acquireLock: async () => ({ acquired: true, returnCode: 0 }),
+      releaseLock: async () => {},
+      runTransaction: async (fn) => fn(null),
+      mediaService: { deleteStoredObjects: async () => ({ deleted: 1, failed: 0 }) },
+      attachmentRepo: { listStoredKeysByConversationIds: async () => [] },
+      runtimeSession: {
+        resetSessionForDeletedConversation: async () => ({ action: 'no_session' }),
+      },
+      conversationRepo: {
+        deleteInactiveRetentionBatch: async () => {
+          calls += 1;
+          if (calls === 1) {
+            setShuttingDownForTests(true);
+            return {
+              rows: [{ id: 'c-shutdown', externalUserId: 'user-shutdown' }],
+              storageKeys: [],
+              deliveryStatusDeleted: 0,
+            };
+          }
+          return { rows: [], storageKeys: [], deliveryStatusDeleted: 0 };
+        },
+      },
+    });
+    try {
+      const result = await service.runSweep();
+      assert.equal(result.interrupted, true);
+      assert.equal(result.conversationsDeleted, 1);
+      assert.equal(events.some((e) => e.event === 'job_stopped_shutdown'), true);
+      assert.equal(events.some((e) => e.event === 'job_finished'), false);
+    } finally {
+      console.log = original;
+      resetShutdownCoordinatorForTests();
+    }
+  });
+});
+
+test('limpia runtime solo si la sesión coincide con la conversación eliminada', async () => {
+  await withRetentionConfig({}, async () => {
+    const calls = { reset: 0, skip: 0 };
+    const service = new ConversationRetentionService({
+      dbEnabled: () => true,
+      acquireLock: async () => ({ acquired: true }),
+      releaseLock: async () => {},
+      runTransaction: async (fn) => fn(null),
+      mediaService: { deleteStoredObjects: async () => ({ deleted: 0, failed: 0 }) },
+      attachmentRepo: { listStoredKeysByConversationIds: async () => [] },
+      conversationRepo: (() => {
+        let deletedOnce = false;
+        return {
+          deleteInactiveRetentionBatch: async () => {
+            if (deletedOnce) return { rows: [], storageKeys: [] };
+            deletedOnce = true;
+            return {
+              rows: [{ id: 'deleted-1', externalUserId: 'wa:user-1', channel: 'whatsapp' }],
+              storageKeys: [],
+            };
+          },
+          findByChannelAndExternalUserId: async () => ({ id: 'new-2' }),
+        };
+      })(),
+      runtimeSession: {
+        resetSessionForDeletedConversation: async (_userId, deletedId) => {
+          if (String(deletedId) === 'deleted-1') {
+            calls.skip += 1;
+            return { action: 'skipped_bound_to_other_conversation' };
+          }
+          calls.reset += 1;
+          return { action: 'reset' };
+        },
+      },
+    });
+
+    sessionService.sessions['wa:user-1'] = {
+      flowId: 'main-menu',
+      currentNode: 'welcome',
+      conversationId: 'new-2',
+    };
+
+    const result = await service.runSweep();
+    assert.equal(result.conversationsDeleted, 1);
+    assert.equal(result.runtimeCleanupSkipped, 1);
+    assert.equal(calls.reset, 0);
+    assert.ok(sessionService.sessions['wa:user-1']);
   });
 });

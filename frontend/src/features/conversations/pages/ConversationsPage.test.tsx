@@ -53,6 +53,51 @@ vi.mock('../hooks/useConversationLiveHandlers', () => ({
   useConversationLiveHandlers: vi.fn(),
 }));
 
+vi.mock('../hooks/useConversationMessagePane', () => ({
+  useConversationMessagePane: () => ({
+    items: [],
+    loading: false,
+    error: null,
+    hasMoreBefore: false,
+    hasMoreAfter: false,
+    highlightedMessageId: null,
+    highlightTerm: '',
+    scrollTargetMessageId: null,
+    consumeScrollTarget: vi.fn(),
+    historyPinned: false,
+    mode: 'tail',
+    loadingOlder: false,
+    loadingNewer: false,
+    jumpToMessage: vi.fn().mockResolvedValue(undefined),
+    loadOlder: vi.fn().mockResolvedValue(undefined),
+    loadNewer: vi.fn().mockResolvedValue(undefined),
+    returnToRecent: vi.fn(),
+    appendLiveMessage: vi.fn(),
+    patchLiveMessage: vi.fn(),
+    clearHighlights: vi.fn(),
+    cancelInFlight: vi.fn(),
+    refetchTail: vi.fn(),
+  }),
+}));
+
+vi.mock('../hooks/useConversationGlobalSearch', () => ({
+  useConversationGlobalSearch: () => ({
+    active: false,
+    debouncedQ: '',
+    loading: false,
+    error: null,
+    data: undefined,
+    refetch: vi.fn(),
+    invalidate: vi.fn(),
+    contactCursor: null,
+    messageCursor: null,
+    setContactCursor: vi.fn(),
+    setMessageCursor: vi.fn(),
+    loadMoreContacts: vi.fn(),
+    loadMoreMessages: vi.fn(),
+  }),
+}));
+
 vi.mock('../hooks/useConversations', () => ({
   useConversations: () => ({
     data: {

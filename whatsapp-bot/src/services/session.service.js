@@ -149,6 +149,80 @@ class SessionService {
     delete this.sessions[userId];
     await this.saveSessions(perfContext);
   }
+
+  /**
+   * Vincula la sesión en memoria a una conversación SQL (generación explícita).
+   */
+  async bindConversationId(userId, conversationId, perfContext = null) {
+    if (!userId || !conversationId) return this.getSession(userId);
+    const current = this.sessions[userId];
+    if (!current) return null;
+    const bound = String(conversationId).toLowerCase();
+    if (String(current.conversationId || '').toLowerCase() === bound) return current;
+    const previousBound = String(current.conversationId || '').toLowerCase();
+    if (previousBound && previousBound !== bound) {
+      return this.updateSession(userId, {
+        conversationId: bound,
+        variables: {},
+        __resetHistory: true,
+      }, perfContext);
+    }
+    return this.updateSession(userId, { conversationId: bound }, perfContext);
+  }
+
+  /**
+   * Limpia runtime solo si la sesión sigue asociada a la conversación eliminada.
+   * Evita borrar estado de una conversación nueva del mismo contacto.
+   */
+  async resetSessionForDeletedConversation(
+    userId,
+    deletedConversationId,
+    { resolveActiveConversation, perfContext = null } = {},
+  ) {
+    if (!userId || !deletedConversationId) {
+      return { action: 'invalid_args' };
+    }
+    const deletedId = String(deletedConversationId).toLowerCase();
+    const session = this.sessions[userId];
+    if (!session) return { action: 'no_session' };
+
+    const sessionConversationId = session.conversationId
+      ? String(session.conversationId).toLowerCase()
+      : null;
+
+    if (sessionConversationId && sessionConversationId !== deletedId) {
+      return { action: 'skipped_bound_to_other_conversation' };
+    }
+
+    if (!sessionConversationId && typeof resolveActiveConversation === 'function') {
+      const active = await resolveActiveConversation();
+      const activeId = active?.id ? String(active.id).toLowerCase() : null;
+      if (activeId && activeId !== deletedId) {
+        await this.bindConversationId(userId, activeId, perfContext);
+        return { action: 'skipped_new_conversation' };
+      }
+    }
+
+    const latest = this.sessions[userId];
+    if (!latest) return { action: 'no_session' };
+    const latestConversationId = latest.conversationId
+      ? String(latest.conversationId).toLowerCase()
+      : null;
+    if (latestConversationId && latestConversationId !== deletedId) {
+      return { action: 'skipped_bound_to_other_conversation' };
+    }
+    if (!latestConversationId && typeof resolveActiveConversation === 'function') {
+      const active = await resolveActiveConversation();
+      const activeId = active?.id ? String(active.id).toLowerCase() : null;
+      if (activeId && activeId !== deletedId) {
+        await this.bindConversationId(userId, activeId, perfContext);
+        return { action: 'skipped_new_conversation' };
+      }
+    }
+
+    await this.resetSession(userId, perfContext);
+    return { action: 'reset' };
+  }
 }
 
 const sessionService = new SessionService();

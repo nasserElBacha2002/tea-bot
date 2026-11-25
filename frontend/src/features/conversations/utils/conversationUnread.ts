@@ -74,7 +74,7 @@ export function conversationMatchesFilters(
   if (filters.channel && item.channel !== filters.channel) return false;
   if (filters.search?.trim()) {
     const q = filters.search.trim().toLowerCase();
-    const hay = `${item.displayName ?? ''} ${item.phoneNumber ?? ''} ${item.lastMessage?.body ?? ''}`.toLowerCase();
+    const hay = `${item.displayName ?? ''} ${item.phoneNumber ?? ''}`.toLowerCase();
     if (!hay.includes(q)) return false;
   }
   return true;

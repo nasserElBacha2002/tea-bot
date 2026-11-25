@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Box, Paper, Stack, Typography, Alert, Chip, Button, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -10,7 +10,6 @@ import { ConversationLiveIndicator } from '../components/ConversationLiveIndicat
 import {
   useConversations,
   useConversationDetail,
-  useConversationMessages,
   useRefreshConversations,
   useClaimConversation,
   useTakeoverConversation,
@@ -33,6 +32,10 @@ import { clientRequestIdFor, completeClientRequest, takeoverRequestKey } from '.
 import { buildInboxAttachmentPayload } from '../utils/inboxAttachmentPayload';
 import type { ComposerSendPayload, ComposerSendResult } from '../components/ConversationComposer';
 import type { SendMessageBatchResponse } from '../api/conversationsApi';
+import { ConversationGlobalSearchResults } from '../components/ConversationGlobalSearchResults';
+import { useConversationGlobalSearch } from '../hooks/useConversationGlobalSearch';
+import { useConversationMessagePane } from '../hooks/useConversationMessagePane';
+import type { ConversationSearchMessageHit } from '../types/conversation.types';
 
 export const ConversationsPage: React.FC = () => {
   const theme = useTheme();
@@ -58,9 +61,18 @@ export const ConversationsPage: React.FC = () => {
   const { agentId: currentAgentId } = useCurrentAgent();
   const { markRead, getReadAt, readMap } = useConversationReadState(currentAgentId);
 
-  const listQuery = useConversations(filters);
+  const searchTerm = filters.search?.trim() ?? '';
+  const globalSearchMode = searchTerm.length >= 2;
+  const listFilters = useMemo(() => {
+    if (!globalSearchMode) return filters;
+    const { search: _search, ...rest } = filters;
+    return rest;
+  }, [filters, globalSearchMode]);
+
+  const listQuery = useConversations(listFilters, { enabled: true });
   const detailQuery = useConversationDetail(selectedId);
-  const messagesQuery = useConversationMessages(selectedId);
+  const messagePane = useConversationMessagePane(selectedId);
+  const globalSearch = useConversationGlobalSearch(filters.search ?? '', Boolean(filters.search?.trim()));
   const refresh = useRefreshConversations();
   const claimMutation = useClaimConversation(filters);
   const takeoverMutation = useTakeoverConversation(filters);
@@ -70,6 +82,10 @@ export const ConversationsPage: React.FC = () => {
 
   const listItems = listQuery.data?.items ?? [];
   const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
+  const inboxById = useMemo(
+    () => new Map(listItems.map((item) => [item.id, item])),
+    [listItems],
+  );
 
   const clearUnreadFor = useCallback(
     (id: string, readThroughAt?: string) => {
@@ -152,10 +168,20 @@ export const ConversationsPage: React.FC = () => {
   const handleConversationCaughtUp = useCallback(
     (readThroughAt: string) => {
       if (!selectedId) return;
+      if (messagePane.historyPinned) return;
       clearUnreadFor(selectedId, readThroughAt);
     },
-    [selectedId, clearUnreadFor],
+    [selectedId, clearUnreadFor, messagePane.historyPinned],
   );
+
+  const messageNavRequestRef = useRef(0);
+  const [pendingMessageNav, setPendingMessageNav] = useState<{
+    requestId: number;
+    conversationId: string;
+    messageId: string;
+    term: string;
+  } | null>(null);
+  const [messageNavError, setMessageNavError] = useState<string | null>(null);
 
   const { status: liveStatus, markManual, setSelectedConversationId } = useConversationLive();
 
@@ -167,6 +193,16 @@ export const ConversationsPage: React.FC = () => {
     onUnread: bumpUnread,
     onNewConversation: markNewConversation,
     onHandoffWaiting: markHandoffWaiting,
+    onLiveEvent: (event) => {
+      if (!selectedId || event.conversationId !== selectedId) return;
+      const message = event.data?.message;
+      if (!message) return;
+      if (event.type === 'conversation.message.created') {
+        messagePane.appendLiveMessage(message);
+      } else if (event.type === 'conversation.message.updated') {
+        messagePane.patchLiveMessage(message);
+      }
+    },
   });
 
   const stableFilters = useMemo(() => filters, [
@@ -189,7 +225,7 @@ export const ConversationsPage: React.FC = () => {
     await listQuery.refetch();
     if (selectedId) {
       await detailQuery.refetch();
-      await messagesQuery.refetch();
+      await messagePane.refetchTail();
     }
   };
 
@@ -198,6 +234,54 @@ export const ConversationsPage: React.FC = () => {
     setActionError(null);
     setSuccessMessage(null);
   };
+
+  const handleOpenSearchMessage = (hit: ConversationSearchMessageHit) => {
+    const requestId = messageNavRequestRef.current + 1;
+    messageNavRequestRef.current = requestId;
+    messagePane.cancelInFlight();
+    setMessageNavError(null);
+    setPendingMessageNav({
+      requestId,
+      conversationId: hit.conversationId,
+      messageId: hit.messageId,
+      term: globalSearch.resultsTerm,
+    });
+    if (selectedId !== hit.conversationId) {
+      navigate(`/conversations/${hit.conversationId}`);
+    }
+  };
+
+  useEffect(() => {
+    if (!pendingMessageNav) return;
+    if (selectedId !== pendingMessageNav.conversationId) return;
+    if (detailQuery.isLoading) return;
+
+    const nav = pendingMessageNav;
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await messagePane.jumpToMessage(nav.messageId, undefined, nav.term, nav.requestId);
+        if (!cancelled && messageNavRequestRef.current === nav.requestId) {
+          setPendingMessageNav(null);
+        }
+      } catch (e) {
+        if (!cancelled && messageNavRequestRef.current === nav.requestId) {
+          setMessageNavError(extractApiError(e).message);
+          setPendingMessageNav(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    pendingMessageNav,
+    selectedId,
+    detailQuery.isLoading,
+    messagePane.jumpToMessage,
+  ]);
 
   const handleBackToList = () => {
     navigate('/conversations');
@@ -264,9 +348,9 @@ export const ConversationsPage: React.FC = () => {
     : null;
 
   const messagesError =
-    messagesQuery.isError
-      ? messagesQuery.error instanceof Error
-        ? messagesQuery.error.message
+    messagePane.error
+      ? messagePane.error instanceof Error
+        ? messagePane.error.message
         : 'Error al cargar mensajes'
       : null;
 
@@ -437,16 +521,38 @@ export const ConversationsPage: React.FC = () => {
               flexDirection: 'column',
             }}
           >
-            <ConversationList
-              conversations={listItems}
-              selectedId={selectedId}
-              unreadIds={derivedUnreadIds}
-              unreadCounts={unreadCounts}
-              newConversationIds={newConversationIds}
-              onSelect={handleSelectConversation}
-              loading={listQuery.isLoading && !persistenceFailure}
-              error={listError}
-            />
+            {globalSearchMode ? (
+              <ConversationGlobalSearchResults
+                loading={globalSearch.loading}
+                pendingNewTerm={globalSearch.pendingNewTerm}
+                error={
+                  globalSearch.error instanceof Error ? globalSearch.error.message : null
+                }
+                data={globalSearch.data}
+                selectedId={selectedId}
+                inboxById={inboxById}
+                unreadIds={derivedUnreadIds}
+                unreadCounts={unreadCounts}
+                newConversationIds={newConversationIds}
+                onOpenConversation={handleSelectConversation}
+                onOpenMessage={(hit) => void handleOpenSearchMessage(hit)}
+                hasMoreContacts={Boolean(globalSearch.data?.contacts.nextCursor)}
+                hasMoreMessages={Boolean(globalSearch.data?.messages.nextCursor)}
+                onLoadMoreContacts={globalSearch.loadMoreContacts}
+                onLoadMoreMessages={globalSearch.loadMoreMessages}
+              />
+            ) : (
+              <ConversationList
+                conversations={listItems}
+                selectedId={selectedId}
+                unreadIds={derivedUnreadIds}
+                unreadCounts={unreadCounts}
+                newConversationIds={newConversationIds}
+                onSelect={handleSelectConversation}
+                loading={listQuery.isLoading && !persistenceFailure}
+                error={listError}
+              />
+            )}
           </Box>
         </Box>
 
@@ -479,15 +585,37 @@ export const ConversationsPage: React.FC = () => {
           }}
           data-testid="conversation-detail-panel"
         >
+          {messageNavError && (
+            <Alert severity="warning" sx={{ mx: 1, mt: 0.5, flexShrink: 0 }} onClose={() => setMessageNavError(null)}>
+              {messageNavError}
+            </Alert>
+          )}
+
           <ConversationDetail
             detail={detailQuery.data}
-            messages={messagesQuery.data?.items ?? []}
+            messages={messagePane.items}
             conversationId={selectedId}
             readAt={selectedReadAt}
             onCaughtUp={handleConversationCaughtUp}
             onBack={isMobileInbox && selectedId ? handleBackToList : undefined}
             loadingDetail={detailQuery.isLoading && Boolean(selectedId)}
-            loadingMessages={messagesQuery.isLoading && Boolean(selectedId)}
+            loadingMessages={messagePane.loading && Boolean(selectedId)}
+            hasMoreBefore={messagePane.hasMoreBefore}
+            hasMoreAfter={messagePane.hasMoreAfter}
+            loadingOlder={messagePane.loadingOlder}
+            loadingNewer={messagePane.loadingNewer}
+            onLoadOlder={messagePane.loadOlder}
+            onLoadNewer={messagePane.loadNewer}
+            scrollTargetMessageId={messagePane.scrollTargetMessageId}
+            onConsumeScrollTarget={messagePane.consumeScrollTarget}
+            highlightedMessageId={messagePane.highlightedMessageId}
+            historyPinned={messagePane.historyPinned}
+            onReturnToRecent={() => void messagePane.returnToRecent()}
+            highlightTerm={messagePane.highlightTerm}
+            onClearIntraSearch={messagePane.clearHighlights}
+            onJumpToMessage={(messageId, term) => {
+              void messagePane.jumpToMessage(messageId, undefined, term);
+            }}
             detailError={detailError}
             messagesError={messagesError}
             sending={sendMutation.isPending}

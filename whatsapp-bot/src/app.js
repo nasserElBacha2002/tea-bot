@@ -8,6 +8,10 @@ import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import conversationRetentionService from './services/conversationRetention.service.js';
 import inboundMediaFetchService from './services/inbound-media-fetch.service.js';
+import {
+  installProcessShutdownHandlers,
+  registerShutdownTask,
+} from './process/shutdown-coordinator.js';
 import flowDocumentService from './services/flow-document.service.js';
 import { isConversationDbEnabled, pingDatabase } from './db/index.js';
 import { probeReentryColumn } from './services/conversation-reentry.service.js';
@@ -17,6 +21,19 @@ const app = createApp();
 const httpServer = http.createServer(app);
 
 validateConfig();
+
+installProcessShutdownHandlers();
+registerShutdownTask('conversation_retention', () => conversationRetentionService.stop());
+registerShutdownTask('conversation_abandonment', () => conversationAbandonmentService.stop());
+registerShutdownTask('inbound_media_fetch', () => inboundMediaFetchService.stop());
+registerShutdownTask('monitoring', () => monitoringService.stop());
+registerShutdownTask('http_server', () => new Promise((resolve) => {
+  if (!httpServer.listening) {
+    resolve();
+    return;
+  }
+  httpServer.close(() => resolve());
+}));
 
 (async () => {
   try {

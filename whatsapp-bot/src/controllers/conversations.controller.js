@@ -1,9 +1,11 @@
 import conversationInboxService from '../services/conversation-inbox.service.js';
+import conversationSearchService from '../services/conversation-search.service.js';
 import conversationTakeoverService, {
   actorFromAdminUser,
 } from '../services/conversation-takeover.service.js';
 import { canTakeoverConversation } from '../auth/roles.js';
 import { sendSuccess, sendApiError, HTTP_STATUS } from '../utils/http-errors.js';
+import { finishConversationSearchRequest } from '../middleware/conversation-search-rate-limit.middleware.js';
 
 function requireConversationOperator(req) {
   const actor = actorFromAdminUser(req.adminUser);
@@ -45,6 +47,38 @@ function handleServiceError(res, error) {
     status: HTTP_STATUS.INTERNAL_ERROR,
   });
 }
+
+function setSearchResponseHeaders(res) {
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.setHeader('Pragma', 'no-cache');
+}
+
+export const searchConversations = async (req, res) => {
+  try {
+    setSearchResponseHeaders(res);
+    const data = await conversationSearchService.searchGlobal(req.body ?? {});
+    return sendSuccess(res, data);
+  } catch (error) {
+    return handleServiceError(res, error);
+  } finally {
+    finishConversationSearchRequest(req);
+  }
+};
+
+export const searchConversationMessages = async (req, res) => {
+  try {
+    setSearchResponseHeaders(res);
+    const data = await conversationSearchService.searchMessagesInConversation(
+      req.params.conversationId,
+      req.body ?? {},
+    );
+    return sendSuccess(res, data);
+  } catch (error) {
+    return handleServiceError(res, error);
+  } finally {
+    finishConversationSearchRequest(req);
+  }
+};
 
 export const listConversations = async (req, res) => {
   try {

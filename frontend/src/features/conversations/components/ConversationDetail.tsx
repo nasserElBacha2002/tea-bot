@@ -16,7 +16,10 @@ import {
 import { useTheme } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SearchIcon from '@mui/icons-material/Search';
 import type { ConversationDetailResponse } from '../types/conversation.types';
+import { ConversationIntraSearchBar } from './ConversationIntraSearchBar';
+import type { ConversationSearchMessageHit } from '../types/conversation.types';
 import { ConversationStatusBadge } from './ConversationStatusBadge';
 import { ConversationMessageTimeline } from './ConversationMessageTimeline';
 import {
@@ -56,6 +59,20 @@ interface Props {
   onClose: () => Promise<void>;
   onUpdateContact: (name: string) => Promise<void>;
   onBack?: () => void;
+  hasMoreBefore?: boolean;
+  hasMoreAfter?: boolean;
+  loadingOlder?: boolean;
+  loadingNewer?: boolean;
+  onLoadOlder?: () => Promise<boolean | void>;
+  onLoadNewer?: () => Promise<boolean | void>;
+  scrollTargetMessageId?: string | null;
+  onConsumeScrollTarget?: () => void;
+  highlightedMessageId?: string | null;
+  historyPinned?: boolean;
+  onReturnToRecent?: () => void;
+  onJumpToMessage?: (messageId: string, term?: string) => void;
+  highlightTerm?: string;
+  onClearIntraSearch?: () => void;
 }
 
 export const ConversationDetail: React.FC<Props> = ({
@@ -81,12 +98,33 @@ export const ConversationDetail: React.FC<Props> = ({
   onClose,
   onUpdateContact,
   onBack,
+  hasMoreBefore,
+  hasMoreAfter,
+  loadingOlder,
+  loadingNewer,
+  onLoadOlder,
+  onLoadNewer,
+  scrollTargetMessageId,
+  onConsumeScrollTarget,
+  highlightedMessageId,
+  historyPinned,
+  onReturnToRecent,
+  onJumpToMessage,
+  highlightTerm = '',
+  onClearIntraSearch,
 }) => {
   const theme = useTheme();
   const isMobileViewport = useMediaQuery(theme.breakpoints.down('md'));
   const isCompactDetail = isMobileViewport || Boolean(onBack);
   const [closeConfirm, setCloseConfirm] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [intraSearchOpen, setIntraSearchOpen] = useState(false);
+  const [intraSearchTerm, setIntraSearchTerm] = useState('');
+
+  const handleIntraFocusHit = (hit: ConversationSearchMessageHit) => {
+    const term = intraSearchTerm.trim() || highlightTerm;
+    onJumpToMessage?.(hit.messageId, term);
+  };
 
   if (loadingDetail) {
     return (
@@ -260,6 +298,26 @@ export const ConversationDetail: React.FC<Props> = ({
           </Typography>
         </Tooltip>
 
+        <Tooltip title="Buscar en la conversación">
+          <IconButton
+            size="small"
+            aria-label="Buscar en la conversación"
+            onClick={() => {
+              setIntraSearchOpen((v) => {
+                const next = !v;
+                if (!next) {
+                  setIntraSearchTerm('');
+                  onClearIntraSearch?.();
+                }
+                return next;
+              });
+            }}
+            color={intraSearchOpen ? 'primary' : 'default'}
+          >
+            <SearchIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+
         {headerActions}
       </Stack>
 
@@ -341,6 +399,21 @@ export const ConversationDetail: React.FC<Props> = ({
       >
         {detailHeader}
         {overflowMenu}
+        {conversationId && (
+          <ConversationIntraSearchBar
+            conversationId={conversationId}
+            open={intraSearchOpen}
+            onClose={() => {
+              setIntraSearchOpen(false);
+              setIntraSearchTerm('');
+              onClearIntraSearch?.();
+            }}
+            onSearchTermChange={setIntraSearchTerm}
+            onFocusHit={(hit) => {
+              handleIntraFocusHit(hit);
+            }}
+          />
+        )}
       </Box>
 
       <ConversationMessageTimeline
@@ -351,6 +424,18 @@ export const ConversationDetail: React.FC<Props> = ({
         conversationId={conversationId ?? conversation.id}
         readAt={readAt}
         onCaughtUp={onCaughtUp}
+        hasMoreBefore={hasMoreBefore}
+        hasMoreAfter={hasMoreAfter}
+        loadingOlder={loadingOlder}
+        loadingNewer={loadingNewer}
+        onLoadOlder={onLoadOlder}
+        onLoadNewer={onLoadNewer}
+        scrollTargetMessageId={scrollTargetMessageId}
+        onConsumeScrollTarget={onConsumeScrollTarget}
+        highlightedMessageId={highlightedMessageId}
+        intraSearchTerm={intraSearchOpen ? intraSearchTerm : highlightTerm}
+        historyPinned={historyPinned}
+        onReturnToRecent={onReturnToRecent}
       />
 
       <Box
