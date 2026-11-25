@@ -30,8 +30,10 @@ test('no rompe con sheets deshabilitado y marca exportado', async () => {
     lastNodeId: 'menu',
   });
   assert.equal(res.skipped, true);
+  assert.equal(res.outcome, 'intentionally_disabled');
   const session = sessionService.getSession(userId);
-  assert.ok(session?.exportedAt);
+  assert.equal(session?.exportedAt, undefined);
+  assert.ok(session?.exportPendingAt);
   await sessionService.resetSession(userId);
   config.googleSheetsEnabled = prev;
 });
@@ -56,9 +58,10 @@ test('permite exportar escalation a humano luego de info inicial', async () => {
     lastNodeId: 'human_handoff',
   });
   assert.equal(res.skipped, true);
+  assert.equal(res.outcome, 'intentionally_disabled');
   const session = sessionService.getSession(userId);
   assert.equal(session?.finalStatus, 'human_handoff');
-  assert.ok(session?.exportedEscalationAt);
+  assert.ok(session?.exportPendingAt);
   await sessionService.resetSession(userId);
   config.googleSheetsEnabled = prevEnabled;
 });

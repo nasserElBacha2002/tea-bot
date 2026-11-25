@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  formatDetalleForExport,
   pickExportClassification,
   resolveConversationClassification,
 } from './classificationResolver.service.js';
@@ -78,6 +79,18 @@ test('fallback sin evidencia devuelve primaryQuery null', () => {
   assert.equal(resolution.classification.source, 'fallback');
   assert.equal(resolution.classification.primaryQuery, null);
   assert.equal(resolution.classification.confidence, 0);
+});
+
+test('formatDetalleForExport preserva licenciatura A en ruta histórica', () => {
+  const resolution = resolveConversationClassification({
+    flowId: 'main-menu',
+    flowVersion: 'v62',
+    visitedNodes: ['welcome', 'si_menu', 'si_dist_menu', 'si_dist_lic_a', 'human_handoff'],
+    answers: {},
+    userMessages: [],
+  });
+  const detalle = formatDetalleForExport(pickExportClassification(resolution, 'enabled'));
+  assert.match(detalle, /Licenciatura A/i);
 });
 
 test('pickExportClassification respeta modo legacy y enabled', () => {

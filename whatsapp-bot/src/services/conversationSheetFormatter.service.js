@@ -1,4 +1,5 @@
 import { formatDetalleForExport } from './conversationClassification/classificationResolver.service.js';
+import { resolveSheetRowByConversationId } from './sheet-row-identity.service.js';
 
 const HUMAN_STATE_MAP = {
   completed: 'Conversación finalizada',
@@ -291,15 +292,13 @@ export function formatContactEmailForSheet(contactEmail) {
 }
 
 export function findSheetRowByConversationId(headers, dataRows, conversationId) {
-  if (!conversationId) return null;
-  const idx = headers.indexOf(CONVERSATION_ID_COLUMN_HEADER);
-  if (idx < 0) return null;
-  const target = String(conversationId).trim().toLowerCase();
-  for (let i = dataRows.length - 1; i >= 0; i -= 1) {
-    const value = String(dataRows[i]?.[idx] || '').trim().toLowerCase();
-    if (value && value === target) return i + 2;
-  }
+  const resolved = resolveSheetRowByConversationId(headers, dataRows, conversationId);
+  if (resolved.status === 'unique') return resolved.sheetRow;
   return null;
+}
+
+export function resolveManagedSheetRow(headers, dataRows, conversationId) {
+  return resolveSheetRowByConversationId(headers, dataRows, conversationId);
 }
 
 /** Columnas que la sincronización automática puede actualizar (no incluye observaciones manuales). */
@@ -328,12 +327,26 @@ export const MANAGED_SHEET_COLUMN_HEADERS = [
 export function findSheetRowMatch(
   headers,
   dataRows,
-  { phoneNumber, startedAt, closedAt = null, lastMessageAt = null, conversationId = null },
+  {
+    phoneNumber,
+    startedAt,
+    closedAt = null,
+    lastMessageAt = null,
+    conversationId = null,
+    strictConversationId = false,
+  },
 ) {
   if (conversationId) {
-    const byId = findSheetRowByConversationId(headers, dataRows, conversationId);
-    if (byId) return byId;
+    const resolved = resolveSheetRowByConversationId(headers, dataRows, conversationId);
+    if (strictConversationId) {
+      if (resolved.status === 'unique') return resolved.sheetRow;
+      return null;
+    }
+    if (resolved.status === 'unique') return resolved.sheetRow;
+    if (resolved.status === 'duplicate') return null;
   }
+
+  if (strictConversationId) return null;
 
   const phoneIdx = headers.indexOf('Teléfono');
   const startIdx = headers.indexOf('Fecha de inicio');
@@ -440,7 +453,7 @@ class ConversationSheetFormatterService {
       },
     };
 
-    const consultaPrincipal = exportClassification?.primaryQuery != null
+    const consultaPrincipal = exportClassification != null
       ? (exportClassification.primaryQuery || 'No informado')
       : inferConsultaPrincipal(answers, visitedNodes);
     const detalle = detalleConsulta

@@ -1,6 +1,12 @@
 import conversationRepository from '../repositories/conversation.repository.js';
 import { validateContactEmail } from '../utils/contact-email.js';
-import conversationSheetSyncService from './conversationSheetSync.service.js';
+import {
+  enqueueEmailSheetSync,
+  enqueueEmailSheetSyncForConversationIds,
+  runCoordinatedEmailSheetSync,
+} from './conversation-sheet-sync-recovery.service.js';
+import { withTransaction } from '../db/index.js';
+import { resolveContactEmailSourceEvent } from '../utils/contact-email-source-event.js';
 
 /**
  * Returns stored email for a conversation row (already loaded).
@@ -33,12 +39,43 @@ export async function resolveContactEmail(conversation) {
   }
 }
 
+async function persistContactEmailSql(conversation, email, eventAt, options = {}) {
+  if (!eventAt) {
+    return { updated: 0, skipped: true, reason: 'missing_event_at', conversationIds: [] };
+  }
+  if (conversation.phoneNumber && conversation.channel) {
+    try {
+      return await conversationRepository.syncContactEmailByPhoneAndChannel(
+        conversation.phoneNumber,
+        conversation.channel,
+        email,
+        eventAt,
+        options,
+      );
+    } catch (error) {
+      if (String(error?.message || '').includes('contact_email')) {
+        return conversationRepository.syncContactEmailForConversationId(
+          conversation.id,
+          email,
+          eventAt,
+          options,
+        );
+      }
+      throw error;
+    }
+  }
+  return conversationRepository.syncContactEmailForConversationId(
+    conversation.id,
+    email,
+    eventAt,
+    options,
+  );
+}
+
 /**
  * Persists email at contact level (synced across conversations with same phone + channel).
- * If the contact already has the same email, this is a no-op update.
- * If a different email is sent later, it updates to the latest valid value.
  */
-export async function saveContactEmailForConversation(conversation, rawEmail) {
+export async function saveContactEmailForConversation(conversation, rawEmail, options = {}) {
   if (!conversation?.id) {
     throw new Error('No se puede guardar el email sin una conversación asociada.');
   }
@@ -52,53 +89,79 @@ export async function saveContactEmailForConversation(conversation, rawEmail) {
   }
 
   const email = validation.normalized;
+  const source = resolveContactEmailSourceEvent(options);
   const existing = await resolveContactEmail(conversation);
+
   if (existing === email) {
-    try {
-      await conversationSheetSyncService.syncEmailForConversation({
-        ...conversation,
-        contactEmail: email,
+    let sqlResult = { updated: 0, skipped: true, conversationIds: [] };
+    let sheetJobEnqueued = false;
+
+    if (source.allowSqlWrite && source.eventAt) {
+      await withTransaction(async (transaction) => {
+        sqlResult = await persistContactEmailSql(conversation, email, source.eventAt, { transaction });
+        if (!sqlResult.skipped && sqlResult.updated > 0) {
+          const targets = sqlResult.conversationIds?.length
+            ? sqlResult.conversationIds
+            : [conversation.id];
+          await enqueueEmailSheetSyncForConversationIds(targets, email, { transaction });
+          sheetJobEnqueued = true;
+        }
       });
-    } catch (error) {
-      console.warn(
-        `[ContactEmail] sheet_sync_failed conversationId=${conversation.id} reason=${error.message}`,
-      );
     }
-    return { email, updated: false };
-  }
 
-  if (conversation.phoneNumber && conversation.channel) {
-    try {
-      await conversationRepository.syncContactEmailByPhoneAndChannel(
-        conversation.phoneNumber,
-        conversation.channel,
+    if (!sheetJobEnqueued) {
+      await enqueueEmailSheetSync(conversation.id, email);
+    }
+
+    const sync = await runCoordinatedEmailSheetSync(conversation.id, email);
+    if (sync.skipped && sync.pendingRecovery) {
+      return {
         email,
-      );
-    } catch (error) {
-      if (String(error?.message || '').includes('contact_email')) {
-        await conversationRepository.updateConversation(conversation.id, { contactEmail: email });
-      } else {
-        throw error;
-      }
+        updated: sqlResult.updated > 0,
+        sheetPending: true,
+        evidenceAdvanced: sqlResult.updated > 0,
+      };
     }
-  } else {
-    await conversationRepository.updateConversation(conversation.id, { contactEmail: email });
-  }
 
-  try {
-    const updatedConversation = {
-      ...conversation,
-      contactEmail: email,
-      phoneNumber: conversation.phoneNumber,
-      startedAt: conversation.startedAt,
-      closedAt: conversation.closedAt ?? null,
+    return {
+      email,
+      updated: sqlResult.updated > 0,
+      evidenceAdvanced: sqlResult.updated > 0,
+      sheetSync: sync,
     };
-    await conversationSheetSyncService.syncEmailForConversation(updatedConversation);
-  } catch (error) {
-    console.warn(
-      `[ContactEmail] sheet_sync_failed conversationId=${conversation.id} reason=${error.message}`,
-    );
   }
 
-  return { email, updated: true };
+  if (!source.allowSqlWrite) {
+    const err = new Error('Falta timestamp confiable del evento de captura.');
+    err.code = 'MISSING_SOURCE_EVENT_AT';
+    err.httpStatus = 409;
+    throw err;
+  }
+
+  let sqlResult = { updated: 0, skipped: true, conversationIds: [] };
+  if (!conversationRepository.isEnabled()) {
+    throw new Error('Conversation DB disabled');
+  }
+
+  await withTransaction(async (transaction) => {
+    sqlResult = await persistContactEmailSql(conversation, email, source.eventAt, { transaction });
+    if (sqlResult.skipped) return;
+    if (sqlResult.updated > 0) {
+      const targets = sqlResult.conversationIds?.length
+        ? sqlResult.conversationIds
+        : [conversation.id];
+      await enqueueEmailSheetSyncForConversationIds(targets, email, { transaction });
+    }
+  });
+
+  if (sqlResult.skipped) {
+    return { email: existing || email, updated: false, precedenceRejected: true };
+  }
+
+  const sync = await runCoordinatedEmailSheetSync(conversation.id, email);
+  if (sync.skipped && sync.pendingRecovery) {
+    return { email, updated: true, sheetPending: true };
+  }
+
+  return { email, updated: true, sheetSync: sync };
 }

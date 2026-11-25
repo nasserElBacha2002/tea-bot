@@ -43,6 +43,7 @@ export class FlowEngine {
     flowSnapshot,
     perfContext = null,
     conversationContext = null,
+    inboundEventAt = null,
   }) {
     const resolveStart = nowMs();
     const rawText = (text || '').trim();
@@ -203,6 +204,8 @@ export class FlowEngine {
         conversation: conversationContext,
         collectEmailNode: currentNode,
         welcomeNode: this._getNode(compiled, flow, WELCOME_NODE_ID),
+        inboundEventAt,
+        messageCreatedAt: inboundEventAt,
       });
       if (emailResult) {
         await sessionService.updateSession(userId, {

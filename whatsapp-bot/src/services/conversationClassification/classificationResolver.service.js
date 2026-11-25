@@ -9,6 +9,12 @@ import { classifyFromExplicitTrack, classifyFromNodeRoute, buildPrimaryQueryFrom
 import { classifyFromTextRules } from './textClassification.service.js';
 import classificationLoggingService from './classificationLogging.service.js';
 import classificationMetricsService from './classificationMetrics.service.js';
+import { buildDetalleFromDimensions } from './classification.rules.js';
+import {
+  PROGRAM_NAME_LABELS,
+  PROGRAM_TYPE_LABELS,
+  SPECIFIC_REASON_LABELS,
+} from './classification.constants.js';
 
 function emptyFallback(input) {
   return {
@@ -144,16 +150,70 @@ export function formatPrimaryQueryForExport(classification) {
   return classification?.primaryQuery || EXPORT_DISPLAY_FALLBACK;
 }
 
+const MATCHED_NODE_DETALLE_LABELS = {
+  si_dist_lic_a: 'Licenciatura A',
+  si_dist_lic_b: 'Licenciatura B',
+  si_pg_lic_a: 'Licenciatura A',
+  si_pg_lic_b: 'Licenciatura B',
+  si_pd_lic_a: 'Licenciatura A',
+  si_pd_lic_b: 'Licenciatura B',
+};
+
+function labelFromMatchedNode(matchedNode) {
+  if (!matchedNode) return null;
+  const direct = MATCHED_NODE_DETALLE_LABELS[matchedNode];
+  if (direct) return direct;
+  const match = String(matchedNode).match(/lic_([a-z])$/i);
+  if (match) return `Licenciatura ${match[1].toUpperCase()}`;
+  return null;
+}
+
+function pushUnique(parts, value) {
+  const text = String(value || '').trim();
+  if (!text) return;
+  if (!parts.some((item) => item.toLowerCase() === text.toLowerCase())) {
+    parts.push(text);
+  }
+}
+
 export function formatDetalleForExport(classification) {
   if (!classification) return '—';
   const parts = [];
-  if (classification.programType === 'posgrado') parts.push('Posgrado');
+  const fromDimensions = buildDetalleFromDimensions(classification);
+  if (fromDimensions) {
+    for (const chunk of fromDimensions.split(' - ')) {
+      pushUnique(parts, chunk);
+    }
+  }
+
+  if (classification.programType === 'posgrado' && classification.programName !== 'periodismo_general') {
+    pushUnique(parts, PROGRAM_TYPE_LABELS.posgrado || 'Posgrado');
+  }
+  if (classification.programType === 'curso') {
+    pushUnique(parts, PROGRAM_TYPE_LABELS.curso || 'Curso');
+  }
+  if (classification.programType === 'licenciatura') {
+    const nodeLabel = labelFromMatchedNode(classification.matchedNode);
+    if (nodeLabel) {
+      pushUnique(parts, nodeLabel);
+    } else {
+      pushUnique(parts, PROGRAM_TYPE_LABELS.licenciatura || 'Licenciatura');
+    }
+  }
+
   if (classification.responsibleArea === 'direccion' || classification.specificReason === 'direccion') {
-    parts.push('Dirección');
+    pushUnique(parts, 'Dirección');
   }
   if (classification.programName) {
-    parts.push(classification.programName.replace(/_/g, ' '));
+    pushUnique(parts, PROGRAM_NAME_LABELS[classification.programName]
+      || classification.programName.replace(/_/g, ' '));
   }
-  if (classification.specificReason) parts.push(classification.specificReason);
+  if (classification.specificReason) {
+    pushUnique(
+      parts,
+      SPECIFIC_REASON_LABELS[classification.specificReason] || classification.specificReason,
+    );
+  }
+
   return parts.length > 0 ? parts.join(' - ') : '—';
 }

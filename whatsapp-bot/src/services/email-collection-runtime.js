@@ -30,6 +30,9 @@ export async function tryHandleEmailCollectionInput({
   conversation,
   collectEmailNode,
   welcomeNode,
+  messageCreatedAt = null,
+  sourceEventAt = null,
+  inboundEventAt = null,
 }) {
   if (!collectEmailNode || !welcomeNode) return null;
 
@@ -45,7 +48,12 @@ export async function tryHandleEmailCollectionInput({
 
   let email = validation.normalized;
   if (conversation) {
-    const saved = await saveContactEmailForConversation(conversation, email);
+    const saved = await saveContactEmailForConversation(conversation, email, {
+      messageCreatedAt,
+      sourceEventAt,
+      inboundEventAt,
+      allowProcessingFallback: !inboundEventAt && !messageCreatedAt && !sourceEventAt,
+    });
     email = saved.email;
   }
 

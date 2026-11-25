@@ -107,6 +107,7 @@ export async function settleTwilioInbound({
       processed = await processInbound(event, {
         perfContext,
         lease: gate?.id ? { id: gate.id, attempts: gate.attempts } : null,
+        inboundCapturedAt: gate?.receivedAt || null,
       });
     }
     if (processed?.kind === 'reply_indeterminate') {

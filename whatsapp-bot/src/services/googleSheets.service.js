@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { config } from '../config.js';
+import { sanitizeSheetRow } from '../utils/sheet-value-sanitizer.js';
 
 export function columnToLetter(index) {
   let n = index + 1;
@@ -132,11 +133,12 @@ class GoogleSheetsService {
     const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
     if (!targetTab) return { skipped: true, reason: 'missing_tab_name' };
     const sheets = await this._getClient();
+    const safeValue = sanitizeSheetRow([value])[0];
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.googleSheetsSpreadsheetId,
       range: `${targetTab}!${a1Range}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [[value]] },
+      valueInputOption: 'RAW',
+      requestBody: { values: [[safeValue]] },
     });
     return { skipped: false, updated: true };
   }
@@ -153,9 +155,9 @@ class GoogleSheetsService {
     const response = await sheets.spreadsheets.values.append({
       spreadsheetId: config.googleSheetsSpreadsheetId,
       range: `${targetTab}!A:Z`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       requestBody: {
-        values: [rowValues],
+        values: [sanitizeSheetRow(rowValues)],
       },
     });
     return { skipped: false, updatedRange: response.data?.updates?.updatedRange || `${targetTab}!A:Z` };
@@ -180,10 +182,48 @@ class GoogleSheetsService {
     await sheets.spreadsheets.values.update({
       spreadsheetId: config.googleSheetsSpreadsheetId,
       range: `${targetTab}!${a1Range}`,
-      valueInputOption: 'USER_ENTERED',
-      requestBody: { values: [rowValues] },
+      valueInputOption: 'RAW',
+      requestBody: { values: [sanitizeSheetRow(rowValues)] },
     });
     return { skipped: false, updated: true };
+  }
+
+  /**
+   * Actualiza solo celdas gestionadas por el bot, preservando columnas administrativas.
+   */
+  async updateManagedCells(tabName, headers, sheetRowNumber, updatesByHeader = {}) {
+    if (!this.hasRequiredConfig()) {
+      return { skipped: true, reason: 'missing_config', missingKeys: this.missingConfigKeys() };
+    }
+    const targetTab = String(tabName || config.googleSheetsTabName || '').trim();
+    if (!targetTab || !sheetRowNumber) {
+      return { skipped: true, reason: 'missing_target' };
+    }
+    const entries = Object.entries(updatesByHeader).filter(([header]) => headers.includes(header));
+    if (entries.length === 0) {
+      return { skipped: true, reason: 'no_managed_cells' };
+    }
+    const data = [];
+    for (const [header, value] of entries) {
+      const idx = headers.indexOf(header);
+      if (idx < 0) continue;
+      data.push({
+        range: `${targetTab}!${columnToLetter(idx)}${sheetRowNumber}`,
+        values: [[sanitizeSheetRow([value])[0]]],
+      });
+    }
+    if (data.length === 0) {
+      return { skipped: true, reason: 'no_managed_cells' };
+    }
+    const sheets = await this._getClient();
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: config.googleSheetsSpreadsheetId,
+      requestBody: {
+        valueInputOption: 'RAW',
+        data,
+      },
+    });
+    return { skipped: false, updated: true, cells: data.length };
   }
 }
 

@@ -77,6 +77,7 @@ function gateFrom(result, event) {
     provider: event?.provider || 'twilio',
     messageId: event?.messageId || null,
     flowId: event?.flowId || null,
+    receivedAt: result.row?.receivedAt || null,
   };
 }
 

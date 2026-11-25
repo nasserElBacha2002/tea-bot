@@ -7,6 +7,7 @@ import { getFlowStorageMode } from './config/flow-storage.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import conversationRetentionService from './services/conversationRetention.service.js';
+import conversationSheetSyncRecoveryService from './services/conversation-sheet-sync-recovery.service.js';
 import inboundMediaFetchService from './services/inbound-media-fetch.service.js';
 import {
   installProcessShutdownHandlers,
@@ -24,6 +25,7 @@ validateConfig();
 
 installProcessShutdownHandlers();
 registerShutdownTask('conversation_retention', () => conversationRetentionService.stop());
+registerShutdownTask('conversation_sheet_sync_recovery', () => conversationSheetSyncRecoveryService.stop());
 registerShutdownTask('conversation_abandonment', () => conversationAbandonmentService.stop());
 registerShutdownTask('inbound_media_fetch', () => inboundMediaFetchService.stop());
 registerShutdownTask('monitoring', () => monitoringService.stop());
@@ -45,6 +47,7 @@ registerShutdownTask('http_server', () => new Promise((resolve) => {
     await sessionService.loadSessions();
     conversationAbandonmentService.start();
     conversationRetentionService.start();
+    conversationSheetSyncRecoveryService.start();
     inboundMediaFetchService.start();
     monitoringService.start();
 

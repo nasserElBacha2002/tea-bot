@@ -47,12 +47,18 @@ function classifyOutbound(outbound, conversation) {
  */
 export async function processCanonicalTwilioInbound(
   event,
-  { perfContext = null, flowSnapshot = null, flowMode = 'published', lease = null } = {},
+  {
+    perfContext = null,
+    flowSnapshot = null,
+    flowMode = 'published',
+    lease = null,
+    inboundCapturedAt = null,
+  } = {},
 ) {
   try {
     return await withInboundLease(lease, () =>
       withInboundUserLock(event.userId, () =>
-        processLockedInbound(event, { perfContext, flowSnapshot, flowMode }),
+        processLockedInbound(event, { perfContext, flowSnapshot, flowMode, inboundCapturedAt }),
       ));
   } catch (error) {
     if (error?.code === 'INBOUND_LEASE_LOST') {
@@ -66,7 +72,7 @@ export async function processCanonicalTwilioInbound(
   }
 }
 
-async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode }) {
+async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode, inboundCapturedAt = null }) {
   const replay = await messagePersistence.safeRun(
     'replayCommittedTurn',
     () => messagePersistence.replayCommittedTurn(event),
@@ -120,6 +126,7 @@ async function processLockedInbound(event, { perfContext, flowSnapshot, flowMode
     flowSnapshot,
     perfContext,
     conversationContext: conversationContext?.conversation ?? null,
+    inboundEventAt: inboundCapturedAt || event?.inboundCapturedAt || null,
   });
   perfContext?.add?.('engineMs', roundMs(nowMs() - engineStart));
 

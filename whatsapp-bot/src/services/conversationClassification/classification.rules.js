@@ -55,11 +55,6 @@ export const FLOW_CLASSIFICATION_RULES = {
           patch: { programType: 'licenciatura', matchedRule: 'node_family:licenciatura' },
         },
         {
-          id: 'posgrado',
-          match: /(?:^|_)pg_(menu|direccion)/,
-          patch: { programType: 'posgrado', matchedRule: 'node_family:posgrado' },
-        },
-        {
           id: 'informes',
           match: /_informes$/,
           patch: { specificReason: 'informes', matchedRule: 'node_suffix:informes' },

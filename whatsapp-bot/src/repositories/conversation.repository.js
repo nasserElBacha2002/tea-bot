@@ -21,6 +21,7 @@ function mapRow(row) {
     phoneNumber: row.phone_number,
     displayName: row.display_name,
     contactEmail: row.contact_email,
+    contactEmailUpdatedAt: row.contact_email_updated_at ?? null,
     status: row.status,
     currentFlowId: row.current_flow_id,
     currentFlowVersion: row.current_flow_version,
@@ -90,26 +91,124 @@ class ConversationRepository {
     );
   }
 
-  async syncContactEmailByPhoneAndChannel(phoneNumber, channel, contactEmail) {
-    if (!phoneNumber || !channel || contactEmail == null) return;
-    await query(
-      `UPDATE dbo.conversations
-       SET contact_email = $1, updated_at = SYSUTCDATETIME()
-       WHERE phone_number = $2 AND channel = $3`,
-      [contactEmail, phoneNumber, channel],
-    );
+  /**
+   * @param {Date | string | null} sourceEventAt Momento del evento de captura (no hora de procesamiento).
+   */
+  async syncContactEmailByPhoneAndChannel(phoneNumber, channel, contactEmail, sourceEventAt = null, options = {}) {
+    if (!phoneNumber || !channel || contactEmail == null) return { updated: 0, skipped: true, conversationIds: [] };
+    const eventAt = sourceEventAt ? new Date(sourceEventAt) : new Date();
+    if (Number.isNaN(eventAt.getTime())) {
+      return { updated: 0, skipped: true, reason: 'invalid_event_at', conversationIds: [] };
+    }
+    const tx = options.transaction || null;
+    try {
+      const { rows } = await query(
+        `UPDATE dbo.conversations
+         SET contact_email = $1,
+             contact_email_updated_at = $4,
+             updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.id
+         WHERE phone_number = $2 AND channel = $3
+           AND (
+             contact_email IS NULL
+             OR contact_email_updated_at IS NULL
+             OR contact_email_updated_at < $4
+             OR (contact_email = $1 AND contact_email_updated_at < $4)
+           )`,
+        [contactEmail, phoneNumber, channel, eventAt],
+        { transaction: tx },
+      );
+      const conversationIds = rows.map((row) => row.id);
+      return { updated: rows.length, skipped: rows.length === 0, conversationIds };
+    } catch (error) {
+      if (!String(error?.message || '').includes('contact_email_updated_at')) {
+        throw error;
+      }
+      const { rows } = await query(
+        `UPDATE dbo.conversations
+         SET contact_email = $1, updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.id
+         WHERE phone_number = $2 AND channel = $3
+           AND (contact_email IS NULL OR contact_email <> $1)`,
+        [contactEmail, phoneNumber, channel],
+        { transaction: tx },
+      );
+      const conversationIds = rows.map((row) => row.id);
+      return { updated: rows.length, skipped: rows.length === 0, legacyColumn: true, conversationIds };
+    }
+  }
+
+  async syncContactEmailForConversationId(conversationId, contactEmail, sourceEventAt = null, options = {}) {
+    if (!conversationId || contactEmail == null) return { updated: 0, skipped: true, conversationIds: [] };
+    const eventAt = sourceEventAt ? new Date(sourceEventAt) : new Date();
+    if (Number.isNaN(eventAt.getTime())) {
+      return { updated: 0, skipped: true, reason: 'invalid_event_at', conversationIds: [] };
+    }
+    const tx = options.transaction || null;
+    try {
+      const { rows } = await query(
+        `UPDATE dbo.conversations
+         SET contact_email = $1,
+             contact_email_updated_at = $3,
+             updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.id
+         WHERE id = $2
+           AND (
+             contact_email IS NULL
+             OR contact_email_updated_at IS NULL
+             OR contact_email_updated_at < $3
+             OR (contact_email = $1 AND contact_email_updated_at < $3)
+           )`,
+        [contactEmail, conversationId, eventAt],
+        { transaction: tx },
+      );
+      const conversationIds = rows.map((row) => row.id);
+      return { updated: rows.length, skipped: rows.length === 0, conversationIds };
+    } catch (error) {
+      if (!String(error?.message || '').includes('contact_email_updated_at')) {
+        throw error;
+      }
+      const { rows } = await query(
+        `UPDATE dbo.conversations
+         SET contact_email = $1, updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.id
+         WHERE id = $2 AND (contact_email IS NULL OR contact_email <> $1)`,
+        [contactEmail, conversationId],
+        { transaction: tx },
+      );
+      const conversationIds = rows.map((row) => row.id);
+      return { updated: rows.length, skipped: rows.length === 0, legacyColumn: true, conversationIds };
+    }
   }
 
   async findContactEmailByPhoneAndChannel(phoneNumber, channel) {
     if (!phoneNumber || !channel) return null;
-    const { rows } = await query(
-      `SELECT TOP (1) contact_email
-       FROM dbo.conversations
-       WHERE phone_number = $1 AND channel = $2
-         AND contact_email IS NOT NULL AND contact_email <> N''
-       ORDER BY updated_at DESC`,
-      [phoneNumber, channel],
-    );
+    let rows;
+    try {
+      ({ rows } = await query(
+        `SELECT TOP (1) contact_email
+         FROM dbo.conversations
+         WHERE phone_number = $1 AND channel = $2
+           AND contact_email IS NOT NULL AND contact_email <> N''
+         ORDER BY
+           CASE WHEN contact_email_updated_at IS NULL THEN 1 ELSE 0 END,
+           contact_email_updated_at DESC,
+           updated_at DESC`,
+        [phoneNumber, channel],
+      ));
+    } catch (error) {
+      if (!String(error?.message || '').includes('contact_email_updated_at')) {
+        throw error;
+      }
+      ({ rows } = await query(
+        `SELECT TOP (1) contact_email
+         FROM dbo.conversations
+         WHERE phone_number = $1 AND channel = $2
+           AND contact_email IS NOT NULL AND contact_email <> N''
+         ORDER BY updated_at DESC`,
+        [phoneNumber, channel],
+      ));
+    }
     const email = rows[0]?.contact_email;
     if (!email || typeof email !== 'string') return null;
     const trimmed = email.trim().toLowerCase();
@@ -166,6 +265,7 @@ class ConversationRepository {
       phoneNumber: 'phone_number',
       displayName: 'display_name',
       contactEmail: 'contact_email',
+      contactEmailUpdatedAt: 'contact_email_updated_at',
       status: 'status',
       currentFlowId: 'current_flow_id',
       currentFlowVersion: 'current_flow_version',

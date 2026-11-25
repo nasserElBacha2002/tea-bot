@@ -76,6 +76,7 @@ class ConversationSheetSyncService {
       closedAt: conversation.closedAt,
       lastMessageAt: conversation.lastMessageAt,
       conversationId: conversation.id,
+      strictConversationId: true,
     });
 
     if (!sheetRow) {
@@ -95,6 +96,13 @@ class ConversationSheetSyncService {
         conversationId: conversation.id,
         sheetRow,
       };
+    }
+
+    if (typeof options.beforeWrite === 'function') {
+      const allowed = await options.beforeWrite({ email, sheetRow, conversationId: conversation.id });
+      if (allowed === false) {
+        return { skipped: true, reason: 'fence_rejected', conversationId: conversation.id, sheetRow };
+      }
     }
 
     const cell = `${columnToLetter(emailColumnIndex)}${sheetRow}`;
@@ -169,6 +177,7 @@ class ConversationSheetSyncService {
         closedAt: conversation.closedAt,
         lastMessageAt: conversation.lastMessageAt,
         conversationId: conversation.id,
+        strictConversationId: true,
       });
     }
     if (!sheetRow) {
@@ -287,7 +296,7 @@ class ConversationSheetSyncService {
           } else if (result.reason === 'row_not_found') {
             stats.notFound += 1;
             console.warn(
-              `[SheetEmailBackfill] not_found conversationId=${conversation.id} phone=${conversation.phoneNumber || '—'}`,
+              `[SheetEmailBackfill] not_found conversationId=${conversation.id}`,
             );
           } else {
             stats.skipped += 1;
