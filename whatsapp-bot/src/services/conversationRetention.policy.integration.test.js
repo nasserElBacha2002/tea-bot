@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../config.js';
-import { isConversationDbEnabled, pingDatabase } from '../db/index.js';
+import { isConversationDbEnabled, pingDatabase, withTransaction } from '../db/index.js';
 import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import { computeRetentionCutoff } from '../utils/conversation-retention.js';
@@ -52,7 +52,12 @@ test('estados assigned/waiting_human no eximen vencimiento por inactividad', asy
   await conversationRepository.updateConversation(recent.id, { lastMessageAt: new Date('2000-02-01T00:00:00.000Z') });
 
   try {
-    const batch = await conversationRepository.deleteInactiveRetentionBatch(cutoff, { limit: 50 });
+    const batch = await withTransaction((transaction) =>
+      conversationRepository.deleteInactiveRetentionBatch(cutoff, {
+        limit: 50,
+        transaction,
+      }),
+    );
     const deleted = new Set(batch.rows.map((row) => String(row.id).toLowerCase()));
     assert.equal(deleted.has(String(assigned.id).toLowerCase()), true);
     assert.equal(deleted.has(String(waiting.id).toLowerCase()), true);

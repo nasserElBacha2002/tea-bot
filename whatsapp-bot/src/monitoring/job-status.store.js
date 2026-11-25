@@ -1,6 +1,11 @@
 import { config } from '../config.js';
 import { isConversationDbEnabled } from '../db/index.js';
-import { upsertJobStatus, readJobStatus } from './monitoring.repository.js';
+import {
+  patchRetentionJobAttemptSkip,
+  readJobStatus,
+  upsertJobStatus,
+  upsertJobStatusRetentionOwner,
+} from './monitoring.repository.js';
 
 const retentionMemory = {
   lastStartedAt: null,
@@ -44,9 +49,9 @@ function persistLater(jobName, fields) {
   });
 }
 
-function persistRetentionSnapshot(patch = {}) {
-  Object.assign(retentionMemory, patch);
-  persistLater('conversation_retention', {
+function persistRetentionOwnerSnapshot(ownerRunId = null) {
+  if (!config.monitoringEnabled || !isConversationDbEnabled()) return;
+  const fields = {
     lastStartedAt: retentionMemory.lastStartedAt,
     lastFinishedAt: retentionMemory.lastFinishedAt,
     lastStatus: retentionMemory.lastStatus,
@@ -61,6 +66,20 @@ function persistRetentionSnapshot(patch = {}) {
     activeRunId: retentionMemory.activeRunId,
     pendingRuntimeCleanup: retentionMemory.pendingRuntimeCleanup,
     pendingMediaDeletes: retentionMemory.pendingMediaDeletes,
+  };
+  void upsertJobStatusRetentionOwner('conversation_retention', fields, { ownerRunId })
+    .catch((error) => {
+      console.error(`[Monitoring] retention owner persist failed: ${error.message}`);
+    });
+}
+
+function persistRetentionSkipOnly() {
+  if (!config.monitoringEnabled || !isConversationDbEnabled()) return;
+  void patchRetentionJobAttemptSkip('conversation_retention', {
+    lastAttemptAt: retentionMemory.lastAttemptAt,
+    lastSkipReason: retentionMemory.lastSkipReason,
+  }).catch((error) => {
+    console.error(`[Monitoring] retention skip persist failed: ${error.message}`);
   });
 }
 
@@ -75,14 +94,15 @@ export function noteRetentionSignal(event, payload = {}) {
   } else if (event === 'job_skipped_already_running') {
     retentionMemory.lastAttemptAt = now;
     retentionMemory.lastSkipReason = 'local_overlap';
-    persistRetentionSnapshot();
+    persistRetentionSkipOnly();
     return;
   } else if (event === 'job_skipped_distributed_lock') {
     retentionMemory.lastAttemptAt = now;
     retentionMemory.lastSkipReason = 'distributed_lock';
-    persistRetentionSnapshot();
+    persistRetentionSkipOnly();
     return;
   } else if (event === 'job_finished') {
+    const runId = payload.runId || retentionMemory.activeRunId;
     retentionMemory.lastFinishedAt = now;
     retentionMemory.lastSuccessfulFinishedAt = now;
     retentionMemory.lastDeletedCount = Number(payload.conversations_deleted ?? 0);
@@ -93,7 +113,10 @@ export function noteRetentionSignal(event, payload = {}) {
     retentionMemory.activeRunId = null;
     retentionMemory.pendingRuntimeCleanup = Number(payload.pending_runtime_cleanup ?? 0);
     retentionMemory.pendingMediaDeletes = Number(payload.pending_media_deletes ?? 0);
+    persistRetentionOwnerSnapshot(runId);
+    return;
   } else if (event === 'job_finished_with_runtime_cleanup_failed' || event === 'job_finished_with_media_cleanup_pending') {
+    const runId = payload.runId || retentionMemory.activeRunId;
     retentionMemory.lastFinishedAt = now;
     retentionMemory.lastDeletedCount = Number(payload.conversations_deleted ?? 0);
     retentionMemory.lastRuntimeCleanupFailed = Number(payload.runtime_cleanup_failed ?? 0);
@@ -103,7 +126,10 @@ export function noteRetentionSignal(event, payload = {}) {
     retentionMemory.activeRunId = null;
     retentionMemory.pendingRuntimeCleanup = Number(payload.pending_runtime_cleanup ?? 0);
     retentionMemory.pendingMediaDeletes = Number(payload.pending_media_deletes ?? 0);
+    persistRetentionOwnerSnapshot(runId);
+    return;
   } else if (event === 'job_stopped_shutdown') {
+    const runId = payload.runId || retentionMemory.activeRunId;
     retentionMemory.lastFinishedAt = now;
     retentionMemory.lastDeletedCount = Number(payload.conversations_deleted ?? retentionMemory.lastDeletedCount ?? 0);
     retentionMemory.lastRuntimeCleanupFailed = Number(payload.runtime_cleanup_failed ?? retentionMemory.lastRuntimeCleanupFailed ?? 0);
@@ -113,17 +139,22 @@ export function noteRetentionSignal(event, payload = {}) {
     retentionMemory.lastStatus = 'SHUTDOWN';
     retentionMemory.lastError = null;
     retentionMemory.activeRunId = null;
+    persistRetentionOwnerSnapshot(runId);
+    return;
   } else if (event === 'error') {
+    const runId = payload.runId || retentionMemory.activeRunId;
     retentionMemory.lastErrorAt = now;
     retentionMemory.lastFailedAt = now;
     retentionMemory.lastFinishedAt = now;
     retentionMemory.lastError = payload.error ? String(payload.error).slice(0, 400) : null;
     retentionMemory.lastStatus = 'FAILED';
     retentionMemory.activeRunId = null;
+    persistRetentionOwnerSnapshot(runId);
+    return;
   } else {
     return;
   }
-  persistRetentionSnapshot();
+  persistRetentionOwnerSnapshot(payload.runId || retentionMemory.activeRunId);
 }
 
 export function noteMonitorJob(jobName, patch) {

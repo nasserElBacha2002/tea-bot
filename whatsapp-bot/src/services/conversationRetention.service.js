@@ -5,6 +5,7 @@ import {
   RETENTION_SWEEP_LOCK_RESOURCE,
   releaseSessionAppLock,
   tryAcquireSessionAppLock,
+  verifySessionAppLockHeld,
 } from '../db/session-app-lock.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import sessionService from './session.service.js';
@@ -56,6 +57,7 @@ export class ConversationRetentionService {
    *   dbEnabled?: () => boolean,
    *   acquireLock?: typeof tryAcquireSessionAppLock,
    *   releaseLock?: typeof releaseSessionAppLock,
+   *   verifyLock?: (resource: string) => Promise<boolean>,
    * }} [deps]
    */
   constructor(deps = {}) {
@@ -67,6 +69,7 @@ export class ConversationRetentionService {
     this.dbEnabled = deps.dbEnabled || isConversationDbEnabled;
     this.acquireLock = deps.acquireLock || tryAcquireSessionAppLock;
     this.releaseLock = deps.releaseLock || releaseSessionAppLock;
+    this.verifyLock = deps.verifyLock || verifySessionAppLockHeld;
     this.timer = null;
     this.running = false;
     this.stopped = false;
@@ -76,6 +79,11 @@ export class ConversationRetentionService {
     this.pendingRuntimeCleanup = new Map();
     /** @type {Set<string>} */
     this.pendingMediaDeletes = new Set();
+    this.mediaQueueState = {
+      hydrateFailed: false,
+      countUncertain: false,
+      ackFailed: 0,
+    };
   }
 
   isEnabled() {
@@ -238,6 +246,9 @@ export class ConversationRetentionService {
           logRetention('sql_deleted', { runId, conversationId: row.id });
         }
 
+        if (lockHeld && !(await this.verifyLock(RETENTION_SWEEP_LOCK_RESOURCE))) {
+          throw new Error('distributed_lock_lost');
+        }
         const mediaFlush = await this._flushPendingMediaDeletes();
         mediaCleanupFailed += mediaFlush.failed;
         const cleanup = await this._cleanupRuntimeSessions(removed);
@@ -257,7 +268,7 @@ export class ConversationRetentionService {
           runtime_cleaned: runtimeCleaned,
           runtime_cleanup_failed: runtimeCleanupFailed,
           pending_runtime_cleanup: this.pendingRuntimeCleanup.size,
-          pending_media_deletes: await this._pendingMediaCount(),
+          pending_media_deletes: (await this._pendingMediaCount()).count,
           duration: durationMs,
         });
         return {
@@ -275,7 +286,12 @@ export class ConversationRetentionService {
       }
 
       const partialRuntime = runtimeCleanupFailed > 0 || this.pendingRuntimeCleanup.size > 0;
-      const partialMedia = (await this._pendingMediaCount()) > 0 || mediaCleanupFailed > 0;
+      const pendingMediaStats = await this._pendingMediaCount();
+      const partialMedia = pendingMediaStats.count > 0
+        || mediaCleanupFailed > 0
+        || pendingMediaStats.uncertain
+        || this.mediaQueueState.hydrateFailed
+        || this.mediaQueueState.ackFailed > 0;
       const finishEvent = partialRuntime
         ? 'job_finished_with_runtime_cleanup_failed'
         : partialMedia
@@ -292,7 +308,8 @@ export class ConversationRetentionService {
         runtime_cleanup_skipped: runtimeCleanupSkipped,
         runtime_cleanup_failed: runtimeCleanupFailed,
         pending_runtime_cleanup: this.pendingRuntimeCleanup.size,
-        pending_media_deletes: await this._pendingMediaCount(),
+        pending_media_deletes: pendingMediaStats.count,
+        media_queue_uncertain: pendingMediaStats.uncertain,
         duration: durationMs,
       });
       return {
@@ -304,6 +321,7 @@ export class ConversationRetentionService {
         runtimeCleaned,
         runtimeCleanupFailed,
         runtimeCleanupSkipped,
+        mediaQueueUncertain: partialMedia,
         durationMs,
       };
     } catch (error) {
@@ -334,12 +352,14 @@ export class ConversationRetentionService {
 
   async _pendingMediaCount() {
     const memory = this.pendingMediaDeletes.size;
-    if (!this.dbEnabled()) return memory;
+    if (!this.dbEnabled()) return { count: memory, uncertain: false };
     try {
       const durable = await countPendingStorageDeletes();
-      return Math.max(memory, durable);
-    } catch {
-      return memory;
+      return { count: Math.max(memory, durable), uncertain: false };
+    } catch (error) {
+      this.mediaQueueState.countUncertain = true;
+      console.error(`[ConversationRetention] pending media count failed: ${error.message}`);
+      return { count: memory, uncertain: true };
     }
   }
 
@@ -353,7 +373,9 @@ export class ConversationRetentionService {
         }
       }
     } catch (error) {
+      this.mediaQueueState.hydrateFailed = true;
       console.error(`[ConversationRetention] pending media hydrate failed: ${error.message}`);
+      throw error;
     }
   }
 
@@ -385,7 +407,11 @@ export class ConversationRetentionService {
             ),
           },
         );
-        if (result.action === 'skipped_bound_to_other_conversation' || result.action === 'skipped_new_conversation') {
+        if (
+          result.action === 'skipped_bound_to_other_conversation'
+          || result.action === 'skipped_new_conversation'
+          || result.action === 'skipped_concurrent_mutation'
+        ) {
           skipped += 1;
           this.pendingRuntimeCleanup.delete(this._pendingRuntimeKey(row));
           logRetention('runtime_cleanup_skipped', {
@@ -431,6 +457,8 @@ export class ConversationRetentionService {
         try {
           await ackPendingStorageDelete(key);
         } catch (ackError) {
+          this.mediaQueueState.ackFailed += 1;
+          failed += 1;
           console.error(`[ConversationRetention] pending media ack failed: ${ackError.message}`);
         }
         if (result.deleted > 0) deleted += 1;

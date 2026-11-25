@@ -1,0 +1,5 @@
+IMPLEMENTED_WITH_ISSUES
+
+Ronda 2: carrera runtime cerrada, cola media sin fallback inseguro, E2E físico+SQL, TX obligatoria, fencing job-status, 610 tests (513+97) exit 0 con TB_SQL_TEST_CONFIRM=tea-bot.
+
+Residual: pendingRuntimeCleanup en memoria (sin cola durable dedicada).

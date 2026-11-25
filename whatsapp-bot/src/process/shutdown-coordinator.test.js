@@ -15,6 +15,7 @@ test('stop espera sweep activo', async () => {
       return { acquired: true, returnCode: 0 };
     },
     releaseLock: async () => {},
+    verifyLock: async () => true,
     runTransaction: async (fn) => fn(null),
     conversationRepo: {
       deleteInactiveRetentionBatch: async () => ({ rows: [], storageKeys: [] }),
@@ -46,6 +47,7 @@ test('stop libera timer y marca servicio detenido', async () => {
     dbEnabled: () => true,
     acquireLock: async () => ({ acquired: true }),
     releaseLock: async () => {},
+    verifyLock: async () => true,
     runTransaction: async (fn) => fn(null),
     conversationRepo: {
       deleteInactiveRetentionBatch: async () => ({ rows: [], storageKeys: [] }),

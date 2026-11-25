@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import '../config.js';
-import { isConversationDbEnabled, pingDatabase, query } from '../db/index.js';
+import { isConversationDbEnabled, pingDatabase, query, withTransaction } from '../db/index.js';
 import { isolatedTestDatabaseReason } from '../db/isolated-test-database.js';
 import conversationRepository from '../repositories/conversation.repository.js';
 import conversationMessageRepository from '../repositories/conversation-message.repository.js';
@@ -64,9 +64,11 @@ test('retención elimina message_delivery_status ligado al mensaje', async (t) =
   );
 
   try {
-    const batch = await conversationRepository.deleteInactiveRetentionBatch(
-      new Date('2000-02-01T00:00:00.000Z'),
-      { limit: 10 },
+    const batch = await withTransaction((transaction) =>
+      conversationRepository.deleteInactiveRetentionBatch(
+        new Date('2000-02-01T00:00:00.000Z'),
+        { limit: 10, transaction },
+      ),
     );
     assert.equal(batch.rows.some((row) => row.id === conversation.id), true);
     assert.equal(batch.deliveryStatusDeleted, 2);

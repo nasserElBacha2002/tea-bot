@@ -1,0 +1,3583 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+
+> whatsapp-bot@1.0.0 test
+> node scripts/run-test-suite.js
+
+# unitarias en paralelo: 107 archivos
+TAP version 13
+# Subtest: normalizeTwilioWhatsappPhone elimina prefijo whatsapp
+ok 1 - normalizeTwilioWhatsappPhone elimina prefijo whatsapp
+  ---
+  duration_ms: 1.362833
+  ...
+# Subtest: normalizeTwilioWhatsappPhone mantiene numero limpio
+ok 2 - normalizeTwilioWhatsappPhone mantiene numero limpio
+  ---
+  duration_ms: 0.300667
+  ...
+# Subtest: normalizeTwilioWhatsappPhone maneja vacio
+ok 3 - normalizeTwilioWhatsappPhone maneja vacio
+  ---
+  duration_ms: 3.175917
+  ...
+# Subtest: normalizeTwilioWhatsappPhone maneja null
+ok 4 - normalizeTwilioWhatsappPhone maneja null
+  ---
+  duration_ms: 0.125708
+  ...
+# Subtest: normalizeTwilioWhatsappPhone maneja undefined
+ok 5 - normalizeTwilioWhatsappPhone maneja undefined
+  ---
+  duration_ms: 0.226917
+  ...
+# Subtest: toCanonicalTwilioInboundEvent conserva userId y agrega phone normalizado
+ok 6 - toCanonicalTwilioInboundEvent conserva userId y agrega phone normalizado
+  ---
+  duration_ms: 0.6815
+  ...
+# Subtest: parseTwilioInboundMedia lee NumMedia y campos indexados
+ok 7 - parseTwilioInboundMedia lee NumMedia y campos indexados
+  ---
+  duration_ms: 0.151167
+  ...
+# Subtest: inboundEventHasProcessableContent incluye media sin texto
+ok 8 - inboundEventHasProcessableContent incluye media sin texto
+  ---
+  duration_ms: 0.294792
+  ...
+# [FlowStorage] FLOW_STORAGE_MODE="json" está obsoleto; usando "db" (única fuente de verdad).
+# Subtest: getFlowStorageMode default db
+ok 9 - getFlowStorageMode default db
+  ---
+  duration_ms: 0.740917
+  ...
+# Subtest: getFlowStorageMode legacy json maps to db
+ok 10 - getFlowStorageMode legacy json maps to db
+  ---
+  duration_ms: 2.1665
+  ...
+# Subtest: GET y HEAD en URL temporal de outbound media
+ok 11 - GET y HEAD en URL temporal de outbound media
+  ---
+  duration_ms: 159.916875
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-MEDIA-ONLY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-MEDIA-ONLY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM100","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM100","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FAIL","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:40:37.439Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":0.301,"error":"db down"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-FAIL","flowId":"main-menu","reason":"processing_error","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FAIL","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-FAIL","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FLAG-false","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-FLAG-false","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-FLAG-false","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FLAG-true","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-FLAG-true","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-FLAG-true","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-LEASE","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM-LEASE","flowId":"main-menu","reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-LEASE","flowId":"main-menu","reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-LEASE","flowId":"main-menu","reason":"lease_lost","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquire_error","provider":"twilio","messageId":"SM-DOWN","flowId":"main-menu","reason":"sql_error","attempts":null,"httpStatus":503}
+# [PERF] {"ts":"2026-11-25T16:40:37.444Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":0.137,"error":"pool unavailable"}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-REPLAY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-REPLAY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-REPLAY","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-REENTRY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-REENTRY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-REENTRY","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-TAKE","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-TAKE","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-TAKE","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-BUSY","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-BUSY","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquire_error","provider":"twilio","messageId":null,"flowId":"main-menu","reason":"unidentified","attempts":null,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-HAND","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-HAND","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-SCHEMA","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:40:37.450Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":1.239,"error":"schema"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-SCHEMA","flowId":"main-menu","reason":"processing_error","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-SCHEMA-2","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:40:37.450Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":0.487,"error":"takeover_schema_required"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-SCHEMA-2","flowId":"main-menu","reason":"processing_error","attempts":1,"httpStatus":null}
+# Subtest: mensaje solo media entra al pipeline sin TwiML de texto
+ok 12 - mensaje solo media entra al pipeline sin TwiML de texto
+  ---
+  duration_ms: 3.506125
+  ...
+# Subtest: T07 el mismo MessageSid tiene un solo turno y el retry reproduce el TwiML
+ok 13 - T07 el mismo MessageSid tiene un solo turno y el retry reproduce el TwiML
+  ---
+  duration_ms: 85.331458
+  ...
+# Subtest: T08 un fallo no queda PROCESSED y el reintento puede completar
+ok 14 - T08 un fallo no queda PROCESSED y el reintento puede completar
+  ---
+  duration_ms: 3.527792
+  ...
+# Subtest: T09 la idempotencia no depende de MONITORING_ENABLED
+ok 15 - T09 la idempotencia no depende de MONITORING_ENABLED
+  ---
+  duration_ms: 1.504166
+  ...
+# Subtest: T11 el dueño anterior no pisa el TwiML del worker que reclamó
+ok 16 - T11 el dueño anterior no pisa el TwiML del worker que reclamó
+  ---
+  duration_ms: 0.581708
+  ...
+# Subtest: T12 si SQL no adquiere, no hay turno ni archivo de dedupe
+ok 17 - T12 si SQL no adquiere, no hay turno ni archivo de dedupe
+  ---
+  duration_ms: 0.333709
+  ...
+# Subtest: T13 el retry después de un HTTP perdido reproduce el TwiML sin otro turno
+ok 18 - T13 el retry después de un HTTP perdido reproduce el TwiML sin otro turno
+  ---
+  duration_ms: 0.6655
+  ...
+# Subtest: T14 un retry del primer mensaje de reentrada no vuelve a consumir la elección
+ok 19 - T14 un retry del primer mensaje de reentrada no vuelve a consumir la elección
+  ---
+  duration_ms: 0.464917
+  ...
+# Subtest: T15 una toma que suprime el turno no se reactiva en el retry
+ok 20 - T15 una toma que suprime el turno no se reactiva en el retry
+  ---
+  duration_ms: 0.760084
+  ...
+# Subtest: un PROCESSING vigente no confirma el webhook con 200
+ok 21 - un PROCESSING vigente no confirma el webhook con 200
+  ---
+  duration_ms: 0.7285
+  ...
+# Subtest: un MessageSid ausente no se procesa ni se inventa
+ok 22 - un MessageSid ausente no se procesa ni se inventa
+  ---
+  duration_ms: 0.334917
+  ...
+# Subtest: un handoff humano vacío no genera un mensaje de WhatsApp
+ok 23 - un handoff humano vacío no genera un mensaje de WhatsApp
+  ---
+  duration_ms: 0.273042
+  ...
+# Subtest: TAKEOVER_SCHEMA_REQUIRED no queda PROCESSED ni confirma el webhook
+ok 24 - TAKEOVER_SCHEMA_REQUIRED no queda PROCESSED ni confirma el webhook
+  ---
+  duration_ms: 3.3575
+  ...
+# Subtest: el controlador no usa el dedupe local ni el flag de monitoreo
+ok 25 - el controlador no usa el dedupe local ni el flag de monitoreo
+  ---
+  duration_ms: 0.345041
+  ...
+# Subtest: el cierre SQL solo lo puede hacer el attempts dueño
+ok 26 - el cierre SQL solo lo puede hacer el attempts dueño
+  ---
+  duration_ms: 0.612083
+  ...
+# Subtest: la migracion 010 solo agrega response_body
+ok 27 - la migracion 010 solo agrega response_body
+  ---
+  duration_ms: 0.694083
+  ...
+# Subtest: validateSqlServerEnv exige server, database, user y password
+ok 28 - validateSqlServerEnv exige server, database, user y password
+  ---
+  duration_ms: 1.013084
+  ...
+# Subtest: buildMssqlConfig arma opciones desde entorno
+ok 29 - buildMssqlConfig arma opciones desde entorno
+  ---
+  duration_ms: 0.32625
+  ...
+# Subtest: isConversationDbEnabled reconoce valores truthy
+ok 30 - isConversationDbEnabled reconoce valores truthy
+  ---
+  duration_ms: 0.233916
+  ...
+# [ConversationDB] Persistencia no disponible (CONVERSATION_DB_DISABLED). Activá CONVERSATION_DB_ENABLED=true o completá DB_SERVER, DB_USER, DB_PASSWORD y DB_NAME.
+# Subtest: ensureConversationDbReady rechaza cuando persistencia deshabilitada explicitamente
+ok 31 - ensureConversationDbReady rechaza cuando persistencia deshabilitada explicitamente
+  ---
+  duration_ms: 1.836625
+  ...
+# Subtest: splitSqlBatches separa por GO
+ok 32 - splitSqlBatches separa por GO
+  ---
+  duration_ms: 1.019917
+  ...
+# Subtest: listMigrationFiles devuelve solo .sql ordenados
+ok 33 - listMigrationFiles devuelve solo .sql ordenados
+  ---
+  duration_ms: 6.884375
+  ...
+# Subtest: migracion 002 define human_handoffs e indices
+ok 34 - migracion 002 define human_handoffs e indices
+  ---
+  duration_ms: 2.385833
+  ...
+# Subtest: applyQueryPlaceholders does not corrupt $10 when replacing $1
+ok 35 - applyQueryPlaceholders does not corrupt $10 when replacing $1
+  ---
+  duration_ms: 0.848083
+  ...
+# Subtest: applyQueryPlaceholders handles pagination params after filters
+ok 36 - applyQueryPlaceholders handles pagination params after filters
+  ---
+  duration_ms: 0.214584
+  ...
+# Subtest: CompositeFlowLoader siempre usa modo db
+ok 37 - CompositeFlowLoader siempre usa modo db
+  ---
+  duration_ms: 1.228375
+  ...
+# Subtest: loadActivePublished delega en dbFlowLoader
+ok 38 - loadActivePublished delega en dbFlowLoader
+  ---
+  duration_ms: 0.408583
+  ...
+# Subtest: libera cupo una sola vez al finalizar operación
+ok 39 - libera cupo una sola vez al finalizar operación
+  ---
+  duration_ms: 3.053875
+  ...
+# Subtest: requireAdmin permite admin
+ok 40 - requireAdmin permite admin
+  ---
+  duration_ms: 0.955334
+  ...
+# Subtest: requireAdmin rechaza conversations_only
+ok 41 - requireAdmin rechaza conversations_only
+  ---
+  duration_ms: 0.89175
+  ...
+# Subtest: requireConversationsInbox permite admin y operador
+ok 42 - requireConversationsInbox permite admin y operador
+  ---
+  duration_ms: 0.806833
+  ...
+# Subtest: requireConversationsInbox rechaza rol desconocido
+ok 43 - requireConversationsInbox rechaza rol desconocido
+  ---
+  duration_ms: 0.297542
+  ...
+# Subtest: TB-005 firma inbound de Twilio
+    # Subtest: la ruta inbound usa el modo y el callback de estado sigue estricto
+    ok 1 - la ruta inbound usa el modo y el callback de estado sigue estricto
+      ---
+      duration_ms: 14.302666
+      ...
+    # Subtest: T01 firma valida en enforce entra al controlador
+    ok 2 - T01 firma valida en enforce entra al controlador
+      ---
+      duration_ms: 94.477667
+      ...
+    # Subtest: T02 firma invalida en enforce responde 403 sin entrar
+    ok 3 - T02 firma invalida en enforce responde 403 sin entrar
+      ---
+      duration_ms: 5.784042
+      ...
+    # Subtest: T03 firma ausente en enforce responde 403 sin entrar
+    ok 4 - T03 firma ausente en enforce responde 403 sin entrar
+      ---
+      duration_ms: 28.880958
+      ...
+    # Subtest: T04 firma invalida en log se registra y se procesa
+    ok 5 - T04 firma invalida en log se registra y se procesa
+      ---
+      duration_ms: 18.02475
+      ...
+    # Subtest: T05 firma valida en log se procesa
+    ok 6 - T05 firma valida en log se procesa
+      ---
+      duration_ms: 10.088167
+      ...
+    # Subtest: T06 modo off procesa una firma invalida y registra el modo inseguro
+    ok 7 - T06 modo off procesa una firma invalida y registra el modo inseguro
+      ---
+      duration_ms: 2.70225
+      ...
+    # Subtest: T07 configuracion invalida no se degrada a off
+    ok 8 - T07 configuracion invalida no se degrada a off
+      ---
+      duration_ms: 3.15525
+      ...
+    # Subtest: T08 sin auth token log y enforce rechazan y no registran el token
+    ok 9 - T08 sin auth token log y enforce rechazan y no registran el token
+      ---
+      duration_ms: 11.762417
+      ...
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"valid","correlationId":"e99f9db4-5a7d-4953-b151-f87eb8eb6097","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/flow-1"}}
+    # Subtest: T09 la firma https se valida con la URL publica y no con el proto del proxy
+    ok 10 - T09 la firma https se valida con la URL publica y no con el proto del proxy
+      ---
+      duration_ms: 11.922417
+      ...
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"valid","correlationId":"2cdb1058-7780-46d6-87e3-ffea59a95ae6","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/tea/webhooks/twilio/flow-1"}}
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"invalid","correlationId":"4e324b15-6b5b-48f2-ab84-ffea0cefe87c","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/tea/webhooks/twilio/flow-1"}}
+    # Subtest: T10 el prefijo publico de Nginx entra en la URL firmada
+    ok 11 - T10 el prefijo publico de Nginx entra en la URL firmada
+      ---
+      duration_ms: 6.334833
+      ...
+    # Subtest: T11 el query string se conserva para la firma y no se registra
+    ok 12 - T11 el query string se conserva para la firma y no se registra
+      ---
+      duration_ms: 21.77325
+      ...
+    # Subtest: T12 un X-Forwarded-Host no confiable no cambia la URL validada
+    ok 13 - T12 un X-Forwarded-Host no confiable no cambia la URL validada
+      ---
+      duration_ms: 20.817125
+      ...
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"valid","correlationId":"0e622e8e-aa81-401a-9433-4f8465d73752","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/flow-1"}}
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"invalid","correlationId":"0bb62712-1864-4c3d-a60b-3aa41b31e31e","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/flow-1"}}
+    # Subtest: parametros repetidos se firman sin quedarse con el ultimo valor
+    ok 14 - parametros repetidos se firman sin quedarse con el ultimo valor
+      ---
+      duration_ms: 2.53975
+      ...
+    # Subtest: T17 el callback de estado exige firma aunque el inbound este en off o log
+    ok 15 - T17 el callback de estado exige firma aunque el inbound este en off o log
+      ---
+      duration_ms: 12.783209
+      ...
+# {"event":"twilio_signature_configuration_error","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"configuration_error","correlationId":"9d8b8991-6e16-4f20-a48f-353ca494227a","reason":"malformed_body"}
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/flow-1","mode":"enforce","result":"valid","correlationId":"9465a86d-45dd-4f12-bf01-8fcc5ad601de","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/flow-1"}}
+# {"event":"inbound_acquire_error","provider":"twilio","messageId":null,"flowId":"flow-1","reason":"unidentified","attempts":null,"httpStatus":null}
+# {"event":"inbound_acquire_error","provider":"twilio","messageId":"SM-SQL-FAIL","flowId":"flow-1","reason":"sql_error","attempts":null,"httpStatus":503}
+# [PERF] {"ts":"2026-11-25T16:40:38.353Z","event":"twilio_webhook_error","flowId":"flow-1","totalMs":0.285,"error":"sql down"}
+    # Subtest: T18 un body malformado no ejecuta el controlador ni responde 500
+    ok 16 - T18 un body malformado no ejecuta el controlador ni responde 500
+      ---
+      duration_ms: 10.434875
+      ...
+    # Subtest: una firma valida con fallo de SQL responde 503 y no 403
+    ok 17 - una firma valida con fallo de SQL responde 503 y no 403
+      ---
+      duration_ms: 0.94975
+      ...
+    1..17
+ok 44 - TB-005 firma inbound de Twilio
+  ---
+  duration_ms: 285.752666
+  type: 'suite'
+  ...
+# Subtest: TB-005 ensamblado HTTP real
+    # Subtest: el orden es json, urlencoded, rutas y el error handler de Twilio
+    ok 1 - el orden es json, urlencoded, rutas y el error handler de Twilio
+      ---
+      duration_ms: 1.986833
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"invalid","correlationId":"5510464c-8f98-43c6-b55d-fc8db582628d","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+    # Subtest: una firma inválida en enforce no entra al TwiML del turno
+    ok 2 - una firma inválida en enforce no entra al TwiML del turno
+      ---
+      duration_ms: 55.147709
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"invalid","correlationId":"3c72c548-0c6d-4515-a071-76e4d8f7f12b","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+    # Subtest: el body crudo conserva parámetros repetidos en la app real
+    ok 3 - el body crudo conserva parámetros repetidos en la app real
+      ---
+      duration_ms: 6.983125
+      ...
+# {"event":"twilio_signature_configuration_error","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"configuration_error","correlationId":"8e7ad0fb-1176-4d09-8930-5cd90154dde0","reason":"malformed_body"}
+    # Subtest: un body malformado responde 4xx sin 500
+    ok 4 - un body malformado responde 4xx sin 500
+      ---
+      duration_ms: 23.99225
+      ...
+    # Subtest: el status sigue exigiendo la URL pública con https, puerto, prefijo y proxy falso
+    ok 5 - el status sigue exigiendo la URL pública con https, puerto, prefijo y proxy falso
+      ---
+      duration_ms: 8.302542
+      ...
+    # Subtest: un prefijo ambiguo rechaza el status sin volverlo permisivo
+    ok 6 - un prefijo ambiguo rechaza el status sin volverlo permisivo
+      ---
+      duration_ms: 5.839625
+      ...
+    1..6
+ok 45 - TB-005 ensamblado HTTP real
+  ---
+  duration_ms: 103.487125
+  type: 'suite'
+  ...
+# Subtest: TB-005 contrato de URL pública
+    # Subtest: 1. sin prefijo usa el origen y la ruta de Express
+    ok 1 - 1. sin prefijo usa el origen y la ruta de Express
+      ---
+      duration_ms: 1.8425
+      ...
+    # Subtest: 2. prefijo eliminado por Nginx se agrega una sola vez
+    ok 2 - 2. prefijo eliminado por Nginx se agrega una sola vez
+      ---
+      duration_ms: 0.690833
+      ...
+    # Subtest: 3. prefijo conservado por Nginx no se vuelve a agregar
+    ok 3 - 3. prefijo conservado por Nginx no se vuelve a agregar
+      ---
+      duration_ms: 0.272
+      ...
+    # Subtest: 4. el prefijo incluido en APP_BASE_URL se usa y el request no lo repite
+    ok 4 - 4. el prefijo incluido en APP_BASE_URL se usa y el request no lo repite
+      ---
+      duration_ms: 0.179542
+      ...
+    # Subtest: 5. el prefijo configurado dos veces es ambiguo
+    ok 5 - 5. el prefijo configurado dos veces es ambiguo
+      ---
+      duration_ms: 0.404875
+      ...
+    # Subtest: 6. un segmento parecido no se trata como prefijo
+    ok 6 - 6. un segmento parecido no se trata como prefijo
+      ---
+      duration_ms: 0.250625
+      ...
+    # Subtest: 7. el query string no se recodifica
+    ok 7 - 7. el query string no se recodifica
+      ---
+      duration_ms: 0.316083
+      ...
+    # Subtest: 8. https conserva el puerto explícito
+    ok 8 - 8. https conserva el puerto explícito
+      ---
+      duration_ms: 0.463375
+      ...
+    # Subtest: 9. los headers forwarded no entran en la URL
+    ok 9 - 9. los headers forwarded no entran en la URL
+      ---
+      duration_ms: 0.521375
+      ...
+    # Subtest: 10. una URL ausente o inválida no se arma
+    ok 10 - 10. una URL ausente o inválida no se arma
+      ---
+      duration_ms: 0.741417
+      ...
+    1..10
+ok 46 - TB-005 contrato de URL pública
+  ---
+  duration_ms: 7.059291
+  type: 'suite'
+  ...
+# Subtest: TB-005 preflight de firma
+    # Subtest: off no queda listo ni activado aunque la URL y el token existan
+    ok 1 - off no queda listo ni activado aunque la URL y el token existan
+      ---
+      duration_ms: 0.500417
+      ...
+    # Subtest: log sin token no arranca y no se describe como inocuo
+    ok 2 - log sin token no arranca y no se describe como inocuo
+      ---
+      duration_ms: 0.1395
+      ...
+    # Subtest: log completo queda observando y enforce sigue sin aprobarse
+    ok 3 - log completo queda observando y enforce sigue sin aprobarse
+      ---
+      duration_ms: 0.127083
+      ...
+    # Subtest: enforce ambiguo se rechaza antes de aceptar tráfico
+    ok 4 - enforce ambiguo se rechaza antes de aceptar tráfico
+      ---
+      duration_ms: 0.134292
+      ...
+    # Subtest: el comando de preflight no imprime el token y off no sale en cero
+    ok 5 - el comando de preflight no imprime el token y off no sale en cero
+      ---
+      duration_ms: 80.485125
+      ...
+    # Subtest: validateConfig no arranca log sin token y no lo degrada a off
+    ok 6 - validateConfig no arranca log sin token y no lo degrada a off
+      ---
+      duration_ms: 67.916625
+      ...
+    1..6
+ok 47 - TB-005 preflight de firma
+  ---
+  duration_ms: 149.548458
+  type: 'suite'
+  ...
+# Subtest: status callback persiste solo con firma Twilio valida
+ok 48 - status callback persiste solo con firma Twilio valida
+  ---
+  duration_ms: 81.4295
+  ...
+# Subtest: store vacio usa el timestamp de DB
+ok 49 - store vacio usa el timestamp de DB
+  ---
+  duration_ms: 0.824042
+  ...
+# Subtest: se conserva el timestamp mas reciente entre memoria y DB
+ok 50 - se conserva el timestamp mas reciente entre memoria y DB
+  ---
+  duration_ms: 0.156167
+  ...
+# Subtest: DB caida no inventa timestamps ni se reporta como lectura correcta
+ok 51 - DB caida no inventa timestamps ni se reporta como lectura correcta
+  ---
+  duration_ms: 0.114208
+  ...
+# {"event":"inbound_schema_warning","reason":"response_body_missing","provider":"twilio","messageId":null,"flowId":null,"attempts":null,"httpStatus":null}
+# {"event":"inbound_schema_warning","reason":"response_body_missing","provider":"twilio","messageId":null,"flowId":null,"attempts":null,"httpStatus":null}
+# {"event":"inbound_dead_letter_requeued","provider":"twilio","messageId":"SMDEAD","flowId":null,"reason":"prepared_failed_not_executed","attempts":2,"httpStatus":null}
+# {"event":"reentry_inbound","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: NVARCHAR(MAX) cuenta como columna presente y NULL como ausente
+ok 52 - NVARCHAR(MAX) cuenta como columna presente y NULL como ausente
+  ---
+  duration_ms: 1.360958
+  ...
+# Subtest: la columna ausente no se cachea y NVARCHAR(MAX) aplicada después sí guarda el TwiML
+ok 53 - la columna ausente no se cachea y NVARCHAR(MAX) aplicada después sí guarda el TwiML
+  ---
+  duration_ms: 1.722375
+  ...
+# Subtest: sin la columna el cierre no escribe response_body
+ok 54 - sin la columna el cierre no escribe response_body
+  ---
+  duration_ms: 1.400583
+  ...
+# Subtest: el worker vencido no escribe después de perder el fence
+ok 55 - el worker vencido no escribe después de perder el fence
+  ---
+  duration_ms: 2.37725
+  ...
+# Subtest: requeue de DEAD_LETTER no borra la fila y un PROCESSED no se reencola
+ok 56 - requeue de DEAD_LETTER no borra la fila y un PROCESSED no se reencola
+  ---
+  duration_ms: 0.601875
+  ...
+# Subtest: el mismo MessageSid no aplica la reentrada dos veces
+ok 57 - el mismo MessageSid no aplica la reentrada dos veces
+  ---
+  duration_ms: 1.55475
+  ...
+# Subtest: la clave del outbound cabe en el índice y no reutiliza el MessageSid
+ok 58 - la clave del outbound cabe en el índice y no reutiliza el MessageSid
+  ---
+  duration_ms: 1.748125
+  ...
+# Subtest: la base de pruebas no se acepta por contener la palabra test
+ok 59 - la base de pruebas no se acepta por contener la palabra test
+  ---
+  duration_ms: 1.755917
+  ...
+# Subtest: skip distribuido no pisa último éxito
+ok 60 - skip distribuido no pisa último éxito
+  ---
+  duration_ms: 2.154542
+  ...
+# Subtest: job_stopped_shutdown no deja estado SUCCESS
+ok 61 - job_stopped_shutdown no deja estado SUCCESS
+  ---
+  duration_ms: 0.248084
+  ...
+# Subtest: skip distribuido sin job_started no marca RUNNING
+ok 62 - skip distribuido sin job_started no marca RUNNING
+  ---
+  duration_ms: 0.205167
+  ...
+# Subtest: migracion 007 define tablas e indice de actividad
+ok 63 - migracion 007 define tablas e indice de actividad
+  ---
+  duration_ms: 1.268625
+  ...
+# Subtest: la migracion 011 crea conversation_message_attachments
+ok 64 - la migracion 011 crea conversation_message_attachments
+  ---
+  duration_ms: 1.794125
+  ...
+# Subtest: la migracion 012 endurece conversation_message_attachments sin tocar 011
+ok 65 - la migracion 012 endurece conversation_message_attachments sin tocar 011
+  ---
+  duration_ms: 1.946041
+  ...
+# Subtest: recordDeliveryStatus registra entrega aunque MONITORING_ENABLED esté apagado
+ok 66 - recordDeliveryStatus registra entrega aunque MONITORING_ENABLED esté apagado
+  ---
+  duration_ms: 1.70575
+  ...
+# Subtest: bot health: DB sana y actividad reciente es operativo
+ok 67 - bot health: DB sana y actividad reciente es operativo
+  ---
+  duration_ms: 1.308333
+  ...
+# Subtest: bot health: DB caída
+ok 68 - bot health: DB caída
+  ---
+  duration_ms: 0.113458
+  ...
+# Subtest: bot health: proceso vivo sin actividad todavía
+ok 69 - bot health: proceso vivo sin actividad todavía
+  ---
+  duration_ms: 0.166042
+  ...
+# Subtest: bot health: error reciente sin flujo exitoso posterior
+ok 70 - bot health: error reciente sin flujo exitoso posterior
+  ---
+  duration_ms: 0.087792
+  ...
+# Subtest: balance: healthy, warning, critical, emergency
+ok 71 - balance: healthy, warning, critical, emergency
+  ---
+  duration_ms: 0.531792
+  ...
+# Subtest: autonomía solo con muestras que cubren más de 24h y gasto neto
+ok 72 - autonomía solo con muestras que cubren más de 24h y gasto neto
+  ---
+  duration_ms: 0.321083
+  ...
+# Subtest: anomalía inbound: cero contra baseline alto, no contra baseline bajo, tráfico normal sano
+ok 73 - anomalía inbound: cero contra baseline alto, no contra baseline bajo, tráfico normal sano
+  ---
+  duration_ms: 0.172666
+  ...
+# Subtest: reconciliación: coincide, falta en DB, API caída
+ok 74 - reconciliación: coincide, falta en DB, API caída
+  ---
+  duration_ms: 19.358917
+  ...
+# Subtest: clasificador: provider issue, DB, cuenta Twilio y healthy
+ok 75 - clasificador: provider issue, DB, cuenta Twilio y healthy
+  ---
+  duration_ms: 0.828333
+  ...
+# Subtest: delivery status no pisa un estado final
+ok 76 - delivery status no pisa un estado final
+  ---
+  duration_ms: 0.687375
+  ...
+# Subtest: alertas y cooldown
+ok 77 - alertas y cooldown
+  ---
+  duration_ms: 0.458166
+  ...
+# Subtest: sanitize no conserva campos sensibles
+ok 78 - sanitize no conserva campos sensibles
+  ---
+  duration_ms: 0.305583
+  ...
+# Subtest: Twilio health: active/online, suspended, offline y error de API
+ok 79 - Twilio health: active/online, suspended, offline y error de API
+  ---
+  duration_ms: 1.955583
+  ...
+# Subtest: listado Twilio falla sin inventar sids
+ok 80 - listado Twilio falla sin inventar sids
+  ---
+  duration_ms: 0.306791
+  ...
+# Subtest: classifyUsageRecord separa recargas y excluye SMS de WhatsApp
+ok 81 - classifyUsageRecord separa recargas y excluye SMS de WhatsApp
+  ---
+  duration_ms: 2.097875
+  ...
+# Subtest: summarizeUsageRecords separa total de cuenta y subtotal WhatsApp sin fallback
+ok 82 - summarizeUsageRecords separa total de cuenta y subtotal WhatsApp sin fallback
+  ---
+  duration_ms: 4.823125
+  ...
+# Subtest: categorías whatsapp desconocidas no se clasifican como Meta
+ok 83 - categorías whatsapp desconocidas no se clasifican como Meta
+  ---
+  duration_ms: 0.318
+  ...
+# Subtest: usage agregado mensual no se asigna a días sin granularidad diaria
+ok 84 - usage agregado mensual no se asigna a días sin granularidad diaria
+  ---
+  duration_ms: 0.299042
+  ...
+# Subtest: importe confirmado cero y ajustes negativos se conservan en acumulados
+ok 85 - importe confirmado cero y ajustes negativos se conservan en acumulados
+  ---
+  duration_ms: 16.981625
+  ...
+# Subtest: resolveBillingCompleteness distingue datos diarios de cobertura contable verificada
+ok 86 - resolveBillingCompleteness distingue datos diarios de cobertura contable verificada
+  ---
+  duration_ms: 0.287291
+  ...
+# Subtest: categoría whatsapp desconocida con importe cero impide cobertura verificada
+ok 87 - categoría whatsapp desconocida con importe cero impide cobertura verificada
+  ---
+  duration_ms: 0.373333
+  ...
+# Subtest: normalizeRecord no convierte importe inválido en cero confirmado
+ok 88 - normalizeRecord no convierte importe inválido en cero confirmado
+  ---
+  duration_ms: 0.18625
+  ...
+# Subtest: resolveTwilioNextPageUrl rechaza URIs fuera de la cuenta
+ok 89 - resolveTwilioNextPageUrl rechaza URIs fuera de la cuenta
+  ---
+  duration_ms: 0.858041
+  ...
+# Subtest: fetchTwilioUsageRecords marca truncamiento de paginación
+ok 90 - fetchTwilioUsageRecords marca truncamiento de paginación
+  ---
+  duration_ms: 1.046334
+  ...
+# Subtest: fetchTwilioUsageRecords usa request inyectado sin red
+ok 91 - fetchTwilioUsageRecords usa request inyectado sin red
+  ---
+  duration_ms: 0.789958
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM100","flowId":null,"reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processing_error","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processing_error","attempts":2,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"retry","attempts":3,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processing_error","attempts":3,"httpStatus":null}
+# {"event":"inbound_dead_letter_alert","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processing_error","attempts":3,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"dead_letter","attempts":3,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM100","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"lease_lost","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"processed","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM100","flowId":null,"reason":"dead_letter","attempts":3,"httpStatus":null}
+# Subtest: webhook nuevo queda en procesamiento y luego PROCESSED
+ok 92 - webhook nuevo queda en procesamiento y luego PROCESSED
+  ---
+  duration_ms: 2.756375
+  ...
+# Subtest: provider_message_id duplicado ya procesado no se vuelve a procesar
+ok 93 - provider_message_id duplicado ya procesado no se vuelve a procesar
+  ---
+  duration_ms: 0.569
+  ...
+# Subtest: PROCESSING reciente no se vuelve a procesar
+ok 94 - PROCESSING reciente no se vuelve a procesar
+  ---
+  duration_ms: 0.334375
+  ...
+# Subtest: PROCESSING stale se puede reclamar e incrementa attempts
+ok 95 - PROCESSING stale se puede reclamar e incrementa attempts
+  ---
+  duration_ms: 0.90375
+  ...
+# Subtest: fallo de procesamiento marca FAILED y el tercer intento queda DEAD_LETTER
+ok 96 - fallo de procesamiento marca FAILED y el tercer intento queda DEAD_LETTER
+  ---
+  duration_ms: 0.918375
+  ...
+# Subtest: el worker anterior no cierra un evento ya reclamado
+ok 97 - el worker anterior no cierra un evento ya reclamado
+  ---
+  duration_ms: 17.089042
+  ...
+# Subtest: la adquisicion no consulta el flag y mide el lease en segundos de SQL
+ok 98 - la adquisicion no consulta el flag y mide el lease en segundos de SQL
+  ---
+  duration_ms: 0.542084
+  ...
+# Subtest: FAILED en el maximo de intentos queda DEAD_LETTER y no procesa
+ok 99 - FAILED en el maximo de intentos queda DEAD_LETTER y no procesa
+  ---
+  duration_ms: 1.332292
+  ...
+# Subtest: rechaza asOf inválido
+ok 100 - rechaza asOf inválido
+  ---
+  duration_ms: 3.2275
+  ...
+# Subtest: rechaza days fuera de rango
+ok 101 - rechaza days fuera de rango
+  ---
+  duration_ms: 1.842375
+  ...
+# Subtest: cost audit combina usage confirmado sin doble conteo ni meta inferido desde SQL
+ok 102 - cost audit combina usage confirmado sin doble conteo ni meta inferido desde SQL
+  ---
+  duration_ms: 68.179
+  ...
+# Subtest: acumulado mensual agrupa por mes civil AR
+ok 103 - acumulado mensual agrupa por mes civil AR
+  ---
+  duration_ms: 65.19725
+  ...
+# Subtest: partial_truncated se propaga a conciliación y dataQuality
+ok 104 - partial_truncated se propaga a conciliación y dataQuality
+  ---
+  duration_ms: 531.186125
+  ...
+# Subtest: compared solo con billing verificado y conteos outbound equivalentes
+ok 105 - compared solo con billing verificado y conteos outbound equivalentes
+  ---
+  duration_ms: 170.586542
+  ...
+# Subtest: conteos no equivalentes dejan reconciliación inconclusive sin delta
+ok 106 - conteos no equivalentes dejan reconciliación inconclusive sin delta
+  ---
+  duration_ms: 0.575333
+  ...
+# Subtest: resolveReconciliationStatus no marca compared con paginación completa pero billing incompleto
+ok 107 - resolveReconciliationStatus no marca compared con paginación completa pero billing incompleto
+  ---
+  duration_ms: 0.135666
+  ...
+# Subtest: parseWhatsAppCostAuditQuery valida fechas y días
+ok 108 - parseWhatsAppCostAuditQuery valida fechas y días
+  ---
+  duration_ms: 0.3305
+  ...
+# Subtest: clampMetricsDays acota 1..90 y usa 30 por defecto
+ok 109 - clampMetricsDays acota 1..90 y usa 30 por defecto
+  ---
+  duration_ms: 1.164625
+  ...
+# Subtest: isSyntheticTwilioOutboundProviderMessageId distingue TwiML de REST
+ok 110 - isSyntheticTwilioOutboundProviderMessageId distingue TwiML de REST
+  ---
+  duration_ms: 0.522167
+  ...
+# Subtest: mapDailyMessageRow calcula whatsappOutbound sin system
+ok 111 - mapDailyMessageRow calcula whatsappOutbound sin system
+  ---
+  duration_ms: 0.172083
+  ...
+# Subtest: mapDeliveryStatusRow normaliza status
+ok 112 - mapDeliveryStatusRow normaliza status
+  ---
+  duration_ms: 0.117542
+  ...
+# Subtest: mapMetricsWindowRow expone ventana AR y UTC
+ok 113 - mapMetricsWindowRow expone ventana AR y UTC
+  ---
+  duration_ms: 0.285625
+  ...
+# Subtest: templates queda como limitación explícita
+ok 114 - templates queda como limitación explícita
+  ---
+  duration_ms: 0.183375
+  ...
+# Subtest: resolveMetaPricingRegime aplica cambio 2026-10-01 por día
+ok 115 - resolveMetaPricingRegime aplica cambio 2026-10-01 por día
+  ---
+  duration_ms: 1.042916
+  ...
+# Subtest: ventana que cruza 2026-10-01 usa régimen por cada día
+ok 116 - ventana que cruza 2026-10-01 usa régimen por cada día
+  ---
+  duration_ms: 1.315083
+  ...
+# Subtest: régimen legacy deja service y utility en ventana sin cargo Meta
+ok 117 - régimen legacy deja service y utility en ventana sin cargo Meta
+  ---
+  duration_ms: 0.224333
+  ...
+# Subtest: franquicia no se aplica en ventana parcial de mes
+ok 118 - franquicia no se aplica en ventana parcial de mes
+  ---
+  duration_ms: 0.177458
+  ...
+# Subtest: franquicia mensual por número solo con mes civil completo
+ok 119 - franquicia mensual por número solo con mes civil completo
+  ---
+  duration_ms: 0.440917
+  ...
+# Subtest: rates del fixture no son operacionales confirmados
+ok 120 - rates del fixture no son operacionales confirmados
+  ---
+  duration_ms: 0.108875
+  ...
+# {"event":"job_started","job":"conversation_retention","runId":"2ff9032d-03c9-491f-b47c-646ff9e98476","cutoff":"2026-10-26T16:40:37.503Z","retentionDays":30,"batchSize":100}
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"job_stopped_shutdown","job":"conversation_retention","runId":"2ff9032d-03c9-491f-b47c-646ff9e98476","conversations_deleted":0,"batches_processed":0,"runtime_cleaned":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"duration":198}
+# Subtest: stop espera sweep activo
+ok 121 - stop espera sweep activo
+  ---
+  duration_ms: 218.36925
+  ...
+# Subtest: stop libera timer y marca servicio detenido
+ok 122 - stop libera timer y marca servicio detenido
+  ---
+  duration_ms: 0.369541
+  ...
+# [conversations-live] client registered 1
+# [conversations-live] broadcast conversation.message.created c1 clients=1
+# [conversations-live] client removed 0
+# [conversations-live] client registered 1
+# Subtest: broadcaster registra y limpia clientes
+ok 123 - broadcaster registra y limpia clientes
+  ---
+  duration_ms: 4.835709
+  ...
+# Subtest: publishConversationLiveEvent ignora eventos sin conversationId
+ok 124 - publishConversationLiveEvent ignora eventos sin conversationId
+  ---
+  duration_ms: 0.281708
+  ...
+# [conversations-live] client registered 1
+# [conversations-live] broadcast conversation.message.created c1 clients=1
+# Subtest: notifyConversationMessageCreated no propaga attachments crudos en extras
+ok 125 - notifyConversationMessageCreated no propaga attachments crudos en extras
+  ---
+  duration_ms: 9.143458
+  ...
+# Subtest: createSignedSessionToken incluye rol y lo verifica
+ok 126 - createSignedSessionToken incluye rol y lo verifica
+  ---
+  duration_ms: 1.447291
+  ...
+# Subtest: token legacy sin rol se trata como admin
+ok 127 - token legacy sin rol se trata como admin
+  ---
+  duration_ms: 0.295708
+  ...
+# Subtest: authenticateAdminUser distingue admin y operador de conversaciones
+ok 128 - authenticateAdminUser distingue admin y operador de conversaciones
+  ---
+  duration_ms: 0.522417
+  ...
+# Subtest: verifyPasswordHash valida SHA-256 hex
+ok 129 - verifyPasswordHash valida SHA-256 hex
+  ---
+  duration_ms: 0.125667
+  ...
+# Subtest: hashAgentSendPayload respeta contrato de request_hash
+ok 130 - hashAgentSendPayload respeta contrato de request_hash
+  ---
+  duration_ms: 1.548416
+  ...
+# Subtest: maxOutboundBatchSize acota a 5
+ok 131 - maxOutboundBatchSize acota a 5
+  ---
+  duration_ms: 0.201333
+  ...
+# Subtest: sendBatch reporta éxito parcial sin afirmar éxito total
+ok 132 - sendBatch reporta éxito parcial sin afirmar éxito total
+  ---
+  duration_ms: 61.66125
+  ...
+# Subtest: sendSingleItem falla sin clientRequestId
+ok 133 - sendSingleItem falla sin clientRequestId
+  ---
+  duration_ms: 1.475625
+  ...
+# Subtest: twilioOutcomeFromError distingue incierto sin reintento automático
+ok 134 - twilioOutcomeFromError distingue incierto sin reintento automático
+  ---
+  duration_ms: 1.048458
+  ...
+# Subtest: _deliverReservedMessage marca uncertain si SQL falla tras aceptación Twilio
+ok 135 - _deliverReservedMessage marca uncertain si SQL falla tras aceptación Twilio
+  ---
+  duration_ms: 1.609083
+  ...
+# Subtest: _deliverReservedMessage idempotente reconcilia entrega WhatsApp previa
+ok 136 - _deliverReservedMessage idempotente reconcilia entrega WhatsApp previa
+  ---
+  duration_ms: 0.251667
+  ...
+# Subtest: _deliverReservedMessage reanuda pending sin duplicar confirmado
+ok 137 - _deliverReservedMessage reanuda pending sin duplicar confirmado
+  ---
+  duration_ms: 0.376541
+  ...
+# Subtest: sendBatch envía texto solo en el primer archivo
+ok 138 - sendBatch envía texto solo en el primer archivo
+  ---
+  duration_ms: 0.734292
+  ...
+# Subtest: sendBatch honra includeBody explícito en reintentos
+ok 139 - sendBatch honra includeBody explícito en reintentos
+  ---
+  duration_ms: 1.202209
+  ...
+# Subtest: _deliverReservedMessage rechaza segundo despacho concurrente
+ok 140 - _deliverReservedMessage rechaza segundo despacho concurrente
+  ---
+  duration_ms: 1.238958
+  ...
+# Subtest: _deliverReservedMessage permite reintentar failed tras adquirir lease
+ok 141 - _deliverReservedMessage permite reintentar failed tras adquirir lease
+  ---
+  duration_ms: 0.53975
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"conv-1","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-1"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"conv-1","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":[],"resolvedHandoffCount":0,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"conv-1","previousStatus":"bot","newStatus":"bot","previousNodeKey":null,"resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":[],"resolvedHandoffCount":0,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: isHandoffTerminalNode reconoce nodos de handoff
+ok 142 - isHandoffTerminalNode reconoce nodos de handoff
+  ---
+  duration_ms: 1.354167
+  ...
+# Subtest: returnConversationToBot resuelve handoff, cierra sesión pausada y resetea nodo
+ok 143 - returnConversationToBot resuelve handoff, cierra sesión pausada y resetea nodo
+  ---
+  duration_ms: 2.491625
+  ...
+# Subtest: returnConversationToBot es idempotente
+ok 144 - returnConversationToBot es idempotente
+  ---
+  duration_ms: 0.969875
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# {"event":"conversation_legacy_state_normalized","conversationId":"conv-1","previousNodeKey":"human_handoff","resumeNodeKey":"welcome","endedSessionCount":1}
+# Subtest: normalizeLegacyBotStateIfNeeded corrige bot + human_handoff sin handoff activo
+ok 145 - normalizeLegacyBotStateIfNeeded corrige bot + human_handoff sin handoff activo
+  ---
+  duration_ms: 124.102
+  ...
+# Subtest: normalizeLegacyBotStateIfNeeded no altera conversación con handoff activo
+ok 146 - normalizeLegacyBotStateIfNeeded no altera conversación con handoff activo
+  ---
+  duration_ms: 0.678458
+  ...
+# Subtest: getConversationMessages incluye attachments en items
+ok 147 - getConversationMessages incluye attachments en items
+  ---
+  duration_ms: 1.975667
+  ...
+# Subtest: openMessageAttachmentContent resuelve archivo stored
+ok 148 - openMessageAttachmentContent resuelve archivo stored
+  ---
+  duration_ms: 10.136292
+  ...
+# Subtest: openMessageAttachmentContent 404 si status no es stored
+ok 149 - openMessageAttachmentContent 404 si status no es stored
+  ---
+  duration_ms: 2.8375
+  ...
+# Subtest: provider internal no requiere Twilio
+ok 150 - provider internal no requiere Twilio
+  ---
+  duration_ms: 0.809583
+  ...
+# Subtest: provider twilio whatsapp requiere Twilio
+ok 151 - provider twilio whatsapp requiere Twilio
+  ---
+  duration_ms: 0.104625
+  ...
+# Subtest: rechaza anclas combinadas
+ok 152 - rechaza anclas combinadas
+  ---
+  duration_ms: 1.62225
+  ...
+# Subtest: rechaza tail con ancla
+ok 153 - rechaza tail con ancla
+  ---
+  duration_ms: 0.353292
+  ...
+# Subtest: rechaza identificador inválido
+ok 154 - rechaza identificador inválido
+  ---
+  duration_ms: 0.375791
+  ...
+# Subtest: sendAgentMessage delega lote a sendBatch
+ok 155 - sendAgentMessage delega lote a sendBatch
+  ---
+  duration_ms: 0.774292
+  ...
+# Subtest: sendAgentMessage propaga error Twilio en envío individual
+ok 156 - sendAgentMessage propaga error Twilio en envío individual
+  ---
+  duration_ms: 0.470166
+  ...
+# Subtest: parseListFilters valida status y sort
+ok 157 - parseListFilters valida status y sort
+  ---
+  duration_ms: 0.913333
+  ...
+# Subtest: listInboxConversations incluye ultimo mensaje y handoff
+ok 158 - listInboxConversations incluye ultimo mensaje y handoff
+  ---
+  duration_ms: 1.023792
+  ...
+# Subtest: getConversationDetail devuelve sesion pausada y handoff
+ok 159 - getConversationDetail devuelve sesion pausada y handoff
+  ---
+  duration_ms: 0.424666
+  ...
+# Subtest: getConversationDetail 404 para id desconocido
+ok 160 - getConversationDetail 404 para id desconocido
+  ---
+  duration_ms: 0.44075
+  ...
+# Subtest: getConversationMessages devuelve mensajes ordenados
+ok 161 - getConversationMessages devuelve mensajes ordenados
+  ---
+  duration_ms: 0.794041
+  ...
+# Subtest: listInboxConversations respeta filtros en repositorio
+ok 162 - listInboxConversations respeta filtros en repositorio
+  ---
+  duration_ms: 0.259625
+  ...
+# Subtest: updateConversationContact persiste displayName y sincroniza por teléfono
+ok 163 - updateConversationContact persiste displayName y sincroniza por teléfono
+  ---
+  duration_ms: 0.958208
+  ...
+# Subtest: closeConversation devuelve la conversación al bot
+ok 164 - closeConversation devuelve la conversación al bot
+  ---
+  duration_ms: 0.481708
+  ...
+# Subtest: returnConversationToBot reactiva el bot y resetea sesión
+ok 165 - returnConversationToBot reactiva el bot y resetea sesión
+  ---
+  duration_ms: 0.657958
+  ...
+# Subtest: claimConversation devuelve éxito en inbox compartido aunque la tomó otro operador
+ok 166 - claimConversation devuelve éxito en inbox compartido aunque la tomó otro operador
+  ---
+  duration_ms: 0.713083
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: caso 7ED6C057 anonimizado: el texto libre posterior al cierre no cae en fallback_global
+ok 167 - caso 7ED6C057 anonimizado: el texto libre posterior al cierre no cae en fallback_global
+  ---
+  duration_ms: 9.532834
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_node","reason":"same_version","nodeKey":"no_presenciales_menu"}
+# Subtest: elegir continuar restaura el nodo y no reabre handoffs resueltos
+ok 168 - elegir continuar restaura el nodo y no reabre handoffs resueltos
+  ---
+  duration_ms: 5.582792
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"fresh","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re17956248402084e56
+# Subtest: elegir nueva consulta presenta el entry y no usa el comando como opción
+ok 169 - elegir nueva consulta presenta el entry y no usa el comando como opción
+  ---
+  duration_ms: 9.85375
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"handoff","reason":"new_handoff","nodeKey":"human_handoff"}
+# Subtest: pedir una persona abre un handoff nuevo y conserva los históricos resueltos
+ok 170 - pedir una persona abre un handoff nuevo y conserva los históricos resueltos
+  ---
+  duration_ms: 3.298792
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"fresh","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re17956248402215e4c
+# Subtest: menú en la reentrada muestra el menú publicado y no el fallback
+ok 171 - menú en la reentrada muestra el menú publicado y no el fallback
+  ---
+  duration_ms: 4.607625
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"fresh","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re17956248402268d5c
+# Subtest: sin email, una consulta nueva presenta collect_email
+ok 172 - sin email, una consulta nueva presenta collect_email
+  ---
+  duration_ms: 4.542041
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"node_removed","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re1795624840231ba1f
+# Subtest: sesión sin nodo compatible continúa por el entry y no por fallback_global
+ok 173 - sesión sin nodo compatible continúa por el entry y no por fallback_global
+  ---
+  duration_ms: 4.515
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: handoff activo no dispara la reentrada
+ok 174 - handoff activo no dispara la reentrada
+  ---
+  duration_ms: 1.687833
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_node","reason":"same_version","nodeKey":"no_presenciales_menu"}
+# Subtest: varios handoffs históricos no se reactivan al continuar
+ok 175 - varios handoffs históricos no se reactivan al continuar
+  ---
+  duration_ms: 4.0095
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# Subtest: dos webhooks simultáneos dejan una sola transición a awaiting_choice
+ok 176 - dos webhooks simultáneos dejan una sola transición a awaiting_choice
+  ---
+  duration_ms: 5.285208
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"case-1795624840247","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMreentry1795624840248","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"reentry_inbound","conversationId":"case-1795624840247","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMreentry1795624840248","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SMreentry1795624840248","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: reentrega del mismo MessageSid no vuelve a consumir la reentrada
+ok 177 - reentrega del mismo MessageSid no vuelve a consumir la reentrada
+  ---
+  duration_ms: 3.512583
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: cierre concurrente no deja que el sync del motor pise el cursor
+ok 178 - cierre concurrente no deja que el sync del motor pise el cursor
+  ---
+  duration_ms: 5.139292
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_legacy_rollback","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3"}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re17956248402552949
+# Subtest: rollback legacy con reentrada pendiente presenta el flujo y no el fallback
+ok 179 - rollback legacy con reentrada pendiente presenta el flujo y no el fallback
+  ---
+  duration_ms: 5.037334
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"conv-reentry-inbound","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: handleInbound no crea una sesión de welcome para el primer texto de reentrada
+ok 180 - handleInbound no crea una sesión de welcome para el primer texto de reentrada
+  ---
+  duration_ms: 2.95425
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"invalid_choice_limit","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=twilio:+54911re17956248402641254
+# Subtest: respuestas inválidas persistidas salen de awaiting_choice sin abrir un handoff
+ok 181 - respuestas inválidas persistidas salen de awaiting_choice sin abrir un handoff
+  ---
+  duration_ms: 4.653208
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: un humano asignado tiene precedencia y no consume la reentrada
+ok 182 - un humano asignado tiene precedencia y no consume la reentrada
+  ---
+  duration_ms: 1.36675
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"node_removed","nodeKey":null}
+# Subtest: nodo eliminado en la misma versión reinicia y no restaura
+ok 183 - nodo eliminado en la misma versión reinicia y no restaura
+  ---
+  duration_ms: 1.9585
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_entry","reason":"node_modified","nodeKey":null}
+# Subtest: versión histórica con nodo modificado no se restaura
+ok 184 - versión histórica con nodo modificado no se restaura
+  ---
+  duration_ms: 35.165292
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_node","reason":"migrated_published","nodeKey":"no_presenciales_menu"}
+# Subtest: versión histórica compatible migra al flujo publicado
+ok 185 - versión histórica compatible migra al flujo publicado
+  ---
+  duration_ms: 9.023167
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":false,"resolvedHandoffIds":["handoff-active"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":"legacy_return","nodeKey":null}
+# Subtest: sin la columna, el cierre no escribe reentry y deja el cursor en null
+ok 186 - sin la columna, el cierre no escribe reentry y deja el cursor en null
+  ---
+  duration_ms: 1.921041
+  ...
+# Subtest: el fallback posterior a un cierre viejo no cuenta como avance del flujo
+ok 187 - el fallback posterior a un cierre viejo no cuenta como avance del flujo
+  ---
+  duration_ms: 1.35375
+  ...
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"present_node","reason":"same_version","nodeKey":"no_presenciales_menu"}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":"legacy_return","nodeKey":null}
+# Subtest: cierre viejo sin reentry_json ofrece el prompt y no el fallback
+ok 188 - cierre viejo sin reentry_json ofrece el prompt y no el fallback
+  ---
+  duration_ms: 4.170041
+  ...
+# Subtest: cierre viejo que ya recibió el fallback igual ofrece la reentrada
+ok 189 - cierre viejo que ya recibió el fallback igual ofrece la reentrada
+  ---
+  duration_ms: 0.695542
+  ...
+# Subtest: cierre viejo que ya entró a un menú no se rearma
+ok 190 - cierre viejo que ya entró a un menú no se rearma
+  ---
+  duration_ms: 0.261542
+  ...
+# Subtest: sin mensaje de devolución no se arma la reentrada vieja
+ok 191 - sin mensaje de devolución no se arma la reentrada vieja
+  ---
+  duration_ms: 0.106875
+  ...
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"handoff","reason":"new_handoff","nodeKey":"human_handoff"}
+# {"event":"reentry_inbound","conversationId":"7ED6C057-3ED1-422E-B0EB-F36A9E15F1A3","action":"prompt","reason":"inactivity","nodeKey":null}
+# Subtest: cierre viejo y pedido de humano deriva sin el fallback
+ok 192 - cierre viejo y pedido de humano deriva sin el fallback
+  ---
+  duration_ms: 1.695584
+  ...
+# Subtest: REENTRY_POLICY=legacy no rearma un cierre viejo
+ok 193 - REENTRY_POLICY=legacy no rearma un cierre viejo
+  ---
+  duration_ms: 0.189333
+  ...
+# Subtest: el primer texto que dice continuar no se consume como elección
+ok 194 - el primer texto que dice continuar no se consume como elección
+  ---
+  duration_ms: 0.160792
+  ...
+# Subtest: inactividad de 12h en solo-bot muestra el prompt de reentrada
+ok 195 - inactividad de 12h en solo-bot muestra el prompt de reentrada
+  ---
+  duration_ms: 0.460666
+  ...
+# Subtest: inactividad menor al umbral no arma reentrada
+ok 196 - inactividad menor al umbral no arma reentrada
+  ---
+  duration_ms: 0.251042
+  ...
+# Subtest: reopenFromInboundMessage no-op si la conversación no está cerrada
+ok 197 - reopenFromInboundMessage no-op si la conversación no está cerrada
+  ---
+  duration_ms: 0.969958
+  ...
+# Subtest: reopenFromInboundMessage sin handoff activo vuelve a bot
+ok 198 - reopenFromInboundMessage sin handoff activo vuelve a bot
+  ---
+  duration_ms: 1.013
+  ...
+# Subtest: reopenFromInboundMessage con handoff resolved histórico vuelve a bot sin crear pending
+ok 199 - reopenFromInboundMessage con handoff resolved histórico vuelve a bot sin crear pending
+  ---
+  duration_ms: 0.4435
+  ...
+# Subtest: reopenFromInboundMessage con handoff pending activo vuelve a waiting_human
+ok 200 - reopenFromInboundMessage con handoff pending activo vuelve a waiting_human
+  ---
+  duration_ms: 0.252375
+  ...
+# Subtest: reopenFromInboundMessage con handoff assigned preserva assignedAgentId
+ok 201 - reopenFromInboundMessage con handoff assigned preserva assignedAgentId
+  ---
+  duration_ms: 0.977667
+  ...
+# Subtest: admin y operador pueden tomar una conversación libre en bot
+ok 202 - admin y operador pueden tomar una conversación libre en bot
+  ---
+  duration_ms: 12.261416
+  ...
+# Subtest: el dueño puede devolver la atención exclusiva
+ok 203 - el dueño puede devolver la atención exclusiva
+  ---
+  duration_ms: 1.030708
+  ...
+# Subtest: otro operador del panel puede cerrar la atención compartida
+ok 204 - otro operador del panel puede cerrar la atención compartida
+  ---
+  duration_ms: 1.049959
+  ...
+# Subtest: el administrador también puede devolver una conversación ajena del panel
+ok 205 - el administrador también puede devolver una conversación ajena del panel
+  ---
+  duration_ms: 0.132667
+  ...
+# Subtest: inbox compartido expone takeoverBlock shared_inbox para no dueños del panel
+ok 206 - inbox compartido expone takeoverBlock shared_inbox para no dueños del panel
+  ---
+  duration_ms: 0.225458
+  ...
+# Subtest: con la toma apagada cualquier operador habilitado puede devolver la cola
+ok 207 - con la toma apagada cualquier operador habilitado puede devolver la cola
+  ---
+  duration_ms: 0.086584
+  ...
+# Subtest: un cierre interno sin actor no pasa por esta autorización
+ok 208 - un cierre interno sin actor no pasa por esta autorización
+  ---
+  duration_ms: 0.296292
+  ...
+# Subtest: searchGlobal valida q corto
+ok 209 - searchGlobal valida q corto
+  ---
+  duration_ms: 1.307625
+  ...
+# Subtest: searchGlobal devuelve contactos y mensajes con snippet
+ok 210 - searchGlobal devuelve contactos y mensajes con snippet
+  ---
+  duration_ms: 1.545541
+  ...
+# Subtest: searchInConversation rechaza cursor inválido
+ok 211 - searchInConversation rechaza cursor inválido
+  ---
+  duration_ms: 0.595
+  ...
+# Subtest: parseCursors acepta cursor válido
+ok 212 - parseCursors acepta cursor válido
+  ---
+  duration_ms: 4.836583
+  ...
+# Subtest: bot activo: la toma pausa el bot y el inbound siguiente no responde solo
+ok 213 - bot activo: la toma pausa el bot y el inbound siguiente no responde solo
+  ---
+  duration_ms: 10.332084
+  ...
+# Subtest: dos agentes en paralelo: uno toma y el otro recibe conflicto
+ok 214 - dos agentes en paralelo: uno toma y el otro recibe conflicto
+  ---
+  duration_ms: 16.398209
+  ...
+# Subtest: doble clic del mismo agente no duplica handoff ni mensaje
+ok 215 - doble clic del mismo agente no duplica handoff ni mensaje
+  ---
+  duration_ms: 6.13525
+  ...
+# Subtest: sin permiso no escribe
+ok 216 - sin permiso no escribe
+  ---
+  duration_ms: 0.668625
+  ...
+# Subtest: handoff pendiente se asigna y el resuelto no se reabre
+ok 217 - handoff pendiente se asigna y el resuelto no se reabre
+  ---
+  duration_ms: 1.148042
+  ...
+# Subtest: reentrada pendiente se cancela en la misma toma
+ok 218 - reentrada pendiente se cancela en la misma toma
+  ---
+  duration_ms: 0.9145
+  ...
+# Subtest: el estado queda en el repositorio después de soltar la instancia
+ok 219 - el estado queda en el repositorio después de soltar la instancia
+  ---
+  duration_ms: 2.801
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"welcome","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["handoff-1"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: devolver al bot después de tomar ofrece reentrada y no un fallback
+ok 220 - devolver al bot después de tomar ofrece reentrada y no un fallback
+  ---
+  duration_ms: 5.304625
+  ...
+# {"event":"manual_takeover_notify_failed","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","error":"socket down"}
+# Subtest: si el websocket falla la toma queda commiteada y el GET la ve
+ok 221 - si el websocket falla la toma queda commiteada y el GET la ve
+  ---
+  duration_ms: 2.400083
+  ...
+# Subtest: la toma apagada y la versión vieja no escriben
+ok 222 - la toma apagada y la versión vieja no escriben
+  ---
+  duration_ms: 1.102334
+  ...
+# Subtest: la reasignación no usa la toma y un operador no puede reasignar
+ok 223 - la reasignación no usa la toma y un operador no puede reasignar
+  ---
+  duration_ms: 0.938
+  ...
+# Subtest: otro actor no reutiliza un clientRequestId como toma exitosa
+ok 224 - otro actor no reutiliza un clientRequestId como toma exitosa
+  ---
+  duration_ms: 2.188542
+  ...
+# Subtest: el mismo request no vuelve a tomar después de una reasignación
+ok 225 - el mismo request no vuelve a tomar después de una reasignación
+  ---
+  duration_ms: 1.588542
+  ...
+# Subtest: un destino inexistente no reasigna
+ok 226 - un destino inexistente no reasigna
+  ---
+  duration_ms: 0.248166
+  ...
+# Subtest: varios handoffs activos quedan en una sola asignación
+ok 227 - varios handoffs activos quedan en una sola asignación
+  ---
+  duration_ms: 1.377042
+  ...
+# Subtest: con el flag apagado no exige el esquema ni toma la conversación
+ok 228 - con el flag apagado no exige el esquema ni toma la conversación
+  ---
+  duration_ms: 0.474708
+  ...
+# Subtest: el mensaje interno de la toma no sale por WhatsApp
+ok 229 - el mensaje interno de la toma no sale por WhatsApp
+  ---
+  duration_ms: 1.283125
+  ...
+# {"event":"automatic_reply_indeterminate","reason":"version_required","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+# {"event":"automatic_reply_indeterminate","reason":"missing_row","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+# {"event":"automatic_reply_indeterminate","reason":"sql_error","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+# {"event":"automatic_reply_indeterminate","reason":"takeover_schema_required","conversationId":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}
+# Subtest: la persistencia comparte la transacción que autoriza
+ok 230 - la persistencia comparte la transacción que autoriza
+  ---
+  duration_ms: 5.128792
+  ...
+# Subtest: un takeover que commitea antes del lock no inserta el outbound
+ok 231 - un takeover que commitea antes del lock no inserta el outbound
+  ---
+  duration_ms: 0.430375
+  ...
+# Subtest: una versión nula no se trata como 0
+ok 232 - una versión nula no se trata como 0
+  ---
+  duration_ms: 2.624875
+  ...
+# Subtest: sin fila persistida la respuesta no se autoriza
+ok 233 - sin fila persistida la respuesta no se autoriza
+  ---
+  duration_ms: 0.463583
+  ...
+# Subtest: un error SQL durante la autorización no envía la respuesta
+ok 234 - un error SQL durante la autorización no envía la respuesta
+  ---
+  duration_ms: 0.490167
+  ...
+# Subtest: un id no persistido queda autorizado por regla explícita
+ok 235 - un id no persistido queda autorizado por regla explícita
+  ---
+  duration_ms: 0.140959
+  ...
+# Subtest: la base apagada es una autorización explícita, no un fallo abierto
+ok 236 - la base apagada es una autorización explícita, no un fallo abierto
+  ---
+  duration_ms: 0.235
+  ...
+# Subtest: con la toma activa y sin columna la autorización queda indeterminada
+ok 237 - con la toma activa y sin columna la autorización queda indeterminada
+  ---
+  duration_ms: 0.3035
+  ...
+# Subtest: buildTwilioConversationFields normaliza telefono y conserva external user id
+ok 238 - buildTwilioConversationFields normaliza telefono y conserva external user id
+  ---
+  duration_ms: 15.889334
+  ...
+# Subtest: buildSessionSyncPatch usa resultado del motor y sesion en memoria
+ok 239 - buildSessionSyncPatch usa resultado del motor y sesion en memoria
+  ---
+  duration_ms: 6.428791
+  ...
+# Subtest: hydrateRuntimeSessionIfNeeded no inventa welcome en first contact
+ok 240 - hydrateRuntimeSessionIfNeeded no inventa welcome en first contact
+  ---
+  duration_ms: 30.23125
+  ...
+# Subtest: hydrateRuntimeSessionIfNeeded hidrata cuando el flujo ya tiene nodo
+ok 241 - hydrateRuntimeSessionIfNeeded hidrata cuando el flujo ya tiene nodo
+  ---
+  duration_ms: 14.532542
+  ...
+# [ConversationAbandonment] sweep scanned=2 abandoned=1
+# Subtest: runSweep exporta y resetea sesiones abandonadas
+ok 242 - runSweep exporta y resetea sesiones abandonadas
+  ---
+  duration_ms: 63.207
+  ...
+# Subtest: accumulateNodeDimensions cubre no_pd_informes
+ok 243 - accumulateNodeDimensions cubre no_pd_informes
+  ---
+  duration_ms: 2.565667
+  ...
+# Subtest: accumulateNodeDimensions cubre no_pd_charla
+ok 244 - accumulateNodeDimensions cubre no_pd_charla
+  ---
+  duration_ms: 0.768291
+  ...
+# Subtest: accumulateNodeDimensions cubre no_pg_informes
+ok 245 - accumulateNodeDimensions cubre no_pg_informes
+  ---
+  duration_ms: 0.238459
+  ...
+# Subtest: accumulateNodeDimensions cubre no_pg_charla
+ok 246 - accumulateNodeDimensions cubre no_pg_charla
+  ---
+  duration_ms: 0.095917
+  ...
+# Subtest: accumulateNodeDimensions cubre no_cursos_info
+ok 247 - accumulateNodeDimensions cubre no_cursos_info
+  ---
+  duration_ms: 0.121667
+  ...
+# Subtest: accumulateNodeDimensions cubre no_dist_informes
+ok 248 - accumulateNodeDimensions cubre no_dist_informes
+  ---
+  duration_ms: 0.10975
+  ...
+# Subtest: accumulateNodeDimensions cubre no_dist_charla
+ok 249 - accumulateNodeDimensions cubre no_dist_charla
+  ---
+  duration_ms: 0.154833
+  ...
+# Subtest: accumulateNodeDimensions cubre si_pd_informes
+ok 250 - accumulateNodeDimensions cubre si_pd_informes
+  ---
+  duration_ms: 0.120167
+  ...
+# Subtest: accumulateNodeDimensions cubre si_pg_informes
+ok 251 - accumulateNodeDimensions cubre si_pg_informes
+  ---
+  duration_ms: 0.582292
+  ...
+# Subtest: isGenericNode ignora human_handoff y welcome
+ok 252 - isGenericNode ignora human_handoff y welcome
+  ---
+  duration_ms: 0.679083
+  ...
+# {"event":"conversation_primary_query_classified","conversationId":"conv-1","flowId":"main-menu","flowVersion":"v11","classifierVersion":"v2.0.0","source":"manual","matchedNode":null,"matchedRule":"manual.edit","result":"Override manual","confidence":1,"fallback":false,"reason":null,"legacyResult":null,"shadowDiff":true,"sheetOperation":null}
+# {"event":"conversation_primary_query_classified","conversationId":"conv-2","flowId":"main-menu","flowVersion":"v11","classifierVersion":"v2.0.0","source":"node_route","matchedNode":"no_pd_informes","matchedRule":"node_suffix:informes","result":"Carrera presencial - Periodismo deportivo - Informes","confidence":0.95,"fallback":false,"reason":null,"legacyResult":null,"shadowDiff":true,"sheetOperation":null}
+# {"event":"conversation_primary_query_classified","conversationId":null,"flowId":"main-menu","flowVersion":null,"classifierVersion":"v2.0.0","source":"node_route","matchedNode":"no_pd_charla","matchedRule":"node_suffix:charla","result":"Carrera presencial - Periodismo deportivo - Charla informativa","confidence":0.95,"fallback":false,"reason":null,"legacyResult":null,"shadowDiff":true,"sheetOperation":null}
+# {"event":"conversation_primary_query_classified","conversationId":null,"flowId":"main-menu","flowVersion":null,"classifierVersion":"v2.0.0","source":"fallback","matchedNode":null,"matchedRule":"no_evidence","result":null,"confidence":0,"fallback":true,"reason":"no_evidence","legacyResult":null,"shadowDiff":false,"sheetOperation":null}
+# {"event":"conversation_primary_query_classified","conversationId":null,"flowId":"main-menu","flowVersion":null,"classifierVersion":"v2.0.0","source":"node_route","matchedNode":"si_dist_menu","matchedRule":"node_family:distancia","result":"Carreras a distancia","confidence":0.95,"fallback":false,"reason":null,"legacyResult":"Carreras a distancia","shadowDiff":false,"sheetOperation":null}
+# Subtest: manual override gana sobre node_route
+ok 253 - manual override gana sobre node_route
+  ---
+  duration_ms: 4.428375
+  ...
+# Subtest: node_route clasifica no_pd_informes acumulando dimensiones
+ok 254 - node_route clasifica no_pd_informes acumulando dimensiones
+  ---
+  duration_ms: 2.008625
+  ...
+# Subtest: nodos genéricos finales no borran clasificación previa
+ok 255 - nodos genéricos finales no borran clasificación previa
+  ---
+  duration_ms: 0.318583
+  ...
+# Subtest: fallback sin evidencia devuelve primaryQuery null
+ok 256 - fallback sin evidencia devuelve primaryQuery null
+  ---
+  duration_ms: 0.342667
+  ...
+# Subtest: pickExportClassification respeta modo legacy y enabled
+ok 257 - pickExportClassification respeta modo legacy y enabled
+  ---
+  duration_ms: 0.3655
+  ...
+# Subtest: saludos no clasifican
+ok 258 - saludos no clasifican
+  ---
+  duration_ms: 1.538458
+  ...
+# Subtest: aranceles e inscripción clasifican con confianza razonable
+ok 259 - aranceles e inscripción clasifican con confianza razonable
+  ---
+  duration_ms: 4.626375
+  ...
+# Subtest: texto completa motivo parcial sin pisar modalidad confirmada
+ok 260 - texto completa motivo parcial sin pisar modalidad confirmada
+  ---
+  duration_ms: 1.229208
+  ...
+# Subtest: periodismo deportivo en texto eleva programName cuando no hay nodo
+ok 261 - periodismo deportivo en texto eleva programName cuando no hay nodo
+  ---
+  duration_ms: 0.356792
+  ...
+# Subtest: no exporta cuando no existe sesión
+ok 262 - no exporta cuando no existe sesión
+  ---
+  duration_ms: 1.651333
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# {"event":"conversation_primary_query_classified","conversationId":null,"flowId":"main-menu","flowVersion":null,"classifierVersion":"v2.0.0","source":"fallback","matchedNode":null,"matchedRule":"no_evidence","result":null,"confidence":0,"fallback":true,"reason":"no_evidence","legacyResult":null,"shadowDiff":false,"sheetOperation":null}
+# [ConversationExport] skip user=test:+5491111111111 reason=disabled
+# Subtest: no rompe con sheets deshabilitado y marca exportado
+ok 263 - no rompe con sheets deshabilitado y marca exportado
+  ---
+  duration_ms: 190.797875
+  ...
+# {"event":"conversation_primary_query_classified","conversationId":null,"flowId":"main-menu","flowVersion":null,"classifierVersion":"v2.0.0","source":"node_route","matchedNode":"si_pg_direccion","matchedRule":"node_suffix:direccion","result":"Carrera presencial - Periodismo general - Dirección","confidence":0.95,"fallback":false,"reason":null,"legacyResult":"Información institucional","shadowDiff":true,"sheetOperation":null}
+# [ConversationExport] skip user=test:+5491111111111 reason=disabled
+# Subtest: permite exportar escalation a humano luego de info inicial
+ok 264 - permite exportar escalation a humano luego de info inicial
+  ---
+  duration_ms: 18.7215
+  ...
+# {"event":"job_started","job":"conversation_retention","runId":"cd8774a9-74f9-43a1-af3a-2dabe371386a","cutoff":"2026-08-05T12:00:00.000Z","retentionDays":30,"batchSize":2}
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"job_finished","job":"conversation_retention","runId":"cd8774a9-74f9-43a1-af3a-2dabe371386a","cutoff":"2026-08-05T12:00:00.000Z","conversations_found":3,"conversations_deleted":3,"delivery_status_deleted":0,"batches_processed":3,"runtime_cleaned":3,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":128}
+# {"event":"job_started","job":"conversation_retention","runId":"4062b26c-7cc7-4191-9a87-9943c154ee26","cutoff":"2026-10-26T16:40:40.985Z","retentionDays":30,"batchSize":500}
+# Subtest: runSweep elimina inactivas en batch y resetea sesiones runtime
+ok 265 - runSweep elimina inactivas en batch y resetea sesiones runtime
+  ---
+  duration_ms: 138.704375
+  ...
+# {"event":"job_finished","job":"conversation_retention","runId":"4062b26c-7cc7-4191-9a87-9943c154ee26","cutoff":"2026-10-26T16:40:40.985Z","conversations_found":1200,"conversations_deleted":1200,"delivery_status_deleted":0,"batches_processed":4,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":36}
+# {"event":"job_started","job":"conversation_retention","runId":"036e0bb7-3a41-4e36-b061-d9858a2fc791","cutoff":"2026-10-26T16:40:41.075Z","retentionDays":30,"batchSize":500}
+# {"event":"job_finished","job":"conversation_retention","runId":"036e0bb7-3a41-4e36-b061-d9858a2fc791","cutoff":"2026-10-26T16:40:41.075Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":26}
+# {"event":"job_started","job":"conversation_retention","runId":"1305562c-5686-4140-900f-f0c217867b69","cutoff":"2026-10-26T16:40:41.113Z","retentionDays":30,"batchSize":100}
+# Subtest: batchSize configurado 1000 con tope 500 procesa 1200 filas en lotes completos y final parcial
+ok 266 - batchSize configurado 1000 con tope 500 procesa 1200 filas en lotes completos y final parcial
+  ---
+  duration_ms: 127.635334
+  ...
+# {"event":"job_finished","job":"conversation_retention","runId":"1305562c-5686-4140-900f-f0c217867b69","cutoff":"2026-10-26T16:40:41.113Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":19}
+# {"event":"job_started","job":"conversation_retention","runId":"8a9dd5dd-cbfd-498a-aa8c-26fca10d082f","cutoff":"2026-10-26T16:40:41.145Z","retentionDays":30,"batchSize":100}
+# {"event":"job_finished","job":"conversation_retention","runId":"8a9dd5dd-cbfd-498a-aa8c-26fca10d082f","cutoff":"2026-10-26T16:40:41.145Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":10}
+# {"event":"job_started","job":"conversation_retention","runId":"cb82827a-701d-4566-8064-c57a10b3a196","cutoff":"2026-08-05T12:00:00.000Z","retentionDays":30,"batchSize":100}
+# Subtest: segunda ejecución es idempotente (no encuentra filas)
+ok 267 - segunda ejecución es idempotente (no encuentra filas)
+  ---
+  duration_ms: 53.776833
+  ...
+# Subtest: runSweep no-op si retención deshabilitada
+ok 268 - runSweep no-op si retención deshabilitada
+  ---
+  duration_ms: 0.448292
+  ...
+# {"event":"job_finished","job":"conversation_retention","runId":"cb82827a-701d-4566-8064-c57a10b3a196","cutoff":"2026-08-05T12:00:00.000Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":7}
+# {"event":"job_started","job":"conversation_retention","runId":"c71ab523-f455-4700-a3b2-38edb6447fa2","cutoff":"2026-10-26T16:40:41.182Z","retentionDays":30,"batchSize":100}
+# Subtest: deleteInactiveBatchBefore no borra si lastMessageAt se refrescó
+ok 269 - deleteInactiveBatchBefore no borra si lastMessageAt se refrescó
+  ---
+  duration_ms: 15.61275
+  ...
+# {"event":"error","job":"conversation_retention","runId":"c71ab523-f455-4700-a3b2-38edb6447fa2","cutoff":"2026-10-26T16:40:41.182Z","conversations_found":0,"conversations_deleted":0,"runtime_cleaned":0,"runtime_cleanup_failed":0,"duration":6,"error":"db down"}
+# {"event":"job_started","job":"conversation_retention","runId":"2315ded4-e653-483d-914e-af345d223f74","cutoff":"2026-10-26T16:40:41.189Z","retentionDays":30,"batchSize":100}
+# {"event":"error","job":"conversation_retention","runId":"2315ded4-e653-483d-914e-af345d223f74","cutoff":"2026-10-26T16:40:41.189Z","conversations_found":0,"conversations_deleted":0,"runtime_cleaned":0,"runtime_cleanup_failed":0,"duration":6,"error":"db down"}
+# {"event":"error","job":"conversation_retention","error":"db down"}
+# {"event":"job_started","job":"conversation_retention","runId":"a2a510eb-4674-4958-9304-537e8807d6c7","cutoff":"2026-10-26T16:40:41.195Z","retentionDays":30,"batchSize":100}
+# {"event":"job_finished","job":"conversation_retention","runId":"a2a510eb-4674-4958-9304-537e8807d6c7","cutoff":"2026-10-26T16:40:41.195Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":12}
+# {"event":"job_started","job":"conversation_retention","runId":"c7f152cc-303a-4496-9275-4920f05ac775","cutoff":"2026-10-26T16:40:41.212Z","retentionDays":30,"batchSize":100}
+# Subtest: runSweep propaga error de repository; scheduler lo absorbe
+ok 270 - runSweep propaga error de repository; scheduler lo absorbe
+  ---
+  duration_ms: 30.086083
+  ...
+# {"event":"job_finished_with_runtime_cleanup_failed","job":"conversation_retention","runId":"c7f152cc-303a-4496-9275-4920f05ac775","cutoff":"2026-10-26T16:40:41.212Z","conversations_found":1,"conversations_deleted":1,"delivery_status_deleted":0,"batches_processed":2,"runtime_cleaned":0,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":1,"pending_runtime_cleanup":1,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":6}
+# {"event":"job_started","job":"conversation_retention","runId":"4e166132-5a9e-4444-89d2-222be5c403e3","cutoff":"2026-10-26T16:40:41.222Z","retentionDays":30,"batchSize":100}
+# {"event":"job_finished","job":"conversation_retention","runId":"4e166132-5a9e-4444-89d2-222be5c403e3","cutoff":"2026-10-26T16:40:41.222Z","conversations_found":0,"conversations_deleted":0,"delivery_status_deleted":0,"batches_processed":1,"runtime_cleaned":1,"runtime_cleanup_skipped":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":6}
+# {"event":"job_skipped_distributed_lock","job":"conversation_retention","runId":"0ee1e98c-d6c6-47d1-97e5-5c65b89d3f11","returnCode":-1}
+# {"event":"job_started","job":"conversation_retention","runId":"5fad23d7-4974-46f2-8137-fd0e5111295f","cutoff":"2026-10-26T16:40:41.235Z","retentionDays":30,"batchSize":100}
+# Subtest: resetSession fallido no reporta cleanup completo y reintenta
+ok 271 - resetSession fallido no reporta cleanup completo y reintenta
+  ---
+  duration_ms: 21.095625
+  ...
+# Subtest: runSweep con lock distribuido omitido no emite job_started
+ok 272 - runSweep con lock distribuido omitido no emite job_started
+  ---
+  duration_ms: 0.696958
+  ...
+# {"event":"job_stopped_shutdown","job":"conversation_retention","runId":"5fad23d7-4974-46f2-8137-fd0e5111295f","conversations_deleted":1,"batches_processed":1,"runtime_cleaned":0,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"duration":7}
+# {"event":"job_started","job":"conversation_retention","runId":"94c59121-2532-4a08-b6c9-6c6c366e99cd","cutoff":"2026-10-26T16:40:41.252Z","retentionDays":30,"batchSize":100}
+# Subtest: shutdown interrumpe sin job_finished SUCCESS
+ok 273 - shutdown interrumpe sin job_finished SUCCESS
+  ---
+  duration_ms: 16.773875
+  ...
+# {"event":"job_finished","job":"conversation_retention","runId":"94c59121-2532-4a08-b6c9-6c6c366e99cd","cutoff":"2026-10-26T16:40:41.252Z","conversations_found":1,"conversations_deleted":1,"delivery_status_deleted":0,"batches_processed":2,"runtime_cleaned":0,"runtime_cleanup_skipped":1,"runtime_cleanup_failed":0,"pending_runtime_cleanup":0,"pending_media_deletes":0,"media_queue_uncertain":false,"duration":14}
+# Subtest: limpia runtime solo si la sesión coincide con la conversación eliminada
+ok 274 - limpia runtime solo si la sesión coincide con la conversación eliminada
+  ---
+  duration_ms: 21.80225
+  ...
+# Subtest: formatHumanRecord produce columnas alineadas con headers extendidos
+ok 275 - formatHumanRecord produce columnas alineadas con headers extendidos
+  ---
+  duration_ms: 55.436833
+  ...
+# Subtest: formatHumanRecord incluye email de contacto
+ok 276 - formatHumanRecord incluye email de contacto
+  ---
+  duration_ms: 1.772958
+  ...
+# Subtest: human_handoff con provider simulator formatea campos humanos clave
+ok 277 - human_handoff con provider simulator formatea campos humanos clave
+  ---
+  duration_ms: 1.980041
+  ...
+# Subtest: findSheetRowMatch localiza fila por teléfono y fecha de inicio
+ok 278 - findSheetRowMatch localiza fila por teléfono y fecha de inicio
+  ---
+  duration_ms: 3.087333
+  ...
+# Subtest: findSheetRowMatch devuelve null si no hay coincidencia
+ok 279 - findSheetRowMatch devuelve null si no hay coincidencia
+  ---
+  duration_ms: 1.713042
+  ...
+# Subtest: phonesMatch ignora prefijo + y formato del sheet
+ok 280 - phonesMatch ignora prefijo + y formato del sheet
+  ---
+  duration_ms: 1.558542
+  ...
+# Subtest: sheetDatesMatch compara fecha del sheet con timestamp de DB
+ok 281 - sheetDatesMatch compara fecha del sheet con timestamp de DB
+  ---
+  duration_ms: 0.293084
+  ...
+# Subtest: findSheetRowMatch localiza fila con teléfono sin + y fecha local del sheet
+ok 282 - findSheetRowMatch localiza fila con teléfono sin + y fecha local del sheet
+  ---
+  duration_ms: 0.826625
+  ...
+# Subtest: recorrido conocido usa etiquetas humanas esperadas
+ok 283 - recorrido conocido usa etiquetas humanas esperadas
+  ---
+  duration_ms: 10.590541
+  ...
+# [ConversationTracker] tracked_answer keys=es_estudiante
+# Subtest: buildTrackingPatch guarda key/value de transición track
+ok 284 - buildTrackingPatch guarda key/value de transición track
+  ---
+  duration_ms: 2.02675
+  ...
+# Subtest: buildNodeVisitPatch evita duplicados consecutivos
+ok 285 - buildNodeVisitPatch evita duplicados consecutivos
+  ---
+  duration_ms: 0.239417
+  ...
+# Subtest: buildFallbackPatch incrementa contador
+ok 286 - buildFallbackPatch incrementa contador
+  ---
+  duration_ms: 0.145375
+  ...
+# Subtest: resolveInitialNodeId skips collect_email when contact already has email
+ok 287 - resolveInitialNodeId skips collect_email when contact already has email
+  ---
+  duration_ms: 0.570083
+  ...
+# Subtest: shouldBlockGlobalMenuDuringEmailCapture only before email is stored
+ok 288 - shouldBlockGlobalMenuDuringEmailCapture only before email is stored
+  ---
+  duration_ms: 0.164708
+  ...
+# Subtest: tryHandleEmailCollectionInput rejects invalid email
+ok 289 - tryHandleEmailCollectionInput rejects invalid email
+  ---
+  duration_ms: 0.458417
+  ...
+# Subtest: tryHandleEmailCollectionInput advances to welcome without DB when no conversation
+ok 290 - tryHandleEmailCollectionInput advances to welcome without DB when no conversation
+  ---
+  duration_ms: 0.285458
+  ...
+# Subtest: isEmailCollectionNode identifies collect_email node id
+ok 291 - isEmailCollectionNode identifies collect_email node id
+  ---
+  duration_ms: 0.217916
+  ...
+# Subtest: invalid email falls back to default message
+ok 292 - invalid email falls back to default message
+  ---
+  duration_ms: 0.101417
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# Subtest: new conversation asks for email before menu
+ok 293 - new conversation asks for email before menu
+  ---
+  duration_ms: 23.548875
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# Subtest: invalid email is rejected and user stays on collect_email
+ok 294 - invalid email is rejected and user stays on collect_email
+  ---
+  duration_ms: 45.089458
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# Subtest: valid email advances to welcome menu
+ok 295 - valid email advances to welcome menu
+  ---
+  duration_ms: 35.17975
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# Subtest: contact with existing email skips collect_email prompt
+ok 296 - contact with existing email skips collect_email prompt
+  ---
+  duration_ms: 6.428333
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# [ConversationTracker] session_context_initialized user=unknown:test-email-collection-user
+# Subtest: global menu command is blocked while awaiting email
+ok 297 - global menu command is blocked while awaiting email
+  ---
+  duration_ms: 16.758917
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: primer contacto con Hola inicia el flujo y no usa fallback
+ok 298 - primer contacto con Hola inicia el flujo y no usa fallback
+  ---
+  duration_ms: 51.707333
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: primer contacto con consulta libre inicia el flujo
+ok 299 - primer contacto con consulta libre inicia el flujo
+  ---
+  duration_ms: 8.198625
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: primer contacto con humano deriva a handoff
+ok 300 - primer contacto con humano deriva a handoff
+  ---
+  duration_ms: 6.761375
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: primer contacto con quiero hablar con una persona deriva a handoff
+ok 301 - primer contacto con quiero hablar con una persona deriva a handoff
+  ---
+  duration_ms: 5.59925
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: después del menú un texto inválido usa el fallback del nodo
+ok 302 - después del menú un texto inválido usa el fallback del nodo
+  ---
+  duration_ms: 7.248625
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# [ConversationTracker] session_context_initialized user=unknown:test-first-contact-user
+# Subtest: después del menú humano deriva a handoff
+ok 303 - después del menú humano deriva a handoff
+  ---
+  duration_ms: 4.527708
+  ...
+# Subtest: evaluateTransitions: sin nodo devuelve fallback
+ok 304 - evaluateTransitions: sin nodo devuelve fallback
+  ---
+  duration_ms: 1.094125
+  ...
+# Subtest: evaluateTransitions: sin transiciones usa nextNode o fallback
+ok 305 - evaluateTransitions: sin transiciones usa nextNode o fallback
+  ---
+  duration_ms: 0.711167
+  ...
+# Subtest: evaluateTransitions: match exacto
+ok 306 - evaluateTransitions: match exacto
+  ---
+  duration_ms: 0.232125
+  ...
+# Subtest: evaluateCompiledTransitionsDetailed: exact/includes/default/fallback
+ok 307 - evaluateCompiledTransitionsDetailed: exact/includes/default/fallback
+  ---
+  duration_ms: 0.872208
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# Subtest: resolveFlowEntryNodeForConversation usa welcome cuando hay email almacenado
+ok 308 - resolveFlowEntryNodeForConversation usa welcome cuando hay email almacenado
+  ---
+  duration_ms: 119.141125
+  ...
+# Subtest: resolveFlowEntryNodeForConversation propaga fallo de carga de flow
+ok 309 - resolveFlowEntryNodeForConversation propaga fallo de carga de flow
+  ---
+  duration_ms: 1.397792
+  ...
+# Subtest: resolveFlowEntryNodeForConversation usa collect_email sin email
+ok 310 - resolveFlowEntryNodeForConversation usa collect_email sin email
+  ---
+  duration_ms: 0.342625
+  ...
+# Subtest: documento exportable cumple validador de flujo
+ok 311 - documento exportable cumple validador de flujo
+  ---
+  duration_ms: 1.451916
+  ...
+# Subtest: import portable no escribe en data/flows
+ok 312 - import portable no escribe en data/flows
+  ---
+  duration_ms: 6.695084
+  ...
+# Subtest: export portable no lee metadata.json en data/flows
+ok 313 - export portable no lee metadata.json en data/flows
+  ---
+  duration_ms: 1.484417
+  ...
+# Subtest: parsePublishedVersionFromFilename v19
+ok 314 - parsePublishedVersionFromFilename v19
+  ---
+  duration_ms: 7.920291
+  ...
+# Subtest: mini flow valida estructura
+ok 315 - mini flow valida estructura
+  ---
+  duration_ms: 0.635166
+  ...
+# Subtest: checksum estable para mini flow
+ok 316 - checksum estable para mini flow
+  ---
+  duration_ms: 0.500708
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: producción v62: número, keycap y etiqueta eligen Dirección de estudios
+ok 317 - producción v62: número, keycap y etiqueta eligen Dirección de estudios
+  ---
+  duration_ms: 190.730084
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: producción v62: el resto de las opciones del menú sigue eligiendo su destino
+ok 318 - producción v62: el resto de las opciones del menú sigue eligiendo su destino
+  ---
+  duration_ms: 152.911625
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: producción v62: dos preguntas libres no repiten el menú sin explicación
+ok 319 - producción v62: dos preguntas libres no repiten el menú sin explicación
+  ---
+  duration_ms: 39.656709
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: producción v62: Menú vuelve al inicio y Atrás usa el historial
+ok 320 - producción v62: Menú vuelve al inicio y Atrás usa el historial
+  ---
+  duration_ms: 68.547125
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: producción v62: sin email, Menú abre la entrada collect_email
+ok 321 - producción v62: sin email, Menú abre la entrada collect_email
+  ---
+  duration_ms: 19.267875
+  ...
+# [ConversationTracker] session_context_initialized user=unknown:flow-nav-prod-user
+# Subtest: un nodo de captura conserva el texto libre
+ok 322 - un nodo de captura conserva el texto libre
+  ---
+  duration_ms: 4.140083
+  ...
+# Subtest: columnToLetter mapea índices de columna
+ok 323 - columnToLetter mapea índices de columna
+  ---
+  duration_ms: 0.65725
+  ...
+# [conversations-live] client registered 1
+# [conversations-live] broadcast conversation.updated conv-1 clients=1
+# Subtest: requestHumanHandoff crea pending y marca waiting_human con sesion pausada
+ok 324 - requestHumanHandoff crea pending y marca waiting_human con sesion pausada
+  ---
+  duration_ms: 1.717666
+  ...
+# Subtest: ensurePendingHandoff reutiliza pending existente
+ok 325 - ensurePendingHandoff reutiliza pending existente
+  ---
+  duration_ms: 0.480209
+  ...
+# Subtest: requestHumanHandoff no duplica confirmacion si ya estaba en human mode
+ok 326 - requestHumanHandoff no duplica confirmacion si ya estaba en human mode
+  ---
+  duration_ms: 0.269625
+  ...
+# Subtest: requestHumanHandoff emite conversation.updated con waiting_human y humanHandoff
+ok 327 - requestHumanHandoff emite conversation.updated con waiting_human y humanHandoff
+  ---
+  duration_ms: 1.270625
+  ...
+# Subtest: fallo transitorio programa retry y luego almacena
+ok 328 - fallo transitorio programa retry y luego almacena
+  ---
+  duration_ms: 23.892
+  ...
+# Subtest: dos adquisiciones concurrentes: solo una gana
+ok 329 - dos adquisiciones concurrentes: solo una gana
+  ---
+  duration_ms: 1.105334
+  ...
+# Subtest: downloadTwilioMedia respeta el tope de bytes
+ok 330 - downloadTwilioMedia respeta el tope de bytes
+  ---
+  duration_ms: 2.10375
+  ...
+# Subtest: ensureInboundAttachmentRows no descarga en el webhook
+ok 331 - ensureInboundAttachmentRows no descarga en el webhook
+  ---
+  duration_ms: 0.756584
+  ...
+# Subtest: proceso almacena JPEG con validación de contenido
+ok 332 - proceso almacena JPEG con validación de contenido
+  ---
+  duration_ms: 13.75075
+  ...
+# Subtest: MIME gif se rechaza al procesar
+ok 333 - MIME gif se rechaza al procesar
+  ---
+  duration_ms: 0.444
+  ...
+# Subtest: HTTP 403 permanece failed sin retry útil
+ok 334 - HTTP 403 permanece failed sin retry útil
+  ---
+  duration_ms: 0.414875
+  ...
+# Subtest: stored existente no vuelve a descargar
+ok 335 - stored existente no vuelve a descargar
+  ---
+  duration_ms: 3.417708
+  ...
+# Subtest: modo humano: metadata de skip para waiting_human y assigned
+ok 336 - modo humano: metadata de skip para waiting_human y assigned
+  ---
+  duration_ms: 0.720458
+  ...
+# [ConversationDB] test failed: db down
+# Subtest: messagePersistence.isEnabled refleja CONVERSATION_DB_ENABLED
+ok 337 - messagePersistence.isEnabled refleja CONVERSATION_DB_ENABLED
+  ---
+  duration_ms: 1.0335
+  ...
+# Subtest: safeRun no relanza cuando DB falla y strict desactivado
+ok 338 - safeRun no relanza cuando DB falla y strict desactivado
+  ---
+  duration_ms: 0.909875
+  ...
+# Subtest: handleInbound en waiting_human persiste mensaje y omite flow engine
+ok 339 - handleInbound en waiting_human persiste mensaje y omite flow engine
+  ---
+  duration_ms: 1.004166
+  ...
+# Subtest: handleInbound en assigned mantiene modo humano
+ok 340 - handleInbound en assigned mantiene modo humano
+  ---
+  duration_ms: 0.946333
+  ...
+# Subtest: handleInbound en bot normaliza legacy y continúa al flow engine
+ok 341 - handleInbound en bot normaliza legacy y continúa al flow engine
+  ---
+  duration_ms: 0.85825
+  ...
+# Subtest: handleInbound con bot + handoff activo inconsistente omite flow engine
+ok 342 - handleInbound con bot + handoff activo inconsistente omite flow engine
+  ---
+  duration_ms: 0.234584
+  ...
+# Subtest: ensurePendingHandoff evita duplicar handoff activo assigned
+ok 343 - ensurePendingHandoff evita duplicar handoff activo assigned
+  ---
+  duration_ms: 0.290375
+  ...
+# Subtest: isEngineHandoffResult mantiene fallback por currentNodeId para flujos publicados
+ok 344 - isEngineHandoffResult mantiene fallback por currentNodeId para flujos publicados
+  ---
+  duration_ms: 0.111791
+  ...
+# Subtest: parseAgentOutboundAttachment valida PNG
+ok 345 - parseAgentOutboundAttachment valida PNG
+  ---
+  duration_ms: 1.336
+  ...
+# Subtest: parseAgentOutboundAttachment rechaza MIME no permitido
+ok 346 - parseAgentOutboundAttachment rechaza MIME no permitido
+  ---
+  duration_ms: 0.904667
+  ...
+# Subtest: parseAgentOutboundAttachment rechaza contenido inconsistente
+ok 347 - parseAgentOutboundAttachment rechaza contenido inconsistente
+  ---
+  duration_ms: 0.213042
+  ...
+# Subtest: resetSessionForDeletedConversation respeta conversationId enlazado
+ok 348 - resetSessionForDeletedConversation respeta conversationId enlazado
+  ---
+  duration_ms: 10.008458
+  ...
+# Subtest: resetSessionForDeletedConversation elimina sesión del mismo id
+ok 349 - resetSessionForDeletedConversation elimina sesión del mismo id
+  ---
+  duration_ms: 3.69875
+  ...
+# Subtest: reset no borra sesión actualizada tras ventana async
+ok 350 - reset no borra sesión actualizada tras ventana async
+  ---
+  duration_ms: 6.77875
+  ...
+# Subtest: bindConversationId a otra conversación resetea history/variables
+ok 351 - bindConversationId a otra conversación resetea history/variables
+  ---
+  duration_ms: 3.817041
+  ...
+# Subtest: mutación entre resolveActiveConversation y reset evita borrado
+ok 352 - mutación entre resolveActiveConversation y reset evita borrado
+  ---
+  duration_ms: 10.738958
+  ...
+# Subtest: replace total de sesión antes del reset la conserva
+ok 353 - replace total de sesión antes del reset la conserva
+  ---
+  duration_ms: 3.260417
+  ...
+# Subtest: sesión legacy consulta resolveActiveConversation antes de resetear
+ok 354 - sesión legacy consulta resolveActiveConversation antes de resetear
+  ---
+  duration_ms: 8.271958
+  ...
+# Subtest: storeSimulatorUpload persiste PNG sin Twilio
+ok 355 - storeSimulatorUpload persiste PNG sin Twilio
+  ---
+  duration_ms: 22.495167
+  ...
+# Subtest: storeSimulatorUpload rechaza mime inválido
+ok 356 - storeSimulatorUpload rechaza mime inválido
+  ---
+  duration_ms: 0.571292
+  ...
+# Subtest: simulatorExternalUserId usa prefijo estable por sesión
+ok 357 - simulatorExternalUserId usa prefijo estable por sesión
+  ---
+  duration_ms: 0.666208
+  ...
+# Subtest: displayNameForSimulatorStatus refleja estado operativo
+ok 358 - displayNameForSimulatorStatus refleja estado operativo
+  ---
+  duration_ms: 0.379875
+  ...
+# Subtest: persistUserInputBeforeEngine y persistEngineResponseAfter están expuestos
+ok 359 - persistUserInputBeforeEngine y persistEngineResponseAfter están expuestos
+  ---
+  duration_ms: 0.115792
+  ...
+# [ConversationTracker] session_context_initialized user=twilio:+54911e2e1795624846204
+# Subtest: e2e inbound: consulta de inscripciones inicia el menú y no el fallback
+ok 360 - e2e inbound: consulta de inscripciones inicia el menú y no el fallback
+  ---
+  duration_ms: 18.147916
+  ...
+# [ConversationTracker] session_context_initialized user=twilio:+54911conc1795624846222
+# [ConversationTracker] session_context_initialized user=twilio:+54911conc1795624846222
+# Subtest: dos webhooks concurrentes del mismo usuario no duplican el inicio
+ok 361 - dos webhooks concurrentes del mismo usuario no duplican el inicio
+  ---
+  duration_ms: 9.395
+  ...
+# Subtest: cierre durante el motor reemplaza el fallback por la reentrada y no sincroniza el cursor
+ok 362 - cierre durante el motor reemplaza el fallback por la reentrada y no sincroniza el cursor
+  ---
+  duration_ms: 3.283291
+  ...
+# [ConversationDB] handleInbound failed: outbound insert failed
+# Subtest: si el outbound de reentrada no se persiste no se devuelve el prompt
+ok 363 - si el outbound de reentrada no se persiste no se devuelve el prompt
+  ---
+  duration_ms: 2.850041
+  ...
+# Subtest: assigned no reinicia el bot en el pipeline
+ok 364 - assigned no reinicia el bot en el pipeline
+  ---
+  duration_ms: 2.528916
+  ...
+# [ConversationTracker] session_context_initialized user=twilio:+54911take1795624846240
+# Subtest: una toma que commitea durante el turno anula el TwiML del bot
+ok 365 - una toma que commitea durante el turno anula el TwiML del bot
+  ---
+  duration_ms: 3.596208
+  ...
+# Subtest: solo adjunto no ejecuta flowEngine
+ok 366 - solo adjunto no ejecuta flowEngine
+  ---
+  duration_ms: 0.484625
+  ...
+# Subtest: un outbound ya commiteado no vuelve a ejecutar el turno
+ok 367 - un outbound ya commiteado no vuelve a ejecutar el turno
+  ---
+  duration_ms: 0.294875
+  ...
+# Subtest: processStatusCallback aplica sent, delivered y read en orden
+ok 368 - processStatusCallback aplica sent, delivered y read en orden
+  ---
+  duration_ms: 1.7215
+  ...
+# Subtest: processStatusCallback conserva failed y error de Twilio
+ok 369 - processStatusCallback conserva failed y error de Twilio
+  ---
+  duration_ms: 0.413959
+  ...
+# Subtest: notifyLinkedOutboundDelivery publica solo el mensaje vinculado
+ok 370 - notifyLinkedOutboundDelivery publica solo el mensaje vinculado
+  ---
+  duration_ms: 0.273458
+  ...
+# Subtest: callback previo a la vinculación no publica sin mensaje
+ok 371 - callback previo a la vinculación no publica sin mensaje
+  ---
+  duration_ms: 0.170167
+  ...
+# Subtest: callback duplicado recupera notificación sin reescribir estado
+ok 372 - callback duplicado recupera notificación sin reescribir estado
+  ---
+  duration_ms: 0.602125
+  ...
+# Subtest: callback obsoleto no republica notificación
+ok 373 - callback obsoleto no republica notificación
+  ---
+  duration_ms: 0.148125
+  ...
+# Subtest: mapMessagesPublicWithDelivery vincula lotes por MessageSid
+ok 374 - mapMessagesPublicWithDelivery vincula lotes por MessageSid
+  ---
+  duration_ms: 0.32525
+  ...
+# Subtest: toTwilioWhatsAppAddress formatea E.164 a whatsapp:
+ok 375 - toTwilioWhatsAppAddress formatea E.164 a whatsapp:
+  ---
+  duration_ms: 0.695334
+  ...
+# Subtest: assertConfigured falla sin variables Twilio
+ok 376 - assertConfigured falla sin variables Twilio
+  ---
+  duration_ms: 0.507291
+  ...
+# Subtest: sendWhatsAppMessage exige body o mediaUrl
+ok 377 - sendWhatsAppMessage exige body o mediaUrl
+  ---
+  duration_ms: 0.515375
+  ...
+# Subtest: webhook duplicado del mismo message SID se ignora
+ok 378 - webhook duplicado del mismo message SID se ignora
+  ---
+  duration_ms: 7.109959
+  ...
+# Subtest: normalizeAgentId compara UUID sin importar mayúsculas
+ok 379 - normalizeAgentId compara UUID sin importar mayúsculas
+  ---
+  duration_ms: 0.675625
+  ...
+# Subtest: resolveAgentIdFromUsername es estable por username
+ok 380 - resolveAgentIdFromUsername es estable por username
+  ---
+  duration_ms: 0.848833
+  ...
+# Subtest: compila indices principales
+ok 381 - compila indices principales
+  ---
+  duration_ms: 1.616625
+  ...
+# Subtest: expone stats del flujo
+ok 382 - expone stats del flujo
+  ---
+  duration_ms: 0.799
+  ...
+# Subtest: normalizeContactEmail trims and lowercases
+ok 383 - normalizeContactEmail trims and lowercases
+  ---
+  duration_ms: 0.585458
+  ...
+# Subtest: validateContactEmail accepts common formats
+ok 384 - validateContactEmail accepts common formats
+  ---
+  duration_ms: 0.522125
+  ...
+# Subtest: validateContactEmail rejects empty and invalid values
+ok 385 - validateContactEmail rejects empty and invalid values
+  ---
+  duration_ms: 0.177792
+  ...
+# Subtest: normalizeContactName recorta espacios y convierte vacío en null
+ok 386 - normalizeContactName recorta espacios y convierte vacío en null
+  ---
+  duration_ms: 0.955625
+  ...
+# Subtest: validateContactName acepta acentos y guiones
+ok 387 - validateContactName acepta acentos y guiones
+  ---
+  duration_ms: 0.783375
+  ...
+# Subtest: validateContactName rechaza nombre vacío
+ok 388 - validateContactName rechaza nombre vacío
+  ---
+  duration_ms: 0.500709
+  ...
+# Subtest: validateContactName rechaza nombre demasiado largo
+ok 389 - validateContactName rechaza nombre demasiado largo
+  ---
+  duration_ms: 0.340917
+  ...
+# Subtest: validateContactName rechaza caracteres inválidos
+ok 390 - validateContactName rechaza caracteres inválidos
+  ---
+  duration_ms: 1.614
+  ...
+# Subtest: conversación nueva sin nodo no está inicializada
+ok 391 - conversación nueva sin nodo no está inicializada
+  ---
+  duration_ms: 0.708125
+  ...
+# Subtest: sesión o conversación con currentNodeKey sí está inicializada
+ok 392 - sesión o conversación con currentNodeKey sí está inicializada
+  ---
+  duration_ms: 0.119
+  ...
+# Subtest: devolver al bot con resume node no es first contact
+ok 393 - devolver al bot con resume node no es first contact
+  ---
+  duration_ms: 0.090083
+  ...
+# Subtest: mapAttachmentPublic no expone storage ni source
+ok 394 - mapAttachmentPublic no expone storage ni source
+  ---
+  duration_ms: 1.3985
+  ...
+# Subtest: mapMessagePublic incluye attachments vacíos por defecto
+ok 395 - mapMessagePublic incluye attachments vacíos por defecto
+  ---
+  duration_ms: 0.200209
+  ...
+# Subtest: mapMessagePublic adjunta metadatos por mensaje
+ok 396 - mapMessagePublic adjunta metadatos por mensaje
+  ---
+  duration_ms: 0.151958
+  ...
+# Subtest: mapWhatsappDeliveryPublic no expone campos internos extra
+ok 397 - mapWhatsappDeliveryPublic no expone campos internos extra
+  ---
+  duration_ms: 1.328042
+  ...
+# Subtest: mapMessagePublic outbound histórico sin entrega no inventa whatsappDelivery
+ok 398 - mapMessagePublic outbound histórico sin entrega no inventa whatsappDelivery
+  ---
+  duration_ms: 1.542958
+  ...
+# Subtest: mapMessagePublic inbound no incluye dispatch ni whatsappDelivery
+ok 399 - mapMessagePublic inbound no incluye dispatch ni whatsappDelivery
+  ---
+  duration_ms: 0.155
+  ...
+# Subtest: mapOutboundDispatchPublic
+ok 400 - mapOutboundDispatchPublic
+  ---
+  duration_ms: 0.266166
+  ...
+# Subtest: mapConversationPublic includes contactEmail
+ok 401 - mapConversationPublic includes contactEmail
+  ---
+  duration_ms: 0.5665
+  ...
+# Subtest: cutoff es now - 30 días
+ok 402 - cutoff es now - 30 días
+  ---
+  duration_ms: 2.216667
+  ...
+# Subtest: lastMessageAt = now - 31 días se elimina
+ok 403 - lastMessageAt = now - 31 días se elimina
+  ---
+  duration_ms: 0.287708
+  ...
+# Subtest: lastMessageAt = now - 29 días permanece
+ok 404 - lastMessageAt = now - 29 días permanece
+  ---
+  duration_ms: 0.114583
+  ...
+# Subtest: lastMessageAt exactamente en cutoff permanece (semántica <)
+ok 405 - lastMessageAt exactamente en cutoff permanece (semántica <)
+  ---
+  duration_ms: 0.08675
+  ...
+# Subtest: lastMessageAt NULL usa startedAt
+ok 406 - lastMessageAt NULL usa startedAt
+  ---
+  duration_ms: 1.272583
+  ...
+# Subtest: parsePositiveInt valida enteros
+ok 407 - parsePositiveInt valida enteros
+  ---
+  duration_ms: 0.138833
+  ...
+# Subtest: clampRetentionBatchSize aplica un solo máximo
+ok 408 - clampRetentionBatchSize aplica un solo máximo
+  ---
+  duration_ms: 0.102125
+  ...
+# Subtest: escapeLikeLiteral escapa comodines SQL
+ok 409 - escapeLikeLiteral escapa comodines SQL
+  ---
+  duration_ms: 0.920459
+  ...
+# Subtest: buildLikePattern incluye comodines externos
+ok 410 - buildLikePattern incluye comodines externos
+  ---
+  duration_ms: 0.189917
+  ...
+# Subtest: validateSearchQuery aplica límites
+ok 411 - validateSearchQuery aplica límites
+  ---
+  duration_ms: 0.301708
+  ...
+# Subtest: findMatchRange es insensible a mayúsculas y acentos
+ok 412 - findMatchRange es insensible a mayúsculas y acentos
+  ---
+  duration_ms: 1.330291
+  ...
+# Subtest: buildSnippet centra coincidencia
+ok 413 - buildSnippet centra coincidencia
+  ---
+  duration_ms: 0.636042
+  ...
+# Subtest: parseSearchLimit rechaza límites inválidos
+ok 414 - parseSearchLimit rechaza límites inválidos
+  ---
+  duration_ms: 0.15975
+  ...
+# Subtest: parseSearchGroups valida alcance
+ok 415 - parseSearchGroups valida alcance
+  ---
+  duration_ms: 0.225791
+  ...
+# Subtest: cursores v2 base64url roundtrip y contexto
+ok 416 - cursores v2 base64url roundtrip y contexto
+  ---
+  duration_ms: 1.070959
+  ...
+# Subtest: sin INTERNAL_AGENT_ID dos usuarios son agentes distintos
+ok 417 - sin INTERNAL_AGENT_ID dos usuarios son agentes distintos
+  ---
+  duration_ms: 1.662208
+  ...
+# Subtest: INTERNAL_AGENT_ID colapsa administrador y operador sin revelar el valor
+ok 418 - INTERNAL_AGENT_ID colapsa administrador y operador sin revelar el valor
+  ---
+  duration_ms: 0.358917
+  ...
+# Subtest: el arranque se detiene si la toma exclusiva comparte identidad
+ok 419 - el arranque se detiene si la toma exclusiva comparte identidad
+  ---
+  duration_ms: 78.939041
+  ...
+# Subtest: computeFlowChecksum es estable para el mismo JSON
+ok 420 - computeFlowChecksum es estable para el mismo JSON
+  ---
+  duration_ms: 1.229042
+  ...
+# Subtest: normalizeFlowDocumentForRuntime coerces numeric transition values
+ok 421 - normalizeFlowDocumentForRuntime coerces numeric transition values
+  ---
+  duration_ms: 2.186458
+  ...
+# ✅ FlowLoader: Cargada versión activa v1 de "main-menu" [json]
+# ✅ FlowLoader: Cargada versión activa v1 de "main-menu" [json]
+# ✅ FlowLoader: Cargada versión activa v2 de "main-menu" [json]
+# ✅ FlowLoader: Cargada versión activa v1 de "main-menu" [json]
+# ✅ FlowLoader: Cargada versión activa v2 de "main-menu" [json]
+# Subtest: getFlow usa cache tras primera carga
+ok 422 - getFlow usa cache tras primera carga
+  ---
+  duration_ms: 2.598958
+  ...
+# Subtest: reloadFlow reemplaza cache con nueva version
+ok 423 - reloadFlow reemplaza cache con nueva version
+  ---
+  duration_ms: 0.623542
+  ...
+# Subtest: invalidateFlow fuerza recarga en siguiente getFlow
+ok 424 - invalidateFlow fuerza recarga en siguiente getFlow
+  ---
+  duration_ms: 0.637333
+  ...
+# Subtest: normaliza keycaps, tildes, mayúsculas y espacios
+ok 425 - normaliza keycaps, tildes, mayúsculas y espacios
+  ---
+  duration_ms: 1.090167
+  ...
+# Subtest: includes exige tokens y no toma si dentro de inscripciones
+ok 426 - includes exige tokens y no toma si dentro de inscripciones
+  ---
+  duration_ms: 0.350834
+  ...
+# Subtest: dos etiquetas iguales quedan ambiguas
+ok 427 - dos etiquetas iguales quedan ambiguas
+  ---
+  duration_ms: 0.61925
+  ...
+# Subtest: dos aliases normalizados con distinto destino quedan ambiguos
+ok 428 - dos aliases normalizados con distinto destino quedan ambiguos
+  ---
+  duration_ms: 0.188375
+  ...
+# Subtest: parsea la etiqueta visible de una opción numerada
+ok 429 - parsea la etiqueta visible de una opción numerada
+  ---
+  duration_ms: 0.717291
+  ...
+# Subtest: el menú de producción asocia la etiqueta 3 con si_pd_direccion
+ok 430 - el menú de producción asocia la etiqueta 3 con si_pd_direccion
+  ---
+  duration_ms: 3.707625
+  ...
+# Subtest: snapshot generado es válido para FlowEngine
+ok 431 - snapshot generado es válido para FlowEngine
+  ---
+  duration_ms: 1.061625
+  ...
+# Subtest: snapshot incluye transiciones editadas
+ok 432 - snapshot incluye transiciones editadas
+  ---
+  duration_ms: 0.2305
+  ...
+# Subtest: checksum cambia tras editar mensaje
+ok 433 - checksum cambia tras editar mensaje
+  ---
+  duration_ms: 0.518291
+  ...
+# Subtest: snapshot builder coerces numeric transition values to strings
+ok 434 - snapshot builder coerces numeric transition values to strings
+  ---
+  duration_ms: 0.25625
+  ...
+# Subtest: checksum estable sin cambios
+ok 435 - checksum estable sin cambios
+  ---
+  duration_ms: 0.140083
+  ...
+# Subtest: valid text string passes validation and compile
+ok 436 - valid text string passes validation and compile
+  ---
+  duration_ms: 2.178292
+  ...
+# Subtest: invalid message object fails with clear path
+ok 437 - invalid message object fails with clear path
+  ---
+  duration_ms: 0.571334
+  ...
+# Subtest: invalid transition value object fails with clear path
+ok 438 - invalid transition value object fails with clear path
+  ---
+  duration_ms: 0.238333
+  ...
+# Subtest: legacy transition value object with text field is coerced
+ok 439 - legacy transition value object with text field is coerced
+  ---
+  duration_ms: 0.338334
+  ...
+# Subtest: invalid matchAny array item fails with clear path
+ok 440 - invalid matchAny array item fails with clear path
+  ---
+  duration_ms: 0.945
+  ...
+# Subtest: numeric transition value passes validation and compiles
+ok 441 - numeric transition value passes validation and compiles
+  ---
+  duration_ms: 0.410208
+  ...
+# Subtest: inspector reports invalid published-like snapshot fields
+ok 442 - inspector reports invalid published-like snapshot fields
+  ---
+  duration_ms: 0.227916
+  ...
+# Subtest: coerces numeric transition values before publish validation
+ok 443 - coerces numeric transition values before publish validation
+  ---
+  duration_ms: 0.919125
+  ...
+# Subtest: rejects match transition without value
+ok 444 - rejects match transition without value
+  ---
+  duration_ms: 0.66625
+  ...
+# Subtest: formats structured validation error with priority
+ok 445 - formats structured validation error with priority
+  ---
+  duration_ms: 0.36125
+  ...
+# Subtest: flowValidator rejects match without value in flow document
+ok 446 - flowValidator rejects match without value in flow document
+  ---
+  duration_ms: 0.397542
+  ...
+# Subtest: flowValidator accepts numeric match values in flow document
+ok 447 - flowValidator accepts numeric match values in flow document
+  ---
+  duration_ms: 0.164292
+  ...
+# Subtest: valida un flujo correcto
+ok 448 - valida un flujo correcto
+  ---
+  duration_ms: 1.259833
+  ...
+# Subtest: rechaza entryNode inexistente
+ok 449 - rechaza entryNode inexistente
+  ---
+  duration_ms: 0.589958
+  ...
+# Subtest: rechaza transiciones a nodos inexistentes
+ok 450 - rechaza transiciones a nodos inexistentes
+  ---
+  duration_ms: 0.227958
+  ...
+# Subtest: rechaza nodos duplicados
+ok 451 - rechaza nodos duplicados
+  ---
+  duration_ms: 0.171875
+  ...
+# Subtest: detecta comando menu con acentos y variantes
+ok 452 - detecta comando menu con acentos y variantes
+  ---
+  duration_ms: 0.791458
+  ...
+# Subtest: detecta comando atras
+ok 453 - detecta comando atras
+  ---
+  duration_ms: 0.170833
+  ...
+# Subtest: detecta comando humano
+ok 454 - detecta comando humano
+  ---
+  duration_ms: 0.112625
+  ...
+# Subtest: detecta pedido explícito de humano en frases
+ok 455 - detecta pedido explícito de humano en frases
+  ---
+  duration_ms: 3.416125
+  ...
+# Subtest: retorna null para texto normal
+ok 456 - retorna null para texto normal
+  ---
+  duration_ms: 0.773
+  ...
+# Subtest: isEngineHumanHandoffResult detecta requiresHuman y terminalReason
+ok 457 - isEngineHumanHandoffResult detecta requiresHuman y terminalReason
+  ---
+  duration_ms: 0.755333
+  ...
+# Subtest: isConversationInHumanMode reconoce waiting_human, assigned y paused
+ok 458 - isConversationInHumanMode reconoce waiting_human, assigned y paused
+  ---
+  duration_ms: 0.171708
+  ...
+# Subtest: resolveHandoffConfirmationMessage prioriza reply del motor
+ok 459 - resolveHandoffConfirmationMessage prioriza reply del motor
+  ---
+  duration_ms: 0.119416
+  ...
+# Subtest: buildContentDispositionHeader escapa comillas y unicode
+ok 460 - buildContentDispositionHeader escapa comillas y unicode
+  ---
+  duration_ms: 0.993791
+  ...
+# Subtest: buildContentDispositionHeader sanea caracteres de control
+ok 461 - buildContentDispositionHeader sanea caracteres de control
+  ---
+  duration_ms: 0.304458
+  ...
+# Subtest: sniff rechaza contenido vacío o falsificado
+ok 462 - sniff rechaza contenido vacío o falsificado
+  ---
+  duration_ms: 0.667875
+  ...
+# Subtest: fallos 4xx HTTP son permanentes salvo 429
+ok 463 - fallos 4xx HTTP son permanentes salvo 429
+  ---
+  duration_ms: 0.197875
+  ...
+# Subtest: serializa callbacks del mismo userId
+ok 464 - serializa callbacks del mismo userId
+  ---
+  duration_ms: 22.537875
+  ...
+# Subtest: un fallo no deja la cola trabada ni una promesa suelta
+ok 465 - un fallo no deja la cola trabada ni una promesa suelta
+  ---
+  duration_ms: 0.795458
+  ...
+# Subtest: userIds distintos no se bloquean entre sí
+ok 466 - userIds distintos no se bloquean entre sí
+  ---
+  duration_ms: 31.731208
+  ...
+# Subtest: grant round-trip y expiración
+ok 467 - grant round-trip y expiración
+  ---
+  duration_ms: 3.143292
+  ...
+# [PERF] {"ts":"2026-11-25T16:40:46.529Z","event":"test_async_error","ms":0.095,"error":"boom"}
+# Subtest: isPerfEnabled defaults to false
+ok 468 - isPerfEnabled defaults to false
+  ---
+  duration_ms: 0.816709
+  ...
+# Subtest: measureAsync returns original result
+ok 469 - measureAsync returns original result
+  ---
+  duration_ms: 0.222917
+  ...
+# Subtest: measureSync returns original result
+ok 470 - measureSync returns original result
+  ---
+  duration_ms: 0.822875
+  ...
+# Subtest: measureAsync propagates errors
+ok 471 - measureAsync propagates errors
+  ---
+  duration_ms: 2.021084
+  ...
+# Subtest: rechaza HTTP y hosts no Twilio
+ok 472 - rechaza HTTP y hosts no Twilio
+  ---
+  duration_ms: 1.144709
+  ...
+# Subtest: redirección fuera de Twilio se rechaza sin enviar credenciales al destino
+ok 473 - redirección fuera de Twilio se rechaza sin enviar credenciales al destino
+  ---
+  duration_ms: 0.86
+  ...
+# Subtest: normalizeTwilioWhatsappNumber elimina prefijo whatsapp
+ok 474 - normalizeTwilioWhatsappNumber elimina prefijo whatsapp
+  ---
+  duration_ms: 0.9335
+  ...
+# Subtest: normalizeTwilioWhatsappNumber mantiene E.164
+ok 475 - normalizeTwilioWhatsappNumber mantiene E.164
+  ---
+  duration_ms: 0.158292
+  ...
+# Subtest: normalizeTwilioWhatsappNumber rechaza vacio
+ok 476 - normalizeTwilioWhatsappNumber rechaza vacio
+  ---
+  duration_ms: 0.079291
+  ...
+# Subtest: normalizeTwilioWhatsappNumber no devuelve literal whatsapp
+ok 477 - normalizeTwilioWhatsappNumber no devuelve literal whatsapp
+  ---
+  duration_ms: 0.178042
+  ...
+# Subtest: normalizeTwilioWhatsappNumber normaliza digitos sin plus
+ok 478 - normalizeTwilioWhatsappNumber normaliza digitos sin plus
+  ---
+  duration_ms: 0.098375
+  ...
+1..478
+# tests 513
+# suites 4
+# pass 513
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 40455.714708
+# integracion SQL en serie: 24 archivos
+TAP version 13
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: TB-005 firma inbound contra SQL tea-bot
+    # Subtest: la base conectada es tea-bot y 009 y 010 ya estan aplicadas
+    ok 1 - la base conectada es tea-bot y 009 y 010 ya estan aplicadas
+      ---
+      duration_ms: 79.114333
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"invalid","correlationId":"7a7447ae-41e9-42ab-b1ec-87dbaf974930","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"twilio_signature_missing","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"missing","correlationId":"2fc3aa10-10f4-49fd-8a79-718b6cdc1267","reason":"missing_signature","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+    # Subtest: T02 y T03 una firma invalida o ausente no escribe eventos ni mensajes
+    ok 2 - T02 y T03 una firma invalida o ausente no escribe eventos ni mensajes
+      ---
+      duration_ms: 98.0385
+      ...
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"valid","correlationId":"35466fb7-b2e3-4353-8d1d-d1e722ee3f3b","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMT1330b1fe5a77264ad49d2b2d155cbcd19f","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=0D78B7AF-62A6-4DF3-9BA2-FD8786A587FE phone=+5491155860277
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# [ConversationDB] session_created id=C7D2FF5D-8E9C-400E-96DB-A71742573900 conversation=0D78B7AF-62A6-4DF3-9BA2-FD8786A587FE
+# [ConversationTracker] session_context_initialized user=twilio:+5491155860277
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMT1330b1fe5a77264ad49d2b2d155cbcd19f","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"valid","correlationId":"56051507-393d-42e4-afa1-bcc11efe6ac3","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SMT1330b1fe5a77264ad49d2b2d155cbcd19f","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+    # Subtest: T13 dos firmas validas del mismo MessageSid procesan una sola vez
+    ok 3 - T13 dos firmas validas del mismo MessageSid procesan una sola vez
+      ---
+      duration_ms: 351.642458
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"invalid","correlationId":"ba2e2b97-04db-4fc2-855f-fa5bf7df5fc9","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"valid","correlationId":"8c121e5b-fbc6-4c7e-8165-1cfcc4200ed0","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMT143620b3193d4f4f26b4e990c1bcabda08","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=94250A5A-B9DE-4520-898B-CB7F84CFC6FF phone=+5491155319697
+# [ConversationDB] session_created id=81A6967A-8E37-4A47-96B3-F63ED90DB86C conversation=94250A5A-B9DE-4520-898B-CB7F84CFC6FF
+# [ConversationTracker] session_context_initialized user=twilio:+5491155319697
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMT143620b3193d4f4f26b4e990c1bcabda08","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+    # Subtest: T14 una firma invalida no consume el MessageSid
+    ok 4 - T14 una firma invalida no consume el MessageSid
+      ---
+      duration_ms: 223.617958
+      ...
+# {"event":"conversation_returned_to_bot","conversationId":"52A97020-912E-43F4-B56A-90C954B23C3B","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["278293A6-D876-4ADB-9152-81FA59A06492"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"valid","correlationId":"4d15ebe1-c9e9-4aa4-be28-dc5500c4ea74","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMT15bca4338a084d4dbe874ddf2b8993ea29","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"reentry_inbound","conversationId":"52A97020-912E-43F4-B56A-90C954B23C3B","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMT15bca4338a084d4dbe874ddf2b8993ea29","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+    # Subtest: T15 una firma valida permite la reentrada
+    ok 5 - T15 una firma valida permite la reentrada
+      ---
+      duration_ms: 350.395084
+      ...
+# {"event":"twilio_signature_valid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"valid","correlationId":"3ee840a1-cbdb-4c95-8356-6015b88f16cd","reason":null,"url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMT16ed4de5b70bf443c6a54f0d14834b9bc2","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=A936ADBB-5F00-4AB9-AE67-71B7B28F17F2 phone=+5491155993007
+# [ConversationDB] session_created id=63DE7A7D-EDE9-4D21-9CE9-57A5391DC163 conversation=A936ADBB-5F00-4AB9-AE67-71B7B28F17F2
+# [ConversationTracker] session_context_initialized user=twilio:+5491155993007
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMT16ed4de5b70bf443c6a54f0d14834b9bc2","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+    # Subtest: T16 con takeover apagado una firma valida sigue atendiendo en bot
+    ok 6 - T16 con takeover apagado una firma valida sigue atendiendo en bot
+      ---
+      duration_ms: 242.545875
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"log","result":"invalid","correlationId":"e515c783-d20a-42bc-9d48-187e5c0669c7","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SMT045dcd039e87dd4ed1a16602ea1c0a6191","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=6638FAC3-4672-474B-8740-FE3B86830E9A phone=+5491155489712
+# [ConversationDB] session_created id=05A174DB-4CB6-45E6-9428-547339C0AA94 conversation=6638FAC3-4672-474B-8740-FE3B86830E9A
+# [ConversationTracker] session_context_initialized user=twilio:+5491155489712
+# {"event":"inbound_completed","provider":"twilio","messageId":"SMT045dcd039e87dd4ed1a16602ea1c0a6191","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+    # Subtest: T04 en log una firma invalida se procesa y escribe el turno
+    ok 7 - T04 en log una firma invalida se procesa y escribe el turno
+      ---
+      duration_ms: 217.764542
+      ...
+    # Subtest: el cleanup rechaza un id preexistente y no lo borra
+    ok 8 - el cleanup rechaza un id preexistente y no lo borra
+      ---
+      duration_ms: 7.136916
+      ...
+# {"event":"twilio_signature_invalid","route":"/webhooks/twilio/main-menu","mode":"enforce","result":"invalid","correlationId":"7caca28c-9d44-4695-aee1-fd850fac0b6f","reason":"signature_mismatch","url":{"protocol":"https","host":"bot.example","pathname":"/webhooks/twilio/main-menu"}}
+    # Subtest: la app real rechaza la firma del último valor repetido sin escribir el SID
+    ok 9 - la app real rechaza la firma del último valor repetido sin escribir el SID
+      ---
+      duration_ms: 28.38125
+      ...
+    1..9
+ok 1 - TB-005 firma inbound contra SQL tea-bot
+  ---
+  duration_ms: 1600.538291
+  type: 'suite'
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-NEW-45e0e887-fad0-4aa1-8d06-494d9017ef22","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-NEW-45e0e887-fad0-4aa1-8d06-494d9017ef22","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-NEW-45e0e887-fad0-4aa1-8d06-494d9017ef22","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 un mensaje nuevo se procesa una vez y el retry no lo repite
+ok 2 - DIN-427 un mensaje nuevo se procesa una vez y el retry no lo repite
+  ---
+  duration_ms: 125.010125
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"in_flight","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-N-19484d0d-21a7-43c1-9c2e-c0670b899a2b","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 ocho adquisiciones del mismo MessageSid dejan un solo dueño
+ok 3 - DIN-427 ocho adquisiciones del mismo MessageSid dejan un solo dueño
+  ---
+  duration_ms: 142.602792
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-LEASE-493c3338-63c1-4fa1-9fbf-ac45f696748d","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM-D427-LEASE-493c3338-63c1-4fa1-9fbf-ac45f696748d","flowId":"main-menu","reason":"reclaimed","attempts":2,"httpStatus":null}
+# [ConversationDB] handleInbound failed: inbound lease lost
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-LEASE-493c3338-63c1-4fa1-9fbf-ac45f696748d","flowId":"main-menu","reason":"reclaimed","attempts":2,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:41:18.792Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":165.736,"error":"inbound lease lost"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-D427-LEASE-493c3338-63c1-4fa1-9fbf-ac45f696748d","flowId":"main-menu","reason":"lease_lost","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-LEASE-493c3338-63c1-4fa1-9fbf-ac45f696748d","flowId":"main-menu","reason":"processed","attempts":2,"httpStatus":null}
+# Subtest: DIN-427 un lease vencido no deja completar ni duplicar al primer trabajador
+ok 4 - DIN-427 un lease vencido no deja completar ni duplicar al primer trabajador
+  ---
+  duration_ms: 269.303042
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-OFF-c9145986-8ab2-48ce-8669-1ffca46ad2d4","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-OFF-c9145986-8ab2-48ce-8669-1ffca46ad2d4","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-OFF-c9145986-8ab2-48ce-8669-1ffca46ad2d4","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-ON-493c1fd6-050e-491f-a3c9-b7959ea61089","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-ON-493c1fd6-050e-491f-a3c9-b7959ea61089","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-ON-493c1fd6-050e-491f-a3c9-b7959ea61089","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 la idempotencia no cambia con MONITORING_ENABLED
+ok 5 - DIN-427 la idempotencia no cambia con MONITORING_ENABLED
+  ---
+  duration_ms: 151.436666
+  ...
+# {"event":"inbound_acquire_error","provider":"twilio","messageId":"SM-D427-SQL-ef028592-7a67-450c-832f-59283b1a0e3f","flowId":"main-menu","reason":"sql_error","attempts":null,"httpStatus":503}
+# [PERF] {"ts":"2026-11-25T16:41:19.045Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":3.94,"error":"Invalid object name 'dbo.din427_relation_missing'."}
+# Subtest: DIN-427 un error de SQL no procesa el turno
+ok 6 - DIN-427 un error de SQL no procesa el turno
+  ---
+  duration_ms: 18.956875
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-FAIL-30b89524-a0f8-46b5-ae12-de823b2f3f1b","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:41:19.065Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":5.894,"error":"turno incompleto"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-D427-FAIL-30b89524-a0f8-46b5-ae12-de823b2f3f1b","flowId":"main-menu","reason":"processing_error","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-FAIL-30b89524-a0f8-46b5-ae12-de823b2f3f1b","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-FAIL-30b89524-a0f8-46b5-ae12-de823b2f3f1b","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# Subtest: DIN-427 un error antes de completar queda reintentable y no PROCESSED
+ok 7 - DIN-427 un error antes de completar queda reintentable y no PROCESSED
+  ---
+  duration_ms: 57.962792
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-EFFECT-943d70bd-e1eb-4ede-8087-e5a12cd4061b","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [PERF] {"ts":"2026-11-25T16:41:19.147Z","event":"twilio_webhook_error","flowId":"main-menu","totalMs":24.696,"error":"cierre perdido"}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-D427-EFFECT-943d70bd-e1eb-4ede-8087-e5a12cd4061b","flowId":"main-menu","reason":"processing_error","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-EFFECT-943d70bd-e1eb-4ede-8087-e5a12cd4061b","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-EFFECT-943d70bd-e1eb-4ede-8087-e5a12cd4061b","flowId":"main-menu","reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-EFFECT-943d70bd-e1eb-4ede-8087-e5a12cd4061b","flowId":"main-menu","reason":"processed","attempts":2,"httpStatus":null}
+# Subtest: DIN-427 un efecto ya guardado no se duplica si el cierre falla
+ok 8 - DIN-427 un efecto ya guardado no se duplica si el cierre falla
+  ---
+  duration_ms: 160.505
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-A-e901e336-840f-4d05-803a-d94d4b2274a2","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-B-3164b6eb-9f5d-4a19-a0af-9299f0422378","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-B-3164b6eb-9f5d-4a19-a0af-9299f0422378","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-A-e901e336-840f-4d05-803a-d94d4b2274a2","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 dos MessageSid distintos pueden procesarse a la vez
+ok 9 - DIN-427 dos MessageSid distintos pueden procesarse a la vez
+  ---
+  duration_ms: 36.977959
+  ...
+# Subtest: DIN-427 un reloj de aplicación adelantado no roba un PROCESSING vigente
+ok 10 - DIN-427 un reloj de aplicación adelantado no roba un PROCESSING vigente
+  ---
+  duration_ms: 37.058
+  ...
+# Subtest: DIN-427 el índice único rechaza dos filas del mismo MessageSid
+ok 11 - DIN-427 el índice único rechaza dos filas del mismo MessageSid
+  ---
+  duration_ms: 25.525083
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-HUMAN-102787de-a4e8-4ba1-a415-fb36527db986","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-HUMAN-102787de-a4e8-4ba1-a415-fb36527db986","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-HUMAN-102787de-a4e8-4ba1-a415-fb36527db986","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 una conversación tomada no cambia de estado ni se responde dos veces
+ok 12 - DIN-427 una conversación tomada no cambia de estado ni se responde dos veces
+  ---
+  duration_ms: 134.088041
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D427-REENTRY-cb90f2fb-984f-4ce5-bb2c-5af956245be9","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"reentry_inbound","conversationId":"EB6F3E09-4E6B-46D3-BC0B-ABCDD5C7C039","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D427-REENTRY-cb90f2fb-984f-4ce5-bb2c-5af956245be9","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D427-REENTRY-cb90f2fb-984f-4ce5-bb2c-5af956245be9","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-427 una reentrada pendiente no se consume dos veces con el mismo MessageSid
+ok 13 - DIN-427 una reentrada pendiente no se consume dos veces con el mismo MessageSid
+  ---
+  duration_ms: 222.218958
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-ACQ-809a5ae6-854a-489e-9a11-2a949d3185f5","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-ACQ-809a5ae6-854a-489e-9a11-2a949d3185f5","flowId":null,"reason":"in_flight","attempts":1,"httpStatus":null}
+# Subtest: dos adquisiciones concurrentes del mismo MessageSid dejan un solo process
+ok 14 - dos adquisiciones concurrentes del mismo MessageSid dejan un solo process
+  ---
+  duration_ms: 160.383417
+  ...
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-PROC-0cc68077-1e01-4981-a41b-135ff8096e86","flowId":null,"reason":"in_flight","attempts":1,"httpStatus":null}
+# Subtest: PROCESSING reciente no se vuelve a adquirir
+ok 15 - PROCESSING reciente no se vuelve a adquirir
+  ---
+  duration_ms: 60.190542
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FAIL-4b3dde4c-f2da-4141-bd70-479ace9dd028","flowId":null,"reason":"retry","attempts":2,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-FAIL-4b3dde4c-f2da-4141-bd70-479ace9dd028","flowId":null,"reason":"in_flight","attempts":2,"httpStatus":null}
+# Subtest: FAILED bajo el maximo lo adquiere un solo worker
+ok 16 - FAILED bajo el maximo lo adquiere un solo worker
+  ---
+  duration_ms: 39.447417
+  ...
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-DEAD-220aa467-26fe-4f0c-8e33-4c10ee190512","flowId":null,"reason":"dead_letter","attempts":3,"httpStatus":null}
+# Subtest: FAILED en el maximo pasa a DEAD_LETTER y no procesa
+ok 17 - FAILED en el maximo pasa a DEAD_LETTER y no procesa
+  ---
+  duration_ms: 39.722
+  ...
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM-STALE-35ccd7f3-c056-4e01-a639-5b478e442f41","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_already_processing","provider":"twilio","messageId":"SM-STALE-35ccd7f3-c056-4e01-a639-5b478e442f41","flowId":null,"reason":"in_flight","attempts":2,"httpStatus":null}
+# Subtest: PROCESSING stale se reclama de forma atomica
+ok 18 - PROCESSING stale se reclama de forma atomica
+  ---
+  duration_ms: 62.559125
+  ...
+# Subtest: migracion 007 aplicada: tablas, indice unico, indice de actividad y constraints
+ok 19 - migracion 007 aplicada: tablas, indice unico, indice de actividad y constraints
+  ---
+  duration_ms: 41.037459
+  ...
+# Subtest: health recupera last inbound desde DB con el store vacio
+ok 20 - health recupera last inbound desde DB con el store vacio
+  ---
+  duration_ms: 90.242292
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FENCE-560f11b9-3ab0-4ff4-8678-5117e956d0cd","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM-FENCE-560f11b9-3ab0-4ff4-8678-5117e956d0cd","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-FENCE-560f11b9-3ab0-4ff4-8678-5117e956d0cd","flowId":null,"reason":"lease_lost","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-FENCE-560f11b9-3ab0-4ff4-8678-5117e956d0cd","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# Subtest: el worker anterior no cierra el evento que otro reclamó
+ok 21 - el worker anterior no cierra el evento que otro reclamó
+  ---
+  duration_ms: 47.597083
+  ...
+# Subtest: el mismo provider_message_id no duplica el mensaje ni el handoff
+ok 22 - el mismo provider_message_id no duplica el mensaje ni el handoff
+  ---
+  duration_ms: 63.053625
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-REPLAY-fd45f9b8-fbd1-40af-a1f5-1b6fa4b3e7dd","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-REPLAY-fd45f9b8-fbd1-40af-a1f5-1b6fa4b3e7dd","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-REPLAY-fd45f9b8-fbd1-40af-a1f5-1b6fa4b3e7dd","flowId":null,"reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: 010 guarda el TwiML y un retry lo lee igual
+ok 23 - 010 guarda el TwiML y un retry lo lee igual
+  ---
+  duration_ms: 45.768
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-FLAG-2bc03fff-17c3-48f4-a1f0-f3d8e215ac36","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-FLAG-2bc03fff-17c3-48f4-a1f0-f3d8e215ac36","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-FLAG-2bc03fff-17c3-48f4-a1f0-f3d8e215ac36","flowId":null,"reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: con monitoreo apagado el segundo begin no procesa de nuevo
+ok 24 - con monitoreo apagado el segundo begin no procesa de nuevo
+  ---
+  duration_ms: 39.192291
+  ...
+# Subtest: un MessageSid de 128 caracteres tiene outbound determinístico y un solo insert
+ok 25 - un MessageSid de 128 caracteres tiene outbound determinístico y un solo insert
+  ---
+  duration_ms: 48.357583
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-LOST-b99c2682-2001-4897-90b8-d5d581160962","flowId":null,"reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_reclaimed","provider":"twilio","messageId":"SM-LOST-b99c2682-2001-4897-90b8-d5d581160962","flowId":null,"reason":"reclaimed","attempts":2,"httpStatus":null}
+# {"event":"inbound_failed","provider":"twilio","messageId":"SM-LOST-b99c2682-2001-4897-90b8-d5d581160962","flowId":null,"reason":"lease_lost","attempts":1,"httpStatus":null}
+# Subtest: el worker que perdió el lease no inserta el mensaje
+ok 26 - el worker que perdió el lease no inserta el mensaje
+  ---
+  duration_ms: 65.997125
+  ...
+# Subtest: la misma auditoría por MessageSid se inserta una vez y otra acción se conserva
+ok 27 - la misma auditoría por MessageSid se inserta una vez y otra acción se conserva
+  ---
+  duration_ms: 47.101
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: conteos diarios clasifican inbound, outbound y excluyen system de whatsappOutbound
+ok 28 - conteos diarios clasifican inbound, outbound y excluyen system de whatsappOutbound
+  ---
+  duration_ms: 216.179209
+  ...
+# Subtest: insert duplicado por provider_message_id no duplica conteos
+ok 29 - insert duplicado por provider_message_id no duplica conteos
+  ---
+  duration_ms: 76.734167
+  ...
+# Subtest: mensaje fuera de la ventana de 30 días AR no se cuenta
+ok 30 - mensaje fuera de la ventana de 30 días AR no se cuenta
+  ---
+  duration_ms: 56.889917
+  ...
+# Subtest: message_delivery_status cuenta un SID por estado pese a updates
+ok 31 - message_delivery_status cuenta un SID por estado pese a updates
+  ---
+  duration_ms: 45.20825
+  ...
+# Subtest: métricas documentan que delivery no mezcla SIDs TwiML sintéticos
+ok 32 - métricas documentan que delivery no mezcla SIDs TwiML sintéticos
+  ---
+  duration_ms: 8.60725
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: SQL: dos adquisiciones de lease concurrentes permiten una sola
+ok 33 - SQL: dos adquisiciones de lease concurrentes permiten una sola
+  ---
+  duration_ms: 177.30025
+  ...
+# Subtest: SQL: dos entregas concurrentes llaman Twilio una sola vez
+ok 34 - SQL: dos entregas concurrentes llaman Twilio una sola vez
+  ---
+  duration_ms: 143.921209
+  ...
+# Subtest: SQL: lease vencido durante Twilio marca uncertain sin reenvío
+ok 35 - SQL: lease vencido durante Twilio marca uncertain sin reenvío
+  ---
+  duration_ms: 53.475584
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"conversation_returned_to_bot","conversationId":"BD8F2E90-A852-4477-835E-AAA58BD4867C","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["465CB467-4B2C-4DB7-B5E2-E5F1F9C82A11"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: returnConversationToBot deja estado coherente
+ok 36 - integration: returnConversationToBot deja estado coherente
+  ---
+  duration_ms: 189.775416
+  ...
+# Subtest: integration: rollback mantiene handoff activo si falla antes del commit
+ok 37 - integration: rollback mantiene handoff activo si falla antes del commit
+  ---
+  duration_ms: 76.539125
+  ...
+# Subtest: integration: ensurePendingHandoff concurrente crea un solo handoff activo
+ok 38 - integration: ensurePendingHandoff concurrente crea un solo handoff activo
+  ---
+  duration_ms: 84.006541
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"1A2180F1-C14B-4332-A88D-C0A22E5367A7","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["4631F6F8-8EA3-4004-9F92-2FFB07E61907"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"1A2180F1-C14B-4332-A88D-C0A22E5367A7","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":[],"resolvedHandoffCount":0,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: double close es idempotente
+ok 39 - integration: double close es idempotente
+  ---
+  duration_ms: 78.427292
+  ...
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# Subtest: integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene coherencia
+ok 40 - integration: normalizeLegacy vs requestHumanHandoff concurrente mantiene coherencia
+  ---
+  duration_ms: 76.324417
+  ...
+# Subtest: integration: requestHumanHandoff hace rollback completo si falla antes del commit
+ok 41 - integration: requestHumanHandoff hace rollback completo si falla antes del commit
+  ---
+  duration_ms: 52.931166
+  ...
+# Subtest: integration: estado inconsistente bot + handoff pending no normaliza
+ok 42 - integration: estado inconsistente bot + handoff pending no normaliza
+  ---
+  duration_ms: 64.793875
+  ...
+# Subtest: integration: reopen assigned preserva assignedAgentId
+ok 43 - integration: reopen assigned preserva assignedAgentId
+  ---
+  duration_ms: 54.41025
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: DIN-439 fase 2 API attachments — auth y descarga
+ok 44 - DIN-439 fase 2 API attachments — auth y descarga
+  ---
+  duration_ms: 235.6155
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"conversation_returned_to_bot","conversationId":"31D92BDF-2DC4-450C-9C1B-CE305646C610","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["FDAC600D-C9C1-435A-A8D2-B7AB59DF9697"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"31D92BDF-2DC4-450C-9C1B-CE305646C610","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: integration: cierre humano y texto libre quedan en reentrada, no en welcome
+ok 45 - integration: cierre humano y texto libre quedan en reentrada, no en welcome
+  ---
+  duration_ms: 185.632334
+  ...
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# {"event":"conversation_returned_to_bot","conversationId":"06F16639-5711-4219-BF33-DB4E3333E3B0","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["AF11B8EA-9F69-41DF-88B4-6094ADAD9DA5"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"06F16639-5711-4219-BF33-DB4E3333E3B0","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"06F16639-5711-4219-BF33-DB4E3333E3B0","action":"present_node","reason":"same_version","nodeKey":"no_presenciales_menu"}
+# Subtest: integration: continuar restaura el nodo publicado de la misma versión
+ok 46 - integration: continuar restaura el nodo publicado de la misma versión
+  ---
+  duration_ms: 127.007958
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"B9AE3986-172A-4EFD-A44C-25073FDEAA70","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["92630885-287E-44F9-8CD1-07BF040E1942"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"B9AE3986-172A-4EFD-A44C-25073FDEAA70","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"B9AE3986-172A-4EFD-A44C-25073FDEAA70","action":"present_entry","reason":"fresh","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=unknown:IT-REENTRY-1795625039884-99c262
+# Subtest: integration: nueva consulta presenta el entry y no matchea el comando
+ok 47 - integration: nueva consulta presenta el entry y no matchea el comando
+  ---
+  duration_ms: 104.587458
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"332C0D83-AC02-482B-B51F-52647F205E8B","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["DC054ECC-6A97-4E69-83DD-5083E6359757"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"332C0D83-AC02-482B-B51F-52647F205E8B","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"332C0D83-AC02-482B-B51F-52647F205E8B","action":"handoff","reason":"new_handoff","nodeKey":"human_handoff"}
+# Subtest: integration: pedir humano abre un handoff nuevo
+ok 48 - integration: pedir humano abre un handoff nuevo
+  ---
+  duration_ms: 111.808666
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"5AF1193D-D1F1-4861-8524-A6107DE9AA12","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["27EE8AD8-ACC8-454C-9A66-1879891FBC7B"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: handoff activo no responde con el prompt
+ok 49 - integration: handoff activo no responde con el prompt
+  ---
+  duration_ms: 88.32875
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"432D3EB4-45DC-4A79-A299-EA3D369DE9C4","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["D1BBCF34-D355-404F-A821-37E31BA13036"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"432D3EB4-45DC-4A79-A299-EA3D369DE9C4","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"432D3EB4-45DC-4A79-A299-EA3D369DE9C4","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# Subtest: integration: dos webhooks distintos dejan un solo awaiting_choice
+ok 50 - integration: dos webhooks distintos dejan un solo awaiting_choice
+  ---
+  duration_ms: 93.390667
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"924179FF-3074-478A-96DA-544A31F002F2","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["8D5FA394-47A1-4D06-B896-01B2987D3E8A"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"924179FF-3074-478A-96DA-544A31F002F2","action":"prompt","reason":null,"nodeKey":null}
+# Subtest: integration: el mismo MessageSid no consume la reentrada dos veces
+ok 51 - integration: el mismo MessageSid no consume la reentrada dos veces
+  ---
+  duration_ms: 76.714875
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"7231247A-8259-4A15-A177-B3400C34890A","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["08269DFA-FB6C-46ED-9936-D1A49BA5B6F7"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: el sync del motor no pisa el cursor con reentrada pendiente
+ok 52 - integration: el sync del motor no pisa el cursor con reentrada pendiente
+  ---
+  duration_ms: 66.434209
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"BB586806-FF9B-426B-82D0-9001AE7515A8","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["0B2B7D10-CB85-4DC8-8FA0-F5D6AF4C7921"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: la toma manual actual no absorbe una reentrada en bot
+ok 53 - integration: la toma manual actual no absorbe una reentrada en bot
+  ---
+  duration_ms: 77.301208
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"50DDE675-4DC5-4D44-9571-A037C9E1928A","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["1D80839D-8D9A-4910-94B3-8234553D511D"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_legacy_rollback","conversationId":"50DDE675-4DC5-4D44-9571-A037C9E1928A"}
+# [ConversationTracker] session_context_initialized user=unknown:IT-REENTRY-1795625040502-4427a3
+# Subtest: integration: REENTRY_POLICY=legacy limpia la reentrada y presenta el entry
+ok 54 - integration: REENTRY_POLICY=legacy limpia la reentrada y presenta el entry
+  ---
+  duration_ms: 82.137166
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"58624903-842E-41F7-96CA-9F7CF75AE147","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["DBA7061A-2B0A-4876-8F72-9B71ED4D4B70"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# [ConversationTracker] session_context_initialized user=unknown:IT-REENTRY-1795625040584-2f8461
+# Subtest: integration: un binario que ignora reentry_json presenta el entry si el cursor es null
+ok 55 - integration: un binario que ignora reentry_json presenta el entry si el cursor es null
+  ---
+  duration_ms: 76.417208
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"2B42B958-1589-4958-BBFB-D0802318118A","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["CEF1FBB2-24AD-4B62-BD36-9D4F466E7537"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"2B42B958-1589-4958-BBFB-D0802318118A","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"2B42B958-1589-4958-BBFB-D0802318118A","action":"present_entry","reason":"historical_unavailable","nodeKey":null}
+# [ConversationTracker] session_context_initialized user=unknown:IT-REENTRY-1795625040661-f32ea5
+# Subtest: integration: una versión histórica que no está en la base reinicia
+ok 56 - integration: una versión histórica que no está en la base reinicia
+  ---
+  duration_ms: 106.380542
+  ...
+# {"event":"conversation_returned_to_bot","conversationId":"B13E539A-3630-4194-A3A8-832F61F81C5B","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"human_handoff","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["075D34B1-F6D6-48FD-9803-5F20C74296C6"],"resolvedHandoffCount":1,"endedSessionCount":1,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"reentry_inbound","conversationId":"B13E539A-3630-4194-A3A8-832F61F81C5B","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"B13E539A-3630-4194-A3A8-832F61F81C5B","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# Subtest: integration: el contador de intentos sobrevive a una instancia nueva
+ok 57 - integration: el contador de intentos sobrevive a una instancia nueva
+  ---
+  duration_ms: 84.148625
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"conversation_returned_to_bot","conversationId":"73FCDEB0-577F-4CE1-88E2-DB73D203D339","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"welcome","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["CF15A332-2349-4C7E-94C8-B2ADD5F2FB4A"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"73FCDEB0-577F-4CE1-88E2-DB73D203D339","previousStatus":"bot","newStatus":"bot","previousNodeKey":null,"resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":[],"resolvedHandoffCount":0,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"73FCDEB0-577F-4CE1-88E2-DB73D203D339","previousStatus":"assigned","newStatus":"bot","previousNodeKey":null,"resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["455875FF-E8BE-4ACB-92FD-FDEFF86DC5F8"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"73FCDEB0-577F-4CE1-88E2-DB73D203D339","previousStatus":"assigned","newStatus":"bot","previousNodeKey":null,"resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["E4EFC4FA-1374-4C3C-B75E-D2E29CB30CAC"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"73FCDEB0-577F-4CE1-88E2-DB73D203D339","previousStatus":"assigned","newStatus":"bot","previousNodeKey":null,"resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["EBEB94AC-C03D-44F5-B4BE-7C671F4BAD41"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"9DC3952B-2FD2-4A2E-B4D1-B0276BAD3927","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"welcome","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["DBC150ED-0F35-4503-921A-9ED84BF21B32"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# {"event":"conversation_returned_to_bot","conversationId":"0876DF6E-5F61-40D1-8773-5671607E14D2","previousStatus":"assigned","newStatus":"bot","previousNodeKey":"welcome","resumeNodeKey":null,"reentryArmed":true,"resolvedHandoffIds":["3ECD3F9A-EF7E-4487-8CE2-E2959DAE3B4A"],"resolvedHandoffCount":1,"endedSessionCount":0,"runtimeReset":true,"runtimeResetFailed":false}
+# Subtest: integration: HTTP real de cierre y devolución con dos cuentas
+ok 58 - integration: HTTP real de cierre y devolución con dos cuentas
+  ---
+  duration_ms: 1014.387167
+  ...
+# Subtest: POST /api/conversations/search sin sesión responde 401
+ok 59 - POST /api/conversations/search sin sesión responde 401
+  ---
+  duration_ms: 21.967458
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: POST /api/conversations/search admin responde 200 con SQL disponible
+ok 60 - POST /api/conversations/search admin responde 200 con SQL disponible
+  ---
+  duration_ms: 111.394917
+  ...
+# Subtest: POST /api/conversations/search conversations_only responde 200 con SQL disponible
+ok 61 - POST /api/conversations/search conversations_only responde 200 con SQL disponible
+  ---
+  duration_ms: 16.382084
+  ...
+# Subtest: POST /api/conversations/search rechaza cursor de otro término
+ok 62 - POST /api/conversations/search rechaza cursor de otro término
+  ---
+  duration_ms: 13.342333
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: conversation search SQL integration
+ok 63 - conversation search SQL integration
+  ---
+  duration_ms: 358.414875
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: paginación contactos y mensajes sin huecos ni duplicados
+ok 64 - paginación contactos y mensajes sin huecos ni duplicados
+  ---
+  duration_ms: 326.901
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: integration: dos procesos toman la misma conversación en SQL TEST
+ok 65 - integration: dos procesos toman la misma conversación en SQL TEST
+  ---
+  duration_ms: 3887.909
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: integration: toma manual exclusiva en SQL TEST
+ok 66 - integration: toma manual exclusiva en SQL TEST
+  ---
+  duration_ms: 213.233833
+  ...
+# Subtest: integration: dos agentes en paralelo sobre SQL real
+ok 67 - integration: dos agentes en paralelo sobre SQL real
+  ---
+  duration_ms: 94.211042
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: retención SQL elimina 120 conversaciones sintéticas en batches de 50
+ok 68 - retención SQL elimina 120 conversaciones sintéticas en batches de 50
+  ---
+  duration_ms: 1790.014583
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: retención elimina message_delivery_status ligado al mensaje
+ok 69 - retención elimina message_delivery_status ligado al mensaje
+  ---
+  duration_ms: 208.928125
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# [DB] releaseSessionAppLock failed: Cannot release the application lock (Database Principal: 'public', Resource: 'tea_bot:conversation_retention') because it is not currently held.
+# Subtest: sp_getapplock impide segunda adquisición concurrente
+ok 70 - sp_getapplock impide segunda adquisición concurrente
+  ---
+  duration_ms: 661.739208
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: schema real: índice last_message_at y cascades de retención
+ok 71 - schema real: índice last_message_at y cascades de retención
+  ---
+  duration_ms: 400.4935
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: cola durable recupera borrado físico tras reinicio de servicio
+ok 72 - cola durable recupera borrado físico tras reinicio de servicio
+  ---
+  duration_ms: 199.586125
+  ...
+# Subtest: clave inválida no hidrata ruta fuera del root
+ok 73 - clave inválida no hidrata ruta fuera del root
+  ---
+  duration_ms: 0.303958
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: estados assigned/waiting_human no eximen vencimiento por inactividad
+ok 74 - estados assigned/waiting_human no eximen vencimiento por inactividad
+  ---
+  duration_ms: 195.390375
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: rollback preserva conversación y cola media tras enqueue
+ok 75 - rollback preserva conversación y cola media tras enqueue
+  ---
+  duration_ms: 146.361208
+  ...
+# Subtest: deleteInactiveRetentionBatch sin transacción falla
+ok 76 - deleteInactiveRetentionBatch sin transacción falla
+  ---
+  duration_ms: 0.274541
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# [ConversationTracker] session_context_initialized user=sim:flow-nav-1795625363611-b0ea1b
+# [ConversationTracker] session_context_initialized user=sim:flow-nav-1795625363611-b0ea1b
+# [ConversationTracker] session_context_initialized user=sim:flow-nav-1795625363611-b0ea1b
+# Subtest: integration: producción v62 persiste Dirección de estudios y el fallback
+ok 77 - integration: producción v62 persiste Dirección de estudios y el fallback
+  ---
+  duration_ms: 195.222625
+  ...
+# [ConversationTracker] session_context_initialized user=sim:flow-nav-1795625363756-43522f
+# [ConversationTracker] session_context_initialized user=sim:flow-nav-1795625363756-43522f
+# Subtest: integration: Menú y Atrás persisten el nodo de producción
+ok 78 - integration: Menú y Atrás persisten el nodo de producción
+  ---
+  duration_ms: 111.065292
+  ...
+# Subtest: integration: una conversación asignada no ejecuta el menú
+ok 79 - integration: una conversación asignada no ejecuta el menú
+  ---
+  duration_ms: 99.04925
+  ...
+# {"event":"reentry_inbound","conversationId":"F8C71B11-40BE-457F-8147-CBCAFDA0F88B","action":"prompt","reason":null,"nodeKey":null}
+# {"event":"reentry_inbound","conversationId":"F8C71B11-40BE-457F-8147-CBCAFDA0F88B","action":"reprompt","reason":"invalid_choice","nodeKey":null}
+# Subtest: integration: la reentrada pendiente no consume Dirección de estudios ni 3
+ok 80 - integration: la reentrada pendiente no consume Dirección de estudios ni 3
+  ---
+  duration_ms: 71.1825
+  ...
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# [ConversationTracker] session_context_initialized user=twilio:+5491103f6a77b25
+# Subtest: integration: el mismo MessageSid no vuelve a ejecutar la transición
+ok 81 - integration: el mismo MessageSid no vuelve a ejecutar la transición
+  ---
+  duration_ms: 192.357042
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D439-efc05579-0996-4042-9c23-d7b2ffa0c9e4","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=C88C7563-5D73-43F6-AF3B-232808117D34 phone=+5491125364981
+# [DbFlowLoader] Cargado "main-menu" v24 desde snapshot DB (checksum c27008bb…)
+# ✅ FlowLoader: Cargada versión activa v24 de "main-menu" [db]
+# [ConversationDB] session_created id=7557087B-F059-41A9-B75C-7183AA1EF0F8 conversation=C88C7563-5D73-43F6-AF3B-232808117D34
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D439-efc05579-0996-4042-9c23-d7b2ffa0c9e4","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# Subtest: DIN-439 texto con adjunto ejecuta el motor y persiste dos adjuntos
+ok 82 - DIN-439 texto con adjunto ejecuta el motor y persiste dos adjuntos
+  ---
+  duration_ms: 391.305542
+  ...
+# [ConversationDB] conversation_created id=1F324C16-5C80-4991-A1E5-75653F09ACEB phone=+5491125365322
+# Subtest: DIN-439 solo imagen no ejecuta el motor y persiste una fila
+ok 83 - DIN-439 solo imagen no ejecuta el motor y persiste una fila
+  ---
+  duration_ms: 157.191125
+  ...
+# {"event":"inbound_acquired","provider":"twilio","messageId":"SM-D439-DUP-e1880bd2-a988-4791-8ade-5cefaa1cbc1c","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# [ConversationDB] conversation_created id=8B600D92-AB2B-4181-A238-D7751696A124 phone=+5491125365479
+# {"event":"inbound_completed","provider":"twilio","messageId":"SM-D439-DUP-e1880bd2-a988-4791-8ade-5cefaa1cbc1c","flowId":"main-menu","reason":"acquired","attempts":1,"httpStatus":null}
+# {"event":"inbound_duplicate_completed","provider":"twilio","messageId":"SM-D439-DUP-e1880bd2-a988-4791-8ade-5cefaa1cbc1c","flowId":"main-menu","reason":"processed","attempts":1,"httpStatus":null}
+# Subtest: DIN-439 webhook duplicado no duplica adjuntos
+ok 84 - DIN-439 webhook duplicado no duplica adjuntos
+  ---
+  duration_ms: 172.269166
+  ...
+# {"event":"sql_test_identity","server":"localhost","port":1433,"database":"tea-bot","instance":"c60449e5dbda"}
+# Subtest: SQL: callbacks concurrentes no retroceden el estado final
+ok 85 - SQL: callbacks concurrentes no retroceden el estado final
+  ---
+  duration_ms: 97.292666
+  ...
+# Subtest: SQL: callback anterior a la vinculación se reconcilia al enlazar SID
+ok 86 - SQL: callback anterior a la vinculación se reconcilia al enlazar SID
+  ---
+  duration_ms: 69.914
+  ...
+# Subtest: SQL: lotes mantienen estado independiente por MessageSid
+ok 87 - SQL: lotes mantienen estado independiente por MessageSid
+  ---
+  duration_ms: 103.071084
+  ...
+# Subtest: SQL: falla la notificación y el callback duplicado recupera sin regresar estado
+ok 88 - SQL: falla la notificación y el callback duplicado recupera sin regresar estado
+  ---
+  duration_ms: 79.827375
+  ...
+# Subtest: SQL: finalización agente con Twilio simulado reconcilia callback temprano
+ok 89 - SQL: finalización agente con Twilio simulado reconcilia callback temprano
+  ---
+  duration_ms: 71.865125
+  ...
+1..89
+# tests 97
+# suites 1
+# pass 97
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 553017.242333

@@ -75,6 +75,21 @@ export async function tryAcquireSessionAppLock(resource, timeoutMs = 0) {
   }
 }
 
+export async function verifySessionAppLockHeld(resource) {
+  if (!isConversationDbEnabled()) return true;
+  if (!lockSession || heldLockResource !== resource) return false;
+  try {
+    const request = lockSession.request();
+    request.input('resource', sql.NVarChar(255), resource);
+    const result = await request.query(
+      `SELECT CASE WHEN APPLOCK_TEST(@resource, N'Exclusive', N'Session') = 1 THEN 1 ELSE 0 END AS held`,
+    );
+    return Number(result.recordset?.[0]?.held) === 1;
+  } catch {
+    return false;
+  }
+}
+
 export async function releaseSessionAppLock(resource) {
   if (!lockSession) {
     heldLockResource = null;

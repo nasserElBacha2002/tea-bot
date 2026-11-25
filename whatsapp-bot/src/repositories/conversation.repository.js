@@ -1,4 +1,4 @@
-import { query, isConversationDbEnabled, parseJsonColumn } from '../db/index.js';
+import { query, isConversationDbEnabled, parseJsonColumn, withTransaction } from '../db/index.js';
 import { currentInboundLease, withFencedWrite } from '../monitoring/inbound-lease.js';
 import { deleteDeliveryStatusForConversationIds } from '../monitoring/monitoring.repository.js';
 import { enqueuePendingStorageDeletes } from './retention-pending-storage.repository.js';
@@ -412,15 +412,32 @@ class ConversationRepository {
     return (rows || []).map((row) => row.id);
   }
 
-  async deleteInactiveBatchBefore(cutoff, { limit = 100, transaction } = {}) {
-    const batch = await this.deleteInactiveRetentionBatch(cutoff, { limit, transaction });
-    return batch.rows;
+  async deleteInactiveBatchBefore(cutoff, { limit = 100, transaction, attachmentRepo } = {}) {
+    if (transaction) {
+      const batch = await this.deleteInactiveRetentionBatch(cutoff, {
+        limit,
+        transaction,
+        attachmentRepo,
+      });
+      return batch.rows;
+    }
+    return withTransaction(async (tx) => {
+      const batch = await this.deleteInactiveRetentionBatch(cutoff, {
+        limit,
+        transaction: tx,
+        attachmentRepo,
+      });
+      return batch.rows;
+    });
   }
 
   /**
    * Un solo batch transaccional: candidatos, adjuntos, delivery_status y DELETE revalidado.
    */
   async deleteInactiveRetentionBatch(cutoff, { limit = 100, transaction, attachmentRepo } = {}) {
+    if (!transaction) {
+      throw new Error('deleteInactiveRetentionBatch requires an active transaction');
+    }
     const conversationIds = await this.listInactiveBatchIdsBefore(cutoff, { limit, transaction });
     if (conversationIds.length === 0) {
       return { rows: [], storageKeys: [], deliveryStatusDeleted: 0 };
@@ -431,12 +448,7 @@ class ConversationRepository {
       storageKeys = await attachmentRepo.listStoredKeysByConversationIds(conversationIds, { transaction });
     }
     if (storageKeys.length > 0) {
-      try {
-        await enqueuePendingStorageDeletes(storageKeys, { transaction });
-      } catch (error) {
-        const missingTable = /retention_pending_storage_deletes/i.test(String(error?.message || ''));
-        if (!missingTable) throw error;
-      }
+      await enqueuePendingStorageDeletes(storageKeys, { transaction });
     }
 
     const deliveryStatusDeleted = await deleteDeliveryStatusForConversationIds(

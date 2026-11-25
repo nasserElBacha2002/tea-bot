@@ -564,6 +564,72 @@ export async function deleteDeliveryStatusForConversationIds(conversationIds, { 
   return Number(rows?.length ?? 0);
 }
 
+export async function patchRetentionJobAttemptSkip(jobName, { lastAttemptAt, lastSkipReason }) {
+  await query(
+    `UPDATE dbo.monitoring_job_status
+     SET details_json = JSON_MODIFY(
+           JSON_MODIFY(ISNULL(details_json, N'{}'), N'$.lastAttemptAt', $2),
+           N'$.lastSkipReason', $3
+         ),
+         updated_at = SYSUTCDATETIME()
+     WHERE job_name = $1`,
+    [jobName, lastAttemptAt, lastSkipReason],
+  );
+}
+
+export async function upsertJobStatusRetentionOwner(jobName, fields, { ownerRunId } = {}) {
+  const details = JSON.stringify({
+    lastDeletedCount: fields.lastDeletedCount ?? null,
+    lastRuntimeCleanupFailed: fields.lastRuntimeCleanupFailed ?? null,
+    lastDurationMs: fields.lastDurationMs ?? null,
+    lastSuccessfulFinishedAt: fields.lastSuccessfulFinishedAt ?? null,
+    lastFailedAt: fields.lastFailedAt ?? null,
+    lastAttemptAt: fields.lastAttemptAt ?? null,
+    lastSkipReason: fields.lastSkipReason ?? null,
+    activeRunId: fields.activeRunId ?? null,
+    pendingRuntimeCleanup: fields.pendingRuntimeCleanup ?? null,
+    pendingMediaDeletes: fields.pendingMediaDeletes ?? null,
+  });
+  const params = [
+    jobName,
+    fields.lastStartedAt || null,
+    fields.lastFinishedAt || null,
+    fields.lastStatus || null,
+    fields.lastError ? String(fields.lastError).slice(0, 400) : null,
+    details,
+    ownerRunId || null,
+  ];
+  const { rows } = await query(
+    `UPDATE dbo.monitoring_job_status
+     SET last_started_at = $2,
+         last_finished_at = $3,
+         last_status = $4,
+         last_error = $5,
+         details_json = $6,
+         updated_at = SYSUTCDATETIME()
+     OUTPUT INSERTED.job_name
+     WHERE job_name = $1
+       AND (
+         $7 IS NULL
+         OR JSON_VALUE(details_json, N'$.activeRunId') = $7
+         OR last_status IS NULL
+         OR last_status <> N'RUNNING'
+       )`,
+    params,
+  );
+  if (rows.length > 0) return true;
+  const insertParams = params.slice(0, -1);
+  await query(
+    `INSERT INTO dbo.monitoring_job_status (
+      job_name, last_started_at, last_finished_at, last_status, last_error, details_json
+    )
+    SELECT $1, $2, $3, $4, $5, $6
+    WHERE NOT EXISTS (SELECT 1 FROM dbo.monitoring_job_status WHERE job_name = $1)`,
+    insertParams,
+  );
+  return false;
+}
+
 export async function upsertJobStatus(jobName, fields) {
   const details = JSON.stringify({
     lastDeletedCount: fields.lastDeletedCount ?? null,

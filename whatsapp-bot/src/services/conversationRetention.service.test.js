@@ -30,6 +30,7 @@ function createHarness({ batches = [], onDelete, resetImpl } = {}) {
     dbEnabled: () => true,
     acquireLock: async () => ({ acquired: true, returnCode: 0 }),
     releaseLock: async () => {},
+    verifyLock: async () => true,
     runtimeSession: {
       resetSessionForDeletedConversation: async (userId, conversationId) => {
         calls.reset += 1;
@@ -106,19 +107,28 @@ test('runSweep elimina inactivas en batch y resetea sesiones runtime', async () 
   });
 });
 
-test('batchSize configurado 1000 con tope 500 procesa todas las filas', async () => {
+test('batchSize configurado 1000 con tope 500 procesa 1200 filas en lotes completos y final parcial', async () => {
   await withRetentionConfig({ conversationRetentionBatchSize: 500 }, async () => {
-    const remaining = Array.from({ length: 12 }, (_, i) => ({
+    const total = 1200;
+    const remaining = Array.from({ length: total }, (_, i) => ({
       id: `c${i}`,
       externalUserId: `user:c${i}`,
     }));
-    const { service } = createHarness({
-      onDelete: ({ limit }) => remaining.splice(0, limit),
+    const limits = [];
+    const { service, calls } = createHarness({
+      onDelete: ({ limit }) => {
+        limits.push(limit);
+        return remaining.splice(0, limit);
+      },
       resetImpl: async () => ({ action: 'no_session' }),
     });
     const result = await service.runSweep();
-    assert.equal(result.conversationsDeleted, 12);
-    assert.equal(result.runtimeCleaned, 0);
+    assert.equal(result.conversationsDeleted, total);
+    assert.equal(calls.delete, 4);
+    assert.deepEqual(limits, [500, 500, 500, 500]);
+    const second = await service.runSweep();
+    assert.equal(second.conversationsDeleted, 0);
+    assert.equal(calls.delete, 5);
   });
 });
 
@@ -272,6 +282,7 @@ test('shutdown interrumpe sin job_finished SUCCESS', async () => {
       dbEnabled: () => true,
       acquireLock: async () => ({ acquired: true, returnCode: 0 }),
       releaseLock: async () => {},
+      verifyLock: async () => true,
       runTransaction: async (fn) => fn(null),
       mediaService: { deleteStoredObjects: async () => ({ deleted: 1, failed: 0 }) },
       attachmentRepo: { listStoredKeysByConversationIds: async () => [] },
@@ -313,6 +324,7 @@ test('limpia runtime solo si la sesión coincide con la conversación eliminada'
       dbEnabled: () => true,
       acquireLock: async () => ({ acquired: true }),
       releaseLock: async () => {},
+      verifyLock: async () => true,
       runTransaction: async (fn) => fn(null),
       mediaService: { deleteStoredObjects: async () => ({ deleted: 0, failed: 0 }) },
       attachmentRepo: { listStoredKeysByConversationIds: async () => [] },

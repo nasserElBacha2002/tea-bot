@@ -64,6 +64,42 @@ test('bindConversationId a otra conversación resetea history/variables', async 
   assert.deepEqual(session.history, []);
 });
 
+test('mutación entre resolveActiveConversation y reset evita borrado', async () => {
+  await sessionService.createSession(USER, 'main-menu', 'welcome', {});
+  const deletedId = '99999999-9999-4999-8999-999999999999';
+  let releaseBarrier;
+  const barrier = new Promise((resolve) => { releaseBarrier = resolve; });
+  const pending = sessionService.resetSessionForDeletedConversation(
+    USER,
+    deletedId,
+    {
+      resolveActiveConversation: async () => {
+        await barrier;
+        return null;
+      },
+    },
+  );
+  await sessionService.updateSession(USER, { variables: { touched: true } });
+  releaseBarrier();
+  const result = await pending;
+  assert.equal(result.action, 'skipped_concurrent_mutation');
+  assert.ok(sessionService.getSession(USER));
+});
+
+test('replace total de sesión antes del reset la conserva', async () => {
+  await sessionService.createSession(USER, 'main-menu', 'welcome', {
+    conversationId: 'aaaa1111-1111-4111-8111-111111111111',
+  });
+  const deletedId = 'aaaa1111-1111-4111-8111-111111111111';
+  await sessionService.updateSession(USER, {
+    conversationId: 'bbbb2222-2222-4222-8222-222222222222',
+    variables: {},
+    __resetHistory: true,
+  });
+  const result = await sessionService.resetSessionForDeletedConversation(USER, deletedId);
+  assert.equal(result.action, 'skipped_bound_to_other_conversation');
+});
+
 test('sesión legacy consulta resolveActiveConversation antes de resetear', async () => {
   await sessionService.createSession(USER, 'main-menu', 'welcome', {});
   let queried = false;

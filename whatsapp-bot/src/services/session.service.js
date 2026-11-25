@@ -22,6 +22,16 @@ class SessionService {
     this.lastPersistBytes = 0;
   }
 
+  _sessionGeneration(session) {
+    return session?.updatedAt || '';
+  }
+
+  _assertSessionUnchanged(userId, generation) {
+    const current = this.sessions[userId];
+    if (!current) return false;
+    return this._sessionGeneration(current) === generation;
+  }
+
   /**
    * Carga las sesiones desde el archivo JSON al iniciar.
    */
@@ -157,8 +167,10 @@ class SessionService {
     if (!userId || !conversationId) return this.getSession(userId);
     const current = this.sessions[userId];
     if (!current) return null;
+    const observedGen = this._sessionGeneration(current);
     const bound = String(conversationId).toLowerCase();
     if (String(current.conversationId || '').toLowerCase() === bound) return current;
+    if (!this._assertSessionUnchanged(userId, observedGen)) return this.getSession(userId);
     const previousBound = String(current.conversationId || '').toLowerCase();
     if (previousBound && previousBound !== bound) {
       return this.updateSession(userId, {
@@ -167,6 +179,7 @@ class SessionService {
         __resetHistory: true,
       }, perfContext);
     }
+    if (!this._assertSessionUnchanged(userId, observedGen)) return this.getSession(userId);
     return this.updateSession(userId, { conversationId: bound }, perfContext);
   }
 
@@ -185,6 +198,7 @@ class SessionService {
     const deletedId = String(deletedConversationId).toLowerCase();
     const session = this.sessions[userId];
     if (!session) return { action: 'no_session' };
+    const initialGen = this._sessionGeneration(session);
 
     const sessionConversationId = session.conversationId
       ? String(session.conversationId).toLowerCase()
@@ -198,29 +212,46 @@ class SessionService {
       const active = await resolveActiveConversation();
       const activeId = active?.id ? String(active.id).toLowerCase() : null;
       if (activeId && activeId !== deletedId) {
-        await this.bindConversationId(userId, activeId, perfContext);
+        if (!this._assertSessionUnchanged(userId, initialGen)) {
+          return { action: 'skipped_concurrent_mutation' };
+        }
+        const bound = await this.bindConversationId(userId, activeId, perfContext);
+        if (!bound) return { action: 'skipped_concurrent_mutation' };
         return { action: 'skipped_new_conversation' };
       }
     }
 
     const latest = this.sessions[userId];
     if (!latest) return { action: 'no_session' };
+    if (!sessionConversationId && this._sessionGeneration(latest) !== initialGen) {
+      const rebound = latest.conversationId ? String(latest.conversationId).toLowerCase() : null;
+      if (rebound && rebound !== deletedId) {
+        return { action: 'skipped_bound_to_other_conversation' };
+      }
+      if (!rebound) {
+        return { action: 'skipped_concurrent_mutation' };
+      }
+    }
+    const gateGen = this._sessionGeneration(latest);
+    if (!this._assertSessionUnchanged(userId, gateGen)) {
+      return { action: 'skipped_concurrent_mutation' };
+    }
     const latestConversationId = latest.conversationId
       ? String(latest.conversationId).toLowerCase()
       : null;
     if (latestConversationId && latestConversationId !== deletedId) {
       return { action: 'skipped_bound_to_other_conversation' };
     }
-    if (!latestConversationId && typeof resolveActiveConversation === 'function') {
-      const active = await resolveActiveConversation();
-      const activeId = active?.id ? String(active.id).toLowerCase() : null;
-      if (activeId && activeId !== deletedId) {
-        await this.bindConversationId(userId, activeId, perfContext);
-        return { action: 'skipped_new_conversation' };
-      }
+    if (latestConversationId === null && sessionConversationId === null) {
+      // Sin vínculo y SQL sin conversación activa distinta: puede resetear si la generación sigue igual.
+    } else if (latestConversationId !== deletedId) {
+      return { action: 'skipped_concurrent_mutation' };
     }
-
-    await this.resetSession(userId, perfContext);
+    if (!this._assertSessionUnchanged(userId, gateGen)) {
+      return { action: 'skipped_concurrent_mutation' };
+    }
+    delete this.sessions[userId];
+    await this.saveSessions(perfContext);
     return { action: 'reset' };
   }
 }
