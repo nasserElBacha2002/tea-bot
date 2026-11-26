@@ -22,17 +22,18 @@ const EXPORT_RE = [
   /export\s*\{([^}]+)\}/g,
 ];
 
-async function walk(dir, acc = []) {
+async function walk(dir, acc = [], errors = { readdir: 0 }) {
   let entries = [];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
+    errors.readdir += 1;
     return acc;
   }
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) await walk(full, acc);
+    if (entry.isDirectory()) await walk(full, acc, errors);
     else if (SOURCE_EXT.has(path.extname(entry.name))) acc.push(full);
   }
   return acc;
@@ -64,11 +65,17 @@ async function main() {
   await mkdir(outDir, { recursive: true });
   const roots = ['whatsapp-bot/src', 'frontend/src'].map((rel) => path.join(repoRoot, rel));
   const files = [];
-  for (const root of roots) files.push(...(await walk(root)));
+  const walkErrors = { readdir: 0 };
+  const readErrors = { read: 0 };
+  for (const root of roots) files.push(...(await walk(root, [], walkErrors)));
   const texts = new Map();
   for (const file of files) {
     const rel = path.relative(repoRoot, file).split(path.sep).join('/');
-    texts.set(rel, await readFile(file, 'utf8'));
+    try {
+      texts.set(rel, await readFile(file, 'utf8'));
+    } catch {
+      readErrors.read += 1;
+    }
   }
   const dead = [];
   for (const [rel, text] of texts) {
@@ -87,8 +94,13 @@ async function main() {
     }
   }
   const payload = {
-    ok: true,
+    ok: walkErrors.readdir === 0 && readErrors.read === 0,
     tool: 'dead-exports',
+    stats: {
+      discovered: files.length,
+      analyzed: texts.size,
+      read_errors: readErrors.read + walkErrors.readdir,
+    },
     note: 'Equivalente informativo de ts-prune: export con nombre que ningún otro archivo menciona.',
     count: dead.length,
     exports: dead.slice(0, 80),

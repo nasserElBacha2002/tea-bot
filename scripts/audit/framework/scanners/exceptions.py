@@ -9,7 +9,7 @@ from ..textutil import mask_non_code, stable_id
 
 CATCH_RE = re.compile(r"\bcatch\b")
 RETURN_DEFAULT_RE = re.compile(
-    r"\breturn\s+(null|undefined|false|true|\[\]|\{\})\s*;",
+    r"\breturn\s+(null|undefined|false|true|\[\]|\{\})\s*;?",
     re.I,
 )
 LOG_CALL_RE = re.compile(

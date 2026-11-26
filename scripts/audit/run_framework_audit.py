@@ -9,13 +9,15 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 AUDIT_SCRIPTS = Path(__file__).resolve().parent
 if str(AUDIT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPTS))
 
 from framework.baseline import compare_findings, regressable_findings  # noqa: E402
-from framework.config import architecture_exception, audit_dir, is_excluded, repo_root  # noqa: E402
+from framework.architecture_util import exception_applies, validate_architecture_config  # noqa: E402
+from framework.config import architecture_exception, audit_dir, is_excluded, load_architecture_config, repo_root  # noqa: E402
 from framework.gate import evaluate_gate  # noqa: E402
 from framework.models import AuditFinding, finding_key  # noqa: E402
 from framework.report import render_summary  # noqa: E402
@@ -39,23 +41,49 @@ def _apply_exclusions(findings: list[AuditFinding]) -> list[AuditFinding]:
     return findings
 
 
-def _apply_architecture_exceptions(findings: list[AuditFinding]) -> list[AuditFinding]:
+def _apply_architecture_exceptions(findings: list[AuditFinding], texts: dict[str, str]) -> list[AuditFinding]:
     for finding in findings:
         if not finding.evidence.get("never_baseline"):
             continue
         rule = str(finding.evidence.get("rule") or finding.subcategory)
         entry, expired = architecture_exception(rule, finding.file)
-        if entry:
+        if entry and finding.file and exception_applies(entry, rule, finding.file, texts.get(finding.file)):
             finding.status = "accepted-risk"
             finding.blocking = False
             finding.evidence = {
                 **finding.evidence,
                 "architecture_exception": entry.get("reason"),
                 "expires_at": entry.get("expires_at") or entry.get("expires"),
+                "allowed_members": entry.get("allowed_members"),
+            }
+        elif entry:
+            finding.evidence = {
+                **finding.evidence,
+                "architecture_exception_rejected": "usage outside allowed_members",
             }
         elif expired:
             finding.evidence = {**finding.evidence, "architecture_exception_expired": expired}
     return findings
+
+
+def _scanner_integrity_ok(metrics: dict[str, Any]) -> bool:
+    telemetry = metrics.get("scanner_telemetry") or {}
+    sources = telemetry.get("sources") or {}
+    if sources.get("failed", 0) > 0:
+        return False
+    if sources.get("analyzed", 0) < sources.get("discovered", 0):
+        return False
+    for tool in ("function_metrics", "dead_exports"):
+        block = telemetry.get(tool) or {}
+        if block.get("ok") is False:
+            return False
+        if int(block.get("parse_errors") or block.get("read_errors") or 0) > 0:
+            return False
+    tool_status = metrics.get("tool_status") or {}
+    for key in ("functions.error", "dead_exports.error", "architecture.config"):
+        if tool_status.get(key):
+            return False
+    return True
 
 
 def _dedupe(findings: list[AuditFinding]) -> list[AuditFinding]:
@@ -80,9 +108,13 @@ def main() -> int:
     raw = out / "raw"
     raw.mkdir(parents=True, exist_ok=True)
 
-    findings, metrics = scan_sources(root)
+    arch_cfg = load_architecture_config()
+    schema_errors = validate_architecture_config(arch_cfg)
+    findings, metrics, texts = scan_sources(root)
+    if schema_errors:
+        metrics.setdefault("tool_status", {})["architecture.config"] = "; ".join(schema_errors)
     ingest_tool_metrics(metrics, raw, findings)
-    findings = _apply_architecture_exceptions(_apply_exclusions(_dedupe(findings)))
+    findings = _apply_architecture_exceptions(_apply_exclusions(_dedupe(findings)), texts)
     findings.sort(key=lambda item: (item.category, item.file or "", item.id))
 
     baseline_findings_path = out / "baseline" / "findings.baseline.json"
@@ -105,14 +137,16 @@ def main() -> int:
     )
     runtime = os.environ.get("AUDIT_RUNTIME", "0") == "1"
     runtime_incomplete = os.environ.get("AUDIT_RUNTIME_INCOMPLETE", "0") == "1"
+    scanner_ok = _scanner_integrity_ok(metrics)
+    framework_status = "ok" if scanner_ok and not schema_errors else "incomplete"
     current = {
         "run_id": run_id,
         "generated_at": generated_at,
         "run_type": "full",
-        "completed": True,
-        "framework_status": "ok",
+        "completed": framework_status == "ok",
+        "framework_status": framework_status,
         "runtime_collected": runtime,
-        "runtime_incomplete": runtime_incomplete,
+        "runtime_incomplete": runtime_incomplete or not scanner_ok or bool(schema_errors),
     }
     findings_payload = {
         **current,

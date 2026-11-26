@@ -26,17 +26,18 @@ function isTest(rel) {
   return TEST_RE.test(rel) || rel.includes('/__tests__/');
 }
 
-async function walk(dir, acc = []) {
+async function walk(dir, acc = [], errors = { readdir: 0 }) {
   let entries = [];
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
+    errors.readdir += 1;
     return acc;
   }
   for (const entry of entries) {
     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) await walk(full, acc);
+    if (entry.isDirectory()) await walk(full, acc, errors);
     else if (SOURCE_EXT.has(path.extname(entry.name))) acc.push(full);
   }
   return acc;
@@ -74,6 +75,9 @@ export function lintSource(code, filename, tools) {
   const config = [
     {
       files: ['**/*.{js,jsx,ts,tsx,mjs}'],
+      linterOptions: {
+        noInlineConfig: true,
+      },
       languageOptions: {
         ecmaVersion: 2022,
         sourceType: 'module',
@@ -143,16 +147,23 @@ async function main() {
   }
   const roots = (thresholds.scan_roots || ['whatsapp-bot/src', 'frontend/src']).map((rel) => path.join(repoRoot, rel));
   const files = [];
+  const walkErrors = { readdir: 0 };
   for (const root of roots) {
-    const found = await walk(root);
+    const found = await walk(root, [], walkErrors);
     files.push(...found);
   }
   const tools = { Linter, tsParser, thresholds };
   const rows = [];
   const parseErrors = [];
+  let skippedTests = 0;
+  let analyzed = 0;
   for (const file of files) {
     const rel = path.relative(repoRoot, file).split(path.sep).join('/');
-    if (isTest(rel)) continue;
+    if (isTest(rel)) {
+      skippedTests += 1;
+      continue;
+    }
+    analyzed += 1;
     const code = await readFile(file, 'utf8');
     const result = lintSource(code, rel, tools);
     if (!result.ok) {
@@ -162,9 +173,15 @@ async function main() {
     rows.push(...result.functions);
   }
   const payload = {
-    ok: true,
+    ok: parseErrors.length === 0 && walkErrors.readdir === 0,
     function_count: rows.length,
     parse_errors: parseErrors.slice(0, 40),
+    stats: {
+      discovered: files.length,
+      analyzed,
+      skipped: skippedTests,
+      readdir_errors: walkErrors.readdir,
+    },
     functions: rows,
   };
   await writeFile(outFile, `${JSON.stringify(payload, null, 2)}\n`);

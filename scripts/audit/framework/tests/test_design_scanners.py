@@ -10,6 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from framework.architecture_util import axios_allowed_usage, validate_architecture_config  # noqa: E402
 from framework.config import architecture_exception, load_thresholds  # noqa: E402
 from framework.gate import evaluate_gate  # noqa: E402
 from framework.models import AuditFinding  # noqa: E402
@@ -145,6 +146,8 @@ class DesignScannerTests(unittest.TestCase):
             raw = Path(tmp)
             payload = {
                 "ok": True,
+                "stats": {"discovered": 1, "analyzed": 1, "skipped": 0},
+                "parse_errors": [],
                 "functions": [
                     {
                         "file": "whatsapp-bot/src/services/flow-engine.service.js",
@@ -171,7 +174,55 @@ class DesignScannerTests(unittest.TestCase):
         self.assertEqual(metrics["numbers"]["functions.cyclomatic_high"], 1)
         self.assertEqual(metrics["maps"]["functions.cyclomatic"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
         self.assertEqual(metrics["maps"]["functions.params"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
+        self.assertEqual(metrics["maps"]["functions.cyclomatic_peak"]["whatsapp-bot/src/services/flow-engine.service.js"], 29)
         self.assertTrue(any(item.file and item.file.endswith("flow-engine.service.js") for item in findings))
+
+    def test_component_under_src_root_matches_architecture(self):
+        findings: list[AuditFinding] = []
+        _architecture_findings(
+            findings,
+            "frontend/src/components/LegacyWidget.tsx",
+            "import axios from 'axios'\n",
+            load_thresholds(),
+        )
+        rules = [item for item in findings if item.subcategory == "components-must-not-import-axios"]
+        self.assertEqual(len(rules), 1)
+
+    def test_axios_http_call_blocks_in_components(self):
+        findings: list[AuditFinding] = []
+        _architecture_findings(
+            findings,
+            "frontend/src/features/demo/components/Widget.tsx",
+            "import axios from 'axios'\nexport async function load() { return axios.get('/api'); }\n",
+            load_thresholds(),
+        )
+        self.assertTrue(any(item.subcategory == "components-must-not-call-axios-http" for item in findings))
+
+    def test_axios_exception_requires_allowed_members_only(self):
+        text = "import axios from 'axios'\nif (axios.isAxiosError(e)) {}\n"
+        self.assertTrue(axios_allowed_usage(text, ["isAxiosError"]))
+        bad = "import axios from 'axios'\nawait axios.get('/x')\n"
+        self.assertFalse(axios_allowed_usage(bad, ["isAxiosError"]))
+
+    def test_architecture_config_schema_rejects_global_exception(self):
+        errors = validate_architecture_config({"exceptions": [{"rule": "x", "file": "**/*", "reason": "r", "expires_at": "2099-01-01"}]})
+        self.assertTrue(errors)
+
+    def test_catch_return_without_semicolon(self):
+        found = scan_exceptions({"a.js": "try { work() } catch (e) { return null }"})
+        kinds = {item.subcategory for item in found}
+        self.assertIn("exception-return-default", kinds)
+
+    def test_function_metrics_parse_errors_mark_incomplete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = Path(tmp)
+            (raw / "function-metrics.json").write_text(
+                json.dumps({"ok": False, "error": "parse", "parse_errors": [{"file": "a.js"}], "stats": {}}),
+                encoding="utf-8",
+            )
+            metrics: dict = {}
+            _ingest_function_metrics(metrics, raw, None)
+        self.assertIn("functions.error", metrics.get("tool_status", {}))
 
     def test_never_baseline_layer_rule_blocks_even_when_already_seen(self):
         item = AuditFinding(

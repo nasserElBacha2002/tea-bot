@@ -71,7 +71,7 @@ FUNCTION_RE = re.compile(
     re.M,
 )
 # God-class branch proxy from localizador (includes optional chaining).
-BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|\?\?|\?\.|\|\||&&)\b")
+BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|\?\?|\|\||&&)\b")
 # Route "heavy logic" branches, without optional-chaining noise.
 ROUTE_BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|catch)\b|\?\?|\|\||&&")
 IMPORT_FROM_RE = re.compile(

@@ -1,0 +1,972 @@
+diff --git a/audit/baseline/metrics.baseline.json b/audit/baseline/metrics.baseline.json
+index 643aab5..a547331 100644
+--- a/audit/baseline/metrics.baseline.json
++++ b/audit/baseline/metrics.baseline.json
+@@ -29,7 +29,8 @@
+     "functions.params": 2,
+     "functions.depth_high": 6,
+     "functions.statements_high": 16,
+-    "dead_exports.count": 188
++    "dead_exports.count": 188,
++    "backend.unit_tests.fail_count": 29
+   },
+   "maps": {
+     "complexity.cyclomatic": {
+@@ -591,6 +592,58 @@
+     "functions.params": {
+       "whatsapp-bot/src/services/flow-engine.service.js": 1,
+       "whatsapp-bot/src/utils/flow-text-field-inspector.js": 1
++    },
++    "functions.cyclomatic_peak": {
++      "whatsapp-bot/src/config.js": 30,
++      "whatsapp-bot/src/controllers/twilio-webhook.controller.js": 31,
++      "whatsapp-bot/src/controllers/webhook.controller.js": 36,
++      "whatsapp-bot/src/monitoring/job-status.store.js": 37,
++      "whatsapp-bot/src/monitoring/monitoring-metrics-query.js": 31,
++      "whatsapp-bot/src/monitoring/monitoring.service.js": 28,
++      "whatsapp-bot/src/monitoring/rules.js": 36,
++      "whatsapp-bot/src/monitoring/twilio-monitor.client.js": 33,
++      "whatsapp-bot/src/monitoring/twilio-usage.client.js": 34,
++      "whatsapp-bot/src/monitoring/whatsapp-billing-dashboard.service.js": 102,
++      "whatsapp-bot/src/monitoring/whatsapp-cost-audit.service.js": 67,
++      "whatsapp-bot/src/monitoring/whatsapp-cost-engine.js": 53,
++      "whatsapp-bot/src/monitoring/whatsapp-effective-period.js": 41,
++      "whatsapp-bot/src/services/agent-outbound-send.service.js": 34,
++      "whatsapp-bot/src/services/conversation-sheet-export.logic.js": 27,
++      "whatsapp-bot/src/services/conversation-takeover.service.js": 30,
++      "whatsapp-bot/src/services/conversation.service.js": 29,
++      "whatsapp-bot/src/services/conversationClassification/classificationLogging.service.js": 26,
++      "whatsapp-bot/src/services/conversationClassification/nodeClassification.service.js": 31,
++      "whatsapp-bot/src/services/conversationClassification/textClassification.service.js": 41,
++      "whatsapp-bot/src/services/conversationExport.service.js": 108,
++      "whatsapp-bot/src/services/conversationRetention.service.js": 29,
++      "whatsapp-bot/src/services/conversationSheetExport.service.js": 62,
++      "whatsapp-bot/src/services/conversationSheetFormatter.service.js": 37,
++      "whatsapp-bot/src/services/export-session-merge.service.js": 41,
++      "whatsapp-bot/src/services/flow-engine.service.js": 107,
++      "whatsapp-bot/src/services/flow-validation-management.service.js": 38,
++      "whatsapp-bot/src/services/session.service.js": 32,
++      "whatsapp-bot/src/services/simulator-persistence.service.js": 26,
++      "whatsapp-bot/src/services/simulator.service.js": 43,
++      "whatsapp-bot/src/services/twilio-inbound-pipeline.js": 64,
++      "whatsapp-bot/src/utils/compile-flow.js": 30,
++      "whatsapp-bot/src/utils/conversation-reentry-policy.js": 34,
++      "whatsapp-bot/src/utils/conversation-search.js": 27,
++      "frontend/src/features/conversations/components/ConversationComposer.tsx": 43,
++      "frontend/src/features/conversations/components/ConversationDetail.tsx": 39,
++      "frontend/src/features/conversations/components/ConversationListItem.tsx": 31,
++      "frontend/src/features/conversations/components/ConversationMessageTimeline.tsx": 26,
++      "frontend/src/features/conversations/pages/ConversationsPage.tsx": 56,
++      "frontend/src/features/conversations/utils/applyConversationLiveEvent.ts": 43,
++      "frontend/src/features/conversations/utils/outboundDeliveryUi.ts": 27,
++      "frontend/src/features/flows/components/FlowGraphNode.tsx": 69,
++      "frontend/src/features/flows/editor/ConversationEditorPage.tsx": 57,
++      "frontend/src/features/flows/editor/model/conversationAdapters.ts": 30,
++      "frontend/src/features/flows/editor/model/publishSummary.ts": 25,
++      "frontend/src/features/flows/editor/state/conversationEditorReducer.ts": 36,
++      "frontend/src/features/flows/utils/flowGraph.mapper.ts": 39,
++      "frontend/src/features/monitoring/components/BillingCostsPanel.tsx": 43,
++      "frontend/src/features/monitoring/pages/MonitoringPage.tsx": 120,
++      "frontend/src/utils/apiError.ts": 28
+     }
+   }
+ }
+diff --git a/scripts/audit/config/audit-architecture.json b/scripts/audit/config/audit-architecture.json
+index 7c9ebca..142e8d1 100644
+--- a/scripts/audit/config/audit-architecture.json
++++ b/scripts/audit/config/audit-architecture.json
+@@ -6,13 +6,15 @@
+       "rule": "components-must-not-import-axios",
+       "file": "frontend/src/features/flows/editor/components/HistoryTimeline.tsx",
+       "reason": "Deuda previa a DIN-552: el componente importa axios solo para axios.isAxiosError. Este ticket no modifica la app.",
+-      "expires_at": "2027-05-26"
++      "expires_at": "2027-05-26",
++      "allowed_members": ["isAxiosError"]
+     },
+     {
+       "rule": "pages-must-not-import-axios",
+       "file": "frontend/src/features/monitoring/pages/MonitoringPage.tsx",
+       "reason": "Deuda previa a DIN-552: la página importa axios solo para axios.isCancel. Este ticket no modifica la app.",
+-      "expires_at": "2027-05-26"
++      "expires_at": "2027-05-26",
++      "allowed_members": ["isCancel"]
+     }
+   ]
+ }
+diff --git a/scripts/audit/config/thresholds.json b/scripts/audit/config/thresholds.json
+index 5acfff9..9f6d639 100644
+--- a/scripts/audit/config/thresholds.json
++++ b/scripts/audit/config/thresholds.json
+@@ -145,6 +145,16 @@
+         "blocking": true,
+         "match_mode": "module"
+       },
++      {
++        "from_glob": "frontend/src/components/**",
++        "to_pattern": "axios",
++        "rule": "components-must-not-import-axios",
++        "severity": "high",
++        "confidence": "high",
++        "status": "detected",
++        "blocking": true,
++        "match_mode": "module"
++      },
+       {
+         "from_glob": "frontend/src/**/pages/**",
+         "to_pattern": "axios",
+@@ -155,6 +165,16 @@
+         "blocking": true,
+         "match_mode": "module"
+       },
++      {
++        "from_glob": "frontend/src/pages/**",
++        "to_pattern": "axios",
++        "rule": "pages-must-not-import-axios",
++        "severity": "high",
++        "confidence": "high",
++        "status": "detected",
++        "blocking": true,
++        "match_mode": "module"
++      },
+       {
+         "from_glob": "whatsapp-bot/src/repositories/**",
+         "to_pattern": "/services/",
+@@ -199,6 +219,7 @@
+       "backend.checkjs.errors": {"tolerance": 0, "priority": "P1"},
+       "backend.syntax.errors": {"tolerance": 0, "priority": "P0"},
+       "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
++      "backend.unit_tests.fail_count": {"tolerance": 0, "priority": "P0"},
+       "security.npm.whatsapp-bot.critical": {"tolerance": 0, "priority": "P0"},
+       "security.npm.whatsapp-bot.high": {"tolerance": 0, "priority": "P1"},
+       "security.npm.frontend.critical": {"tolerance": 0, "priority": "P0"},
+@@ -243,6 +264,11 @@
+         "tolerance": 0,
+         "only_if_at_least": 1,
+         "priority": "P1"
++      },
++      "functions.cyclomatic_peak": {
++        "tolerance": 0,
++        "only_if_at_least": 25,
++        "priority": "P1"
+       }
+     }
+   },
+diff --git a/scripts/audit/framework/config.py b/scripts/audit/framework/config.py
+index 3bd934d..5f61d7b 100644
+--- a/scripts/audit/framework/config.py
++++ b/scripts/audit/framework/config.py
+@@ -32,7 +32,13 @@ def load_architecture_config() -> dict[str, Any]:
+     path = Path(__file__).resolve().parents[1] / "config" / "audit-architecture.json"
+     if not path.is_file():
+         return {"exceptions": []}
+-    return json.loads(path.read_text(encoding="utf-8"))
++    data = json.loads(path.read_text(encoding="utf-8"))
++    from .architecture_util import validate_architecture_config  # local: avoids cycle at import
++
++    errors = validate_architecture_config(data)
++    if errors:
++        data["_schema_errors"] = errors
++    return data
+ 
+ 
+ def architecture_exception(rule: str, file: str | None) -> tuple[dict[str, Any] | None, str | None]:
+diff --git a/scripts/audit/framework/scan.py b/scripts/audit/framework/scan.py
+index 70a4dcb..a50eb16 100644
+--- a/scripts/audit/framework/scan.py
++++ b/scripts/audit/framework/scan.py
+@@ -12,6 +12,7 @@ from fnmatch import fnmatch
+ from pathlib import Path
+ from typing import Any
+ 
++from .architecture_util import AXIOS_HTTP_RE
+ from .config import load_thresholds, repo_root
+ from .models import AuditFinding
+ from .scanners.design import scan_design
+@@ -23,6 +24,7 @@ from .textutil import (
+     extract_imports,
+     find_cycles,
+     line_count,
++    mask_non_code,
+     resolve_specifier,
+     stable_id,
+ )
+@@ -87,7 +89,7 @@ def _finding(**kwargs: Any) -> AuditFinding:
+     return AuditFinding(**kwargs)
+ 
+ 
+-def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any]]:
++def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any], dict[str, str]]:
+     root = root or repo_root()
+     thresholds = load_thresholds()
+     complexity_cfg = thresholds["complexity"]
+@@ -95,7 +97,14 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
+     coupling_cfg = thresholds["coupling"]
+     files = iter_source_files(root)
+     known = {path.relative_to(root).as_posix() for path in files}
+-    texts = {path.relative_to(root).as_posix(): _read(path) for path in files}
++    texts: dict[str, str] = {}
++    read_failed = 0
++    for path in files:
++        rel = path.relative_to(root).as_posix()
++        try:
++            texts[rel] = _read(path)
++        except OSError:
++            read_failed += 1
+     findings: list[AuditFinding] = []
+     cyclomatic_map: dict[str, int] = {}
+     graph: dict[str, set[str]] = {rel: set() for rel in known}
+@@ -242,11 +251,46 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
+             **(design_metrics.get("maps") or {}),
+         },
+         "samples": dict(design_metrics.get("samples") or {}),
++        "scanner_telemetry": {
++            "sources": {
++                "discovered": len(files),
++                "analyzed": len(texts),
++                "skipped": 0,
++                "failed": read_failed,
++            },
++            **(design_metrics.get("scanner_telemetry") or {}),
++        },
+     }
+-    return findings, metrics
++    return findings, metrics, texts
+ 
+ 
+ def _architecture_findings(findings: list[AuditFinding], rel: str, text: str, thresholds: dict[str, Any]) -> None:
++    masked = mask_non_code(text)
++    if AXIOS_HTTP_RE.search(masked) and _matches(
++        rel,
++        [
++            "frontend/src/**/components/**",
++            "frontend/src/components/**",
++            "frontend/src/**/pages/**",
++            "frontend/src/pages/**",
++        ],
++    ):
++        findings.append(
++            _finding(
++                id=stable_id("arch", "axios-http", rel),
++                category="architecture",
++                subcategory="components-must-not-call-axios-http",
++                severity="critical",
++                confidence="high",
++                status="detected",
++                title="Llamada HTTP vía axios en capa UI",
++                description="axios.get/post/request y similares están prohibidos en components/pages.",
++                file=rel,
++                evidence={"rule": "components-must-not-call-axios-http", "never_baseline": True},
++                recommendation="Usar el cliente API de features en lugar de axios directo.",
++                blocking=True,
++            )
++        )
+     bindings = import_bindings(text)
+     for rule in thresholds.get("architecture", {}).get("forbidden_import_patterns") or []:
+         if not fnmatch(rel, rule.get("from_glob") or "**/*"):
+@@ -400,10 +444,20 @@ def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path, findings: list[A
+         samples["syntax"] = failed[:40]
+ 
+     unit_exit = _read_exit_code(raw_dir / "backend-unit-tests.exit")
+-    if unit_exit is not None:
++    unit_summary_path = raw_dir / "backend-unit-tests.json"
++    if unit_summary_path.is_file():
++        summary = json.loads(unit_summary_path.read_text(encoding="utf-8"))
++        fail_count = int(summary.get("fail_count") or summary.get("failures") or 0)
++        numbers["backend.unit_tests.fail_count"] = fail_count
++        numbers["backend.unit_tests.failed"] = 0 if fail_count == 0 else 1
++        tool_status["backend.unit_tests.exit"] = int(summary.get("exit_code") or unit_exit or (1 if fail_count else 0))
++        breakdown = summary.get("failure_kinds") or {}
++        if breakdown:
++            samples["unit_test_failures"] = breakdown
++    elif unit_exit is not None:
+         tool_status["backend.unit_tests.exit"] = unit_exit
+-        # Preservar el fallo de pruebas aparte de la cobertura: 1 = falló, 0 = pasó.
+         numbers["backend.unit_tests.failed"] = 0 if unit_exit == 0 else 1
++        numbers["backend.unit_tests.fail_count"] = 1 if unit_exit != 0 else 0
+ 
+     coverage_path = raw_dir / "backend-coverage.txt"
+     if coverage_path.is_file():
+@@ -425,9 +479,22 @@ def _ingest_function_metrics(
+         return
+     payload = json.loads(path.read_text(encoding="utf-8"))
+     tool_status = metrics.setdefault("tool_status", {})
++    telemetry = metrics.setdefault("scanner_telemetry", {})
++    stats = payload.get("stats") or {}
++    telemetry["function_metrics"] = {
++        "ok": bool(payload.get("ok")),
++        "discovered": int(stats.get("discovered") or 0),
++        "analyzed": int(stats.get("analyzed") or 0),
++        "skipped": int(stats.get("skipped") or 0),
++        "parse_errors": len(payload.get("parse_errors") or []),
++    }
+     if not payload.get("ok"):
+         tool_status["functions.error"] = str(payload.get("error") or "function_metrics_failed")
+         return
++    parse_errors = list(payload.get("parse_errors") or [])
++    if parse_errors:
++        tool_status["functions.error"] = f"parse_errors={len(parse_errors)}"
++        return
+     rows = list(payload.get("functions") or [])
+     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+     for row in rows:
+@@ -491,9 +558,17 @@ def _ingest_function_metrics(
+                 blocking=False,
+             )
+         )
+-        del map_key
++    peak_map: dict[str, int] = {}
++    for row in rows:
++        if row.get("rule") != "complexity":
++            continue
++        rel = str(row.get("file") or "")
++        value = int(row.get("complexity") or 0)
++        if rel:
++            peak_map[rel] = max(peak_map.get(rel, 0), value)
+     maps = metrics.setdefault("maps", {})
+     maps["functions.cyclomatic"] = cc_map
++    maps["functions.cyclomatic_peak"] = peak_map
+     maps["functions.long"] = long_map
+     maps["functions.params"] = param_map
+ 
+@@ -507,9 +582,20 @@ def _ingest_dead_exports(
+     if not path.is_file():
+         return
+     payload = json.loads(path.read_text(encoding="utf-8"))
++    telemetry = metrics.setdefault("scanner_telemetry", {})
++    stats = payload.get("stats") or {}
++    telemetry["dead_exports"] = {
++        "ok": bool(payload.get("ok")),
++        "discovered": int(stats.get("discovered") or 0),
++        "analyzed": int(stats.get("analyzed") or 0),
++        "read_errors": int(stats.get("read_errors") or 0),
++    }
+     if not payload.get("ok"):
+         metrics.setdefault("tool_status", {})["dead_exports.error"] = str(payload.get("error") or "dead_exports_failed")
+         return
++    if int(stats.get("read_errors") or 0) > 0:
++        metrics.setdefault("tool_status", {})["dead_exports.error"] = f"read_errors={stats.get('read_errors')}"
++        return
+     count = int(payload.get("count") or 0)
+     metrics.setdefault("numbers", {})["dead_exports.count"] = count
+     exports = list(payload.get("exports") or [])
+diff --git a/scripts/audit/framework/scanners/dead_env.py b/scripts/audit/framework/scanners/dead_env.py
+index 744df2c..31d3bc7 100644
+--- a/scripts/audit/framework/scanners/dead_env.py
++++ b/scripts/audit/framework/scanners/dead_env.py
+@@ -34,9 +34,28 @@ def read_names(texts: dict[str, str]) -> set[str]:
+     return found
+ 
+ 
++def read_names_by_kind(texts: dict[str, str]) -> tuple[set[str], set[str]]:
++    backend: set[str] = set()
++    vite: set[str] = set()
++    for rel, text in texts.items():
++        is_frontend = rel.startswith("frontend/")
++        for name in ENV_DOT.findall(text):
++            if name.startswith("VITE_") or (is_frontend and "import.meta.env" in text):
++                vite.add(name)
++            elif not name.startswith("VITE_"):
++                backend.add(name)
++        for name in ENV_INDEX.findall(text):
++            if name.startswith("VITE_"):
++                vite.add(name)
++            else:
++                backend.add(name)
++    return backend, vite
++
++
+ def scan(texts: dict[str, str], root: Path | None = None) -> tuple[list[AuditFinding], int]:
+     documented = documented_names(root)
+     used = read_names(texts)
++    backend_used, vite_used = read_names_by_kind(texts)
+     missing = sorted(used - documented)
+     unused = sorted(documented - used)
+     findings: list[AuditFinding] = []
+@@ -54,7 +73,13 @@ def scan(texts: dict[str, str], root: Path | None = None) -> tuple[list[AuditFin
+                     f"{len(missing)} variables se leen vía process.env o import.meta.env "
+                     "y no están en los .env.example."
+                 ),
+-                evidence={"vars": missing[:80], "count": len(missing)},
++                evidence={
++                    "vars": missing[:80],
++                    "count": len(missing),
++                    "backend_vars": sorted(backend_used - documented)[:40],
++                    "vite_vars": sorted(vite_used - documented)[:40],
++                    "native_vite_ignored": ["MODE", "DEV", "PROD", "SSR"],
++                },
+                 recommendation="Documentarlas en .env.example (incluye VITE_* del frontend).",
+                 blocking=False,
+             )
+diff --git a/scripts/audit/framework/scanners/dead_exports.mjs b/scripts/audit/framework/scanners/dead_exports.mjs
+index c7b35d4..42dddb6 100644
+--- a/scripts/audit/framework/scanners/dead_exports.mjs
++++ b/scripts/audit/framework/scanners/dead_exports.mjs
+@@ -22,17 +22,18 @@ const EXPORT_RE = [
+   /export\s*\{([^}]+)\}/g,
+ ];
+ 
+-async function walk(dir, acc = []) {
++async function walk(dir, acc = [], errors = { readdir: 0 }) {
+   let entries = [];
+   try {
+     entries = await readdir(dir, { withFileTypes: true });
+   } catch {
++    errors.readdir += 1;
+     return acc;
+   }
+   for (const entry of entries) {
+     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') continue;
+     const full = path.join(dir, entry.name);
+-    if (entry.isDirectory()) await walk(full, acc);
++    if (entry.isDirectory()) await walk(full, acc, errors);
+     else if (SOURCE_EXT.has(path.extname(entry.name))) acc.push(full);
+   }
+   return acc;
+@@ -64,11 +65,17 @@ async function main() {
+   await mkdir(outDir, { recursive: true });
+   const roots = ['whatsapp-bot/src', 'frontend/src'].map((rel) => path.join(repoRoot, rel));
+   const files = [];
+-  for (const root of roots) files.push(...(await walk(root)));
++  const walkErrors = { readdir: 0 };
++  const readErrors = { read: 0 };
++  for (const root of roots) files.push(...(await walk(root, [], walkErrors)));
+   const texts = new Map();
+   for (const file of files) {
+     const rel = path.relative(repoRoot, file).split(path.sep).join('/');
+-    texts.set(rel, await readFile(file, 'utf8'));
++    try {
++      texts.set(rel, await readFile(file, 'utf8'));
++    } catch {
++      readErrors.read += 1;
++    }
+   }
+   const dead = [];
+   for (const [rel, text] of texts) {
+@@ -87,8 +94,13 @@ async function main() {
+     }
+   }
+   const payload = {
+-    ok: true,
++    ok: walkErrors.readdir === 0 && readErrors.read === 0,
+     tool: 'dead-exports',
++    stats: {
++      discovered: files.length,
++      analyzed: texts.size,
++      read_errors: readErrors.read + walkErrors.readdir,
++    },
+     note: 'Equivalente informativo de ts-prune: export con nombre que ningún otro archivo menciona.',
+     count: dead.length,
+     exports: dead.slice(0, 80),
+diff --git a/scripts/audit/framework/scanners/design.py b/scripts/audit/framework/scanners/design.py
+index 7cd172d..00e88bb 100644
+--- a/scripts/audit/framework/scanners/design.py
++++ b/scripts/audit/framework/scanners/design.py
+@@ -83,4 +83,12 @@ def scan_design(
+         "numbers": numbers,
+         "maps": {"architecture.god_score": god_scores},
+         "samples": samples,
++        "scanner_telemetry": {
++            "design": {
++                "discovered": len(texts),
++                "analyzed": len(texts),
++                "skipped": 0,
++                "failed": 0,
++            }
++        },
+     }
+diff --git a/scripts/audit/framework/scanners/exceptions.py b/scripts/audit/framework/scanners/exceptions.py
+index 99bc455..4d23142 100644
+--- a/scripts/audit/framework/scanners/exceptions.py
++++ b/scripts/audit/framework/scanners/exceptions.py
+@@ -9,7 +9,7 @@ from ..textutil import mask_non_code, stable_id
+ 
+ CATCH_RE = re.compile(r"\bcatch\b")
+ RETURN_DEFAULT_RE = re.compile(
+-    r"\breturn\s+(null|undefined|false|true|\[\]|\{\})\s*;",
++    r"\breturn\s+(null|undefined|false|true|\[\]|\{\})\s*;?",
+     re.I,
+ )
+ LOG_CALL_RE = re.compile(
+diff --git a/scripts/audit/framework/scanners/function_metrics.mjs b/scripts/audit/framework/scanners/function_metrics.mjs
+index 049eae5..65f0001 100644
+--- a/scripts/audit/framework/scanners/function_metrics.mjs
++++ b/scripts/audit/framework/scanners/function_metrics.mjs
+@@ -26,17 +26,18 @@ function isTest(rel) {
+   return TEST_RE.test(rel) || rel.includes('/__tests__/');
+ }
+ 
+-async function walk(dir, acc = []) {
++async function walk(dir, acc = [], errors = { readdir: 0 }) {
+   let entries = [];
+   try {
+     entries = await readdir(dir, { withFileTypes: true });
+   } catch {
++    errors.readdir += 1;
+     return acc;
+   }
+   for (const entry of entries) {
+     if (entry.name === 'node_modules' || entry.name === 'dist' || entry.name === 'coverage') continue;
+     const full = path.join(dir, entry.name);
+-    if (entry.isDirectory()) await walk(full, acc);
++    if (entry.isDirectory()) await walk(full, acc, errors);
+     else if (SOURCE_EXT.has(path.extname(entry.name))) acc.push(full);
+   }
+   return acc;
+@@ -74,6 +75,9 @@ export function lintSource(code, filename, tools) {
+   const config = [
+     {
+       files: ['**/*.{js,jsx,ts,tsx,mjs}'],
++      linterOptions: {
++        noInlineConfig: true,
++      },
+       languageOptions: {
+         ecmaVersion: 2022,
+         sourceType: 'module',
+@@ -143,16 +147,23 @@ async function main() {
+   }
+   const roots = (thresholds.scan_roots || ['whatsapp-bot/src', 'frontend/src']).map((rel) => path.join(repoRoot, rel));
+   const files = [];
++  const walkErrors = { readdir: 0 };
+   for (const root of roots) {
+-    const found = await walk(root);
++    const found = await walk(root, [], walkErrors);
+     files.push(...found);
+   }
+   const tools = { Linter, tsParser, thresholds };
+   const rows = [];
+   const parseErrors = [];
++  let skippedTests = 0;
++  let analyzed = 0;
+   for (const file of files) {
+     const rel = path.relative(repoRoot, file).split(path.sep).join('/');
+-    if (isTest(rel)) continue;
++    if (isTest(rel)) {
++      skippedTests += 1;
++      continue;
++    }
++    analyzed += 1;
+     const code = await readFile(file, 'utf8');
+     const result = lintSource(code, rel, tools);
+     if (!result.ok) {
+@@ -162,9 +173,15 @@ async function main() {
+     rows.push(...result.functions);
+   }
+   const payload = {
+-    ok: true,
++    ok: parseErrors.length === 0 && walkErrors.readdir === 0,
+     function_count: rows.length,
+     parse_errors: parseErrors.slice(0, 40),
++    stats: {
++      discovered: files.length,
++      analyzed,
++      skipped: skippedTests,
++      readdir_errors: walkErrors.readdir,
++    },
+     functions: rows,
+   };
+   await writeFile(outFile, `${JSON.stringify(payload, null, 2)}\n`);
+diff --git a/scripts/audit/framework/scanners/function_metrics.spec.mjs b/scripts/audit/framework/scanners/function_metrics.spec.mjs
+index f5a3efc..6f2c845 100644
+--- a/scripts/audit/framework/scanners/function_metrics.spec.mjs
++++ b/scripts/audit/framework/scanners/function_metrics.spec.mjs
+@@ -37,3 +37,23 @@ test('eslint flags CC, length and processNode-style parameter lists', () => {
+   assert.ok(byRule['max-params']?.some((row) => row.name === 'processNode' && row.params === 10));
+   assert.ok(byRule['max-statements']?.some((row) => row.name === 'processNode' && row.statements > 50));
+ });
++
++test('eslint-disable does not weaken function metric rules', () => {
++  const { Linter } = requireFromFrontend('eslint');
++  const tsParser = requireFromFrontend('typescript-eslint').parser;
++  const thresholds = {
++    complexity: { function_cyclomatic_high: 25 },
++    code_smells: {
++      method_lines: { warning: 80 },
++      param_count: { warning: 6 },
++      max_depth: 4,
++      max_statements: 50,
++    },
++  };
++  const body = Array.from({ length: 90 }, (_, index) => `  if (p0 && p1) { return ${index}; }`).join('\n');
++  const code = `/* eslint-disable complexity, max-lines-per-function */\nexport function risky(p0, p1) {\n${body}\n}\n`;
++  const result = lintSource(code, 'frontend/src/a.tsx', { Linter, tsParser, thresholds });
++  assert.equal(result.ok, true, result.error);
++  const cc = result.functions.filter((row) => row.rule === 'complexity');
++  assert.ok(cc.length > 0, 'expected complexity findings despite eslint-disable');
++});
+diff --git a/scripts/audit/framework/scanners/heuristics.py b/scripts/audit/framework/scanners/heuristics.py
+index 294132c..75ab156 100644
+--- a/scripts/audit/framework/scanners/heuristics.py
++++ b/scripts/audit/framework/scanners/heuristics.py
+@@ -71,7 +71,7 @@ FUNCTION_RE = re.compile(
+     re.M,
+ )
+ # God-class branch proxy from localizador (includes optional chaining).
+-BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|\?\?|\?\.|\|\||&&)\b")
++BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|\?\?|\|\||&&)\b")
+ # Route "heavy logic" branches, without optional-chaining noise.
+ ROUTE_BRANCH_RE = re.compile(r"\b(if|else if|switch|case|for|while|catch)\b|\?\?|\|\||&&")
+ IMPORT_FROM_RE = re.compile(
+diff --git a/scripts/audit/framework/tests/test_design_scanners.py b/scripts/audit/framework/tests/test_design_scanners.py
+index 1ce24e4..9d525a9 100644
+--- a/scripts/audit/framework/tests/test_design_scanners.py
++++ b/scripts/audit/framework/tests/test_design_scanners.py
+@@ -2,16 +2,19 @@
+ 
+ from __future__ import annotations
+ 
++import json
+ import sys
++import tempfile
+ import unittest
+ from pathlib import Path
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+ 
++from framework.architecture_util import axios_allowed_usage, validate_architecture_config  # noqa: E402
+ from framework.config import architecture_exception, load_thresholds  # noqa: E402
+ from framework.gate import evaluate_gate  # noqa: E402
+ from framework.models import AuditFinding  # noqa: E402
+-from framework.scan import _architecture_findings  # noqa: E402
++from framework.scan import _architecture_findings, _ingest_function_metrics  # noqa: E402
+ from framework.scanners.dead_env import read_names  # noqa: E402
+ from framework.scanners.exceptions import scan as scan_exceptions  # noqa: E402
+ from framework.scanners.god_class import score_file  # noqa: E402
+@@ -138,6 +141,89 @@ class DesignScannerTests(unittest.TestCase):
+         self.assertIsNone(expired_entry)
+         self.assertIn("expired", expired_reason or "")
+ 
++    def test_function_metrics_ingest_builds_maps(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            raw = Path(tmp)
++            payload = {
++                "ok": True,
++                "stats": {"discovered": 1, "analyzed": 1, "skipped": 0},
++                "parse_errors": [],
++                "functions": [
++                    {
++                        "file": "whatsapp-bot/src/services/flow-engine.service.js",
++                        "rule": "complexity",
++                        "name": "processNode",
++                        "line": 422,
++                        "complexity": 29,
++                        "message": "complexity",
++                    },
++                    {
++                        "file": "whatsapp-bot/src/services/flow-engine.service.js",
++                        "rule": "max-params",
++                        "name": "processNode",
++                        "line": 422,
++                        "params": 10,
++                        "message": "params",
++                    },
++                ],
++            }
++            (raw / "function-metrics.json").write_text(json.dumps(payload), encoding="utf-8")
++            metrics: dict = {}
++            findings: list[AuditFinding] = []
++            _ingest_function_metrics(metrics, raw, findings)
++        self.assertEqual(metrics["numbers"]["functions.cyclomatic_high"], 1)
++        self.assertEqual(metrics["maps"]["functions.cyclomatic"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
++        self.assertEqual(metrics["maps"]["functions.params"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
++        self.assertEqual(metrics["maps"]["functions.cyclomatic_peak"]["whatsapp-bot/src/services/flow-engine.service.js"], 29)
++        self.assertTrue(any(item.file and item.file.endswith("flow-engine.service.js") for item in findings))
++
++    def test_component_under_src_root_matches_architecture(self):
++        findings: list[AuditFinding] = []
++        _architecture_findings(
++            findings,
++            "frontend/src/components/LegacyWidget.tsx",
++            "import axios from 'axios'\n",
++            load_thresholds(),
++        )
++        rules = [item for item in findings if item.subcategory == "components-must-not-import-axios"]
++        self.assertEqual(len(rules), 1)
++
++    def test_axios_http_call_blocks_in_components(self):
++        findings: list[AuditFinding] = []
++        _architecture_findings(
++            findings,
++            "frontend/src/features/demo/components/Widget.tsx",
++            "import axios from 'axios'\nexport async function load() { return axios.get('/api'); }\n",
++            load_thresholds(),
++        )
++        self.assertTrue(any(item.subcategory == "components-must-not-call-axios-http" for item in findings))
++
++    def test_axios_exception_requires_allowed_members_only(self):
++        text = "import axios from 'axios'\nif (axios.isAxiosError(e)) {}\n"
++        self.assertTrue(axios_allowed_usage(text, ["isAxiosError"]))
++        bad = "import axios from 'axios'\nawait axios.get('/x')\n"
++        self.assertFalse(axios_allowed_usage(bad, ["isAxiosError"]))
++
++    def test_architecture_config_schema_rejects_global_exception(self):
++        errors = validate_architecture_config({"exceptions": [{"rule": "x", "file": "**/*", "reason": "r", "expires_at": "2099-01-01"}]})
++        self.assertTrue(errors)
++
++    def test_catch_return_without_semicolon(self):
++        found = scan_exceptions({"a.js": "try { work() } catch (e) { return null }"})
++        kinds = {item.subcategory for item in found}
++        self.assertIn("exception-return-default", kinds)
++
++    def test_function_metrics_parse_errors_mark_incomplete(self):
++        with tempfile.TemporaryDirectory() as tmp:
++            raw = Path(tmp)
++            (raw / "function-metrics.json").write_text(
++                json.dumps({"ok": False, "error": "parse", "parse_errors": [{"file": "a.js"}], "stats": {}}),
++                encoding="utf-8",
++            )
++            metrics: dict = {}
++            _ingest_function_metrics(metrics, raw, None)
++        self.assertIn("functions.error", metrics.get("tool_status", {}))
++
+     def test_never_baseline_layer_rule_blocks_even_when_already_seen(self):
+         item = AuditFinding(
+             id="layer",
+diff --git a/scripts/audit/run_backend_unit_coverage.mjs b/scripts/audit/run_backend_unit_coverage.mjs
+index c8bb32e..1475e8f 100755
+--- a/scripts/audit/run_backend_unit_coverage.mjs
++++ b/scripts/audit/run_backend_unit_coverage.mjs
+@@ -1,13 +1,15 @@
+ #!/usr/bin/env node
+ // Cobertura de las pruebas unitarias del backend (sin integración SQL).
+-import { readdir } from 'node:fs/promises';
++import { mkdir, writeFile } from 'node:fs/promises';
+ import { spawn } from 'node:child_process';
+ import path from 'node:path';
+ import { fileURLToPath } from 'node:url';
++import { readdir } from 'node:fs/promises';
+ 
+ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+ const backend = path.join(repo, 'whatsapp-bot');
+ const src = path.join(backend, 'src');
++const rawDir = path.join(repo, 'audit/raw');
+ 
+ async function walk(dir) {
+   const entries = await readdir(dir, { withFileTypes: true });
+@@ -25,23 +27,91 @@ function isIntegration(file) {
+   return name.endsWith('.integration.test.js') || name === 'conversation-takeover.distributed.test.js';
+ }
+ 
++function classifyLine(line) {
++  if (/AssertionError|ERR_ASSERTION/.test(line)) return 'assertion';
++  if (/ERR_MODULE_NOT_FOUND|Cannot find module|ERR_REQUIRE_ESM/.test(line)) return 'config';
++  if (/ECONN|ETIMEOUT|SQL Server|ConnectionError/i.test(line)) return 'infra';
++  return 'other';
++}
++
++function summarizeOutput(text, exitCode) {
++  const kinds = { assertion: 0, config: 0, infra: 0, other: 0 };
++  let failCount = 0;
++  const summary = text.match(/# fail (\d+)/);
++  if (summary) {
++    failCount = Number(summary[1]);
++  } else {
++    const failLines = text.match(/^✖\s.+$/gm) || [];
++    failCount = failLines.length;
++  }
++  const blocks = text.split(/\n(?=# Subtest:|^✖ )/gm);
++  for (const block of blocks) {
++    if (!/^✖/.test(block.trim()) && !block.includes('✖')) continue;
++    const kind = classifyLine(block);
++    kinds[kind] = (kinds[kind] || 0) + 1;
++  }
++  if (!Object.values(kinds).some((n) => n > 0) && failCount > 0) {
++    kinds.assertion = failCount;
++  }
++  if (exitCode !== 0 && failCount === 0) {
++    failCount = 1;
++    kinds.other = 1;
++  }
++  return { fail_count: failCount, failure_kinds: kinds };
++}
++
+ const files = (await walk(src)).filter((file) => !isIntegration(file)).sort();
+ if (files.length === 0) {
+   console.error('run_backend_unit_coverage: no hay pruebas unitarias');
+   process.exit(1);
+ }
+ 
++await mkdir(rawDir, { recursive: true });
++const logPath = path.join(rawDir, 'backend-unit-tests.log');
++const jsonOut = path.join(rawDir, 'backend-unit-tests.json');
++const tapPath = path.join(rawDir, 'backend-unit-tests.tap');
++
+ const args = [
+   '--test',
+   '--experimental-test-coverage',
+   '--test-coverage-include=src/**/*.js',
+   '--test-coverage-exclude=src/**/*.test.js',
+   '--test-reporter=spec',
++  '--test-reporter=tap',
++  '--test-reporter-destination=stdout',
++  '--test-reporter-destination',
++  tapPath,
+   ...files,
+ ];
+ 
+-const child = spawn(process.execPath, args, { cwd: backend, stdio: 'inherit' });
+-child.on('exit', (code, signal) => {
+-  if (signal) process.exit(1);
+-  process.exit(code ?? 1);
++const child = spawn(process.execPath, args, { cwd: backend, stdio: ['inherit', 'pipe', 'pipe'] });
++let captured = '';
++child.stdout.on('data', (chunk) => {
++  const text = chunk.toString();
++  captured += text;
++  process.stdout.write(chunk);
++});
++child.stderr.on('data', (chunk) => {
++  const text = chunk.toString();
++  captured += text;
++  process.stderr.write(chunk);
+ });
++child.on('exit', async (code, signal) => {
++  const exitCode = signal ? 1 : (code ?? 1);
++  await writeFile(logPath, captured);
++  let tapText = '';
++  try {
++    const { readFile } = await import('node:fs/promises');
++    tapText = await readFile(tapPath, 'utf8');
++  } catch {
++    tapText = '';
++  }
++  const parsed = summarizeOutput(`${captured}\n${tapText}`, exitCode);
++  const summary = {
++    exit_code: exitCode,
++    ...parsed,
++    files_executed: files.length,
++  };
++  await writeFile(jsonOut, `${JSON.stringify(summary, null, 2)}\n`);
++  process.exit(exitCode);
++});
+\ No newline at end of file
+diff --git a/scripts/audit/run_framework_audit.py b/scripts/audit/run_framework_audit.py
+index 71b62f0..34b4bfd 100755
+--- a/scripts/audit/run_framework_audit.py
++++ b/scripts/audit/run_framework_audit.py
+@@ -9,13 +9,15 @@ import os
+ import sys
+ from datetime import datetime, timezone
+ from pathlib import Path
++from typing import Any
+ 
+ AUDIT_SCRIPTS = Path(__file__).resolve().parent
+ if str(AUDIT_SCRIPTS) not in sys.path:
+     sys.path.insert(0, str(AUDIT_SCRIPTS))
+ 
+ from framework.baseline import compare_findings, regressable_findings  # noqa: E402
+-from framework.config import architecture_exception, audit_dir, is_excluded, repo_root  # noqa: E402
++from framework.architecture_util import exception_applies, validate_architecture_config  # noqa: E402
++from framework.config import architecture_exception, audit_dir, is_excluded, load_architecture_config, repo_root  # noqa: E402
+ from framework.gate import evaluate_gate  # noqa: E402
+ from framework.models import AuditFinding, finding_key  # noqa: E402
+ from framework.report import render_summary  # noqa: E402
+@@ -39,25 +41,51 @@ def _apply_exclusions(findings: list[AuditFinding]) -> list[AuditFinding]:
+     return findings
+ 
+ 
+-def _apply_architecture_exceptions(findings: list[AuditFinding]) -> list[AuditFinding]:
++def _apply_architecture_exceptions(findings: list[AuditFinding], texts: dict[str, str]) -> list[AuditFinding]:
+     for finding in findings:
+         if not finding.evidence.get("never_baseline"):
+             continue
+         rule = str(finding.evidence.get("rule") or finding.subcategory)
+         entry, expired = architecture_exception(rule, finding.file)
+-        if entry:
++        if entry and finding.file and exception_applies(entry, rule, finding.file, texts.get(finding.file)):
+             finding.status = "accepted-risk"
+             finding.blocking = False
+             finding.evidence = {
+                 **finding.evidence,
+                 "architecture_exception": entry.get("reason"),
+                 "expires_at": entry.get("expires_at") or entry.get("expires"),
++                "allowed_members": entry.get("allowed_members"),
++            }
++        elif entry:
++            finding.evidence = {
++                **finding.evidence,
++                "architecture_exception_rejected": "usage outside allowed_members",
+             }
+         elif expired:
+             finding.evidence = {**finding.evidence, "architecture_exception_expired": expired}
+     return findings
+ 
+ 
++def _scanner_integrity_ok(metrics: dict[str, Any]) -> bool:
++    telemetry = metrics.get("scanner_telemetry") or {}
++    sources = telemetry.get("sources") or {}
++    if sources.get("failed", 0) > 0:
++        return False
++    if sources.get("analyzed", 0) < sources.get("discovered", 0):
++        return False
++    for tool in ("function_metrics", "dead_exports"):
++        block = telemetry.get(tool) or {}
++        if block.get("ok") is False:
++            return False
++        if int(block.get("parse_errors") or block.get("read_errors") or 0) > 0:
++            return False
++    tool_status = metrics.get("tool_status") or {}
++    for key in ("functions.error", "dead_exports.error", "architecture.config"):
++        if tool_status.get(key):
++            return False
++    return True
++
++
+ def _dedupe(findings: list[AuditFinding]) -> list[AuditFinding]:
+     best: dict[str, AuditFinding] = {}
+     for finding in findings:
+@@ -80,9 +108,13 @@ def main() -> int:
+     raw = out / "raw"
+     raw.mkdir(parents=True, exist_ok=True)
+ 
+-    findings, metrics = scan_sources(root)
++    arch_cfg = load_architecture_config()
++    schema_errors = validate_architecture_config(arch_cfg)
++    findings, metrics, texts = scan_sources(root)
++    if schema_errors:
++        metrics.setdefault("tool_status", {})["architecture.config"] = "; ".join(schema_errors)
+     ingest_tool_metrics(metrics, raw, findings)
+-    findings = _apply_architecture_exceptions(_apply_exclusions(_dedupe(findings)))
++    findings = _apply_architecture_exceptions(_apply_exclusions(_dedupe(findings)), texts)
+     findings.sort(key=lambda item: (item.category, item.file or "", item.id))
+ 
+     baseline_findings_path = out / "baseline" / "findings.baseline.json"
+@@ -105,14 +137,16 @@ def main() -> int:
+     )
+     runtime = os.environ.get("AUDIT_RUNTIME", "0") == "1"
+     runtime_incomplete = os.environ.get("AUDIT_RUNTIME_INCOMPLETE", "0") == "1"
++    scanner_ok = _scanner_integrity_ok(metrics)
++    framework_status = "ok" if scanner_ok and not schema_errors else "incomplete"
+     current = {
+         "run_id": run_id,
+         "generated_at": generated_at,
+         "run_type": "full",
+-        "completed": True,
+-        "framework_status": "ok",
++        "completed": framework_status == "ok",
++        "framework_status": framework_status,
+         "runtime_collected": runtime,
+-        "runtime_incomplete": runtime_incomplete,
++        "runtime_incomplete": runtime_incomplete or not scanner_ok or bool(schema_errors),
+     }
+     findings_payload = {
+         **current,
+diff --git a/scripts/audit/save_baseline.py b/scripts/audit/save_baseline.py
+index 882f8f2..9d242ee 100755
+--- a/scripts/audit/save_baseline.py
++++ b/scripts/audit/save_baseline.py
+@@ -26,6 +26,7 @@ REQUIRED_NUMBERS = (
+     "backend.syntax.errors",
+     "backend.coverage.lines_pct",
+     "backend.unit_tests.failed",
++    "backend.unit_tests.fail_count",
+     "exceptions.empty",
+     "exceptions.log_only",
+     "exceptions.return_default",
+@@ -39,6 +40,7 @@ REQUIRED_MAPS = (
+     "functions.long",
+     "functions.cyclomatic",
+     "functions.params",
++    "functions.cyclomatic_peak",
+ )
+ 
+ 

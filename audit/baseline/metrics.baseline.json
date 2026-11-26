@@ -29,7 +29,8 @@
     "functions.params": 2,
     "functions.depth_high": 6,
     "functions.statements_high": 16,
-    "dead_exports.count": 188
+    "dead_exports.count": 188,
+    "backend.unit_tests.fail_count": 29
   },
   "maps": {
     "complexity.cyclomatic": {
@@ -591,6 +592,58 @@
     "functions.params": {
       "whatsapp-bot/src/services/flow-engine.service.js": 1,
       "whatsapp-bot/src/utils/flow-text-field-inspector.js": 1
+    },
+    "functions.cyclomatic_peak": {
+      "whatsapp-bot/src/config.js": 30,
+      "whatsapp-bot/src/controllers/twilio-webhook.controller.js": 31,
+      "whatsapp-bot/src/controllers/webhook.controller.js": 36,
+      "whatsapp-bot/src/monitoring/job-status.store.js": 37,
+      "whatsapp-bot/src/monitoring/monitoring-metrics-query.js": 31,
+      "whatsapp-bot/src/monitoring/monitoring.service.js": 28,
+      "whatsapp-bot/src/monitoring/rules.js": 36,
+      "whatsapp-bot/src/monitoring/twilio-monitor.client.js": 33,
+      "whatsapp-bot/src/monitoring/twilio-usage.client.js": 34,
+      "whatsapp-bot/src/monitoring/whatsapp-billing-dashboard.service.js": 102,
+      "whatsapp-bot/src/monitoring/whatsapp-cost-audit.service.js": 67,
+      "whatsapp-bot/src/monitoring/whatsapp-cost-engine.js": 53,
+      "whatsapp-bot/src/monitoring/whatsapp-effective-period.js": 41,
+      "whatsapp-bot/src/services/agent-outbound-send.service.js": 34,
+      "whatsapp-bot/src/services/conversation-sheet-export.logic.js": 27,
+      "whatsapp-bot/src/services/conversation-takeover.service.js": 30,
+      "whatsapp-bot/src/services/conversation.service.js": 29,
+      "whatsapp-bot/src/services/conversationClassification/classificationLogging.service.js": 26,
+      "whatsapp-bot/src/services/conversationClassification/nodeClassification.service.js": 31,
+      "whatsapp-bot/src/services/conversationClassification/textClassification.service.js": 41,
+      "whatsapp-bot/src/services/conversationExport.service.js": 108,
+      "whatsapp-bot/src/services/conversationRetention.service.js": 29,
+      "whatsapp-bot/src/services/conversationSheetExport.service.js": 62,
+      "whatsapp-bot/src/services/conversationSheetFormatter.service.js": 37,
+      "whatsapp-bot/src/services/export-session-merge.service.js": 41,
+      "whatsapp-bot/src/services/flow-engine.service.js": 107,
+      "whatsapp-bot/src/services/flow-validation-management.service.js": 38,
+      "whatsapp-bot/src/services/session.service.js": 32,
+      "whatsapp-bot/src/services/simulator-persistence.service.js": 26,
+      "whatsapp-bot/src/services/simulator.service.js": 43,
+      "whatsapp-bot/src/services/twilio-inbound-pipeline.js": 64,
+      "whatsapp-bot/src/utils/compile-flow.js": 30,
+      "whatsapp-bot/src/utils/conversation-reentry-policy.js": 34,
+      "whatsapp-bot/src/utils/conversation-search.js": 27,
+      "frontend/src/features/conversations/components/ConversationComposer.tsx": 43,
+      "frontend/src/features/conversations/components/ConversationDetail.tsx": 39,
+      "frontend/src/features/conversations/components/ConversationListItem.tsx": 31,
+      "frontend/src/features/conversations/components/ConversationMessageTimeline.tsx": 26,
+      "frontend/src/features/conversations/pages/ConversationsPage.tsx": 56,
+      "frontend/src/features/conversations/utils/applyConversationLiveEvent.ts": 43,
+      "frontend/src/features/conversations/utils/outboundDeliveryUi.ts": 27,
+      "frontend/src/features/flows/components/FlowGraphNode.tsx": 69,
+      "frontend/src/features/flows/editor/ConversationEditorPage.tsx": 57,
+      "frontend/src/features/flows/editor/model/conversationAdapters.ts": 30,
+      "frontend/src/features/flows/editor/model/publishSummary.ts": 25,
+      "frontend/src/features/flows/editor/state/conversationEditorReducer.ts": 36,
+      "frontend/src/features/flows/utils/flowGraph.mapper.ts": 39,
+      "frontend/src/features/monitoring/components/BillingCostsPanel.tsx": 43,
+      "frontend/src/features/monitoring/pages/MonitoringPage.tsx": 120,
+      "frontend/src/utils/apiError.ts": 28
     }
   }
 }

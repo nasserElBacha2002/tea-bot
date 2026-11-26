@@ -12,6 +12,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from .architecture_util import AXIOS_HTTP_RE
 from .config import load_thresholds, repo_root
 from .models import AuditFinding
 from .scanners.design import scan_design
@@ -23,6 +24,7 @@ from .textutil import (
     extract_imports,
     find_cycles,
     line_count,
+    mask_non_code,
     resolve_specifier,
     stable_id,
 )
@@ -87,7 +89,7 @@ def _finding(**kwargs: Any) -> AuditFinding:
     return AuditFinding(**kwargs)
 
 
-def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any]]:
+def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any], dict[str, str]]:
     root = root or repo_root()
     thresholds = load_thresholds()
     complexity_cfg = thresholds["complexity"]
@@ -95,7 +97,14 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
     coupling_cfg = thresholds["coupling"]
     files = iter_source_files(root)
     known = {path.relative_to(root).as_posix() for path in files}
-    texts = {path.relative_to(root).as_posix(): _read(path) for path in files}
+    texts: dict[str, str] = {}
+    read_failed = 0
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            texts[rel] = _read(path)
+        except OSError:
+            read_failed += 1
     findings: list[AuditFinding] = []
     cyclomatic_map: dict[str, int] = {}
     graph: dict[str, set[str]] = {rel: set() for rel in known}
@@ -242,11 +251,46 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
             **(design_metrics.get("maps") or {}),
         },
         "samples": dict(design_metrics.get("samples") or {}),
+        "scanner_telemetry": {
+            "sources": {
+                "discovered": len(files),
+                "analyzed": len(texts),
+                "skipped": 0,
+                "failed": read_failed,
+            },
+            **(design_metrics.get("scanner_telemetry") or {}),
+        },
     }
-    return findings, metrics
+    return findings, metrics, texts
 
 
 def _architecture_findings(findings: list[AuditFinding], rel: str, text: str, thresholds: dict[str, Any]) -> None:
+    masked = mask_non_code(text)
+    if AXIOS_HTTP_RE.search(masked) and _matches(
+        rel,
+        [
+            "frontend/src/**/components/**",
+            "frontend/src/components/**",
+            "frontend/src/**/pages/**",
+            "frontend/src/pages/**",
+        ],
+    ):
+        findings.append(
+            _finding(
+                id=stable_id("arch", "axios-http", rel),
+                category="architecture",
+                subcategory="components-must-not-call-axios-http",
+                severity="critical",
+                confidence="high",
+                status="detected",
+                title="Llamada HTTP vía axios en capa UI",
+                description="axios.get/post/request y similares están prohibidos en components/pages.",
+                file=rel,
+                evidence={"rule": "components-must-not-call-axios-http", "never_baseline": True},
+                recommendation="Usar el cliente API de features en lugar de axios directo.",
+                blocking=True,
+            )
+        )
     bindings = import_bindings(text)
     for rule in thresholds.get("architecture", {}).get("forbidden_import_patterns") or []:
         if not fnmatch(rel, rule.get("from_glob") or "**/*"):
@@ -400,10 +444,20 @@ def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path, findings: list[A
         samples["syntax"] = failed[:40]
 
     unit_exit = _read_exit_code(raw_dir / "backend-unit-tests.exit")
-    if unit_exit is not None:
+    unit_summary_path = raw_dir / "backend-unit-tests.json"
+    if unit_summary_path.is_file():
+        summary = json.loads(unit_summary_path.read_text(encoding="utf-8"))
+        fail_count = int(summary.get("fail_count") or summary.get("failures") or 0)
+        numbers["backend.unit_tests.fail_count"] = fail_count
+        numbers["backend.unit_tests.failed"] = 0 if fail_count == 0 else 1
+        tool_status["backend.unit_tests.exit"] = int(summary.get("exit_code") or unit_exit or (1 if fail_count else 0))
+        breakdown = summary.get("failure_kinds") or {}
+        if breakdown:
+            samples["unit_test_failures"] = breakdown
+    elif unit_exit is not None:
         tool_status["backend.unit_tests.exit"] = unit_exit
-        # Preservar el fallo de pruebas aparte de la cobertura: 1 = falló, 0 = pasó.
         numbers["backend.unit_tests.failed"] = 0 if unit_exit == 0 else 1
+        numbers["backend.unit_tests.fail_count"] = 1 if unit_exit != 0 else 0
 
     coverage_path = raw_dir / "backend-coverage.txt"
     if coverage_path.is_file():
@@ -425,8 +479,21 @@ def _ingest_function_metrics(
         return
     payload = json.loads(path.read_text(encoding="utf-8"))
     tool_status = metrics.setdefault("tool_status", {})
+    telemetry = metrics.setdefault("scanner_telemetry", {})
+    stats = payload.get("stats") or {}
+    telemetry["function_metrics"] = {
+        "ok": bool(payload.get("ok")),
+        "discovered": int(stats.get("discovered") or 0),
+        "analyzed": int(stats.get("analyzed") or 0),
+        "skipped": int(stats.get("skipped") or 0),
+        "parse_errors": len(payload.get("parse_errors") or []),
+    }
     if not payload.get("ok"):
         tool_status["functions.error"] = str(payload.get("error") or "function_metrics_failed")
+        return
+    parse_errors = list(payload.get("parse_errors") or [])
+    if parse_errors:
+        tool_status["functions.error"] = f"parse_errors={len(parse_errors)}"
         return
     rows = list(payload.get("functions") or [])
     grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -491,8 +558,17 @@ def _ingest_function_metrics(
                 blocking=False,
             )
         )
+    peak_map: dict[str, int] = {}
+    for row in rows:
+        if row.get("rule") != "complexity":
+            continue
+        rel = str(row.get("file") or "")
+        value = int(row.get("complexity") or 0)
+        if rel:
+            peak_map[rel] = max(peak_map.get(rel, 0), value)
     maps = metrics.setdefault("maps", {})
     maps["functions.cyclomatic"] = cc_map
+    maps["functions.cyclomatic_peak"] = peak_map
     maps["functions.long"] = long_map
     maps["functions.params"] = param_map
 
@@ -506,8 +582,19 @@ def _ingest_dead_exports(
     if not path.is_file():
         return
     payload = json.loads(path.read_text(encoding="utf-8"))
+    telemetry = metrics.setdefault("scanner_telemetry", {})
+    stats = payload.get("stats") or {}
+    telemetry["dead_exports"] = {
+        "ok": bool(payload.get("ok")),
+        "discovered": int(stats.get("discovered") or 0),
+        "analyzed": int(stats.get("analyzed") or 0),
+        "read_errors": int(stats.get("read_errors") or 0),
+    }
     if not payload.get("ok"):
         metrics.setdefault("tool_status", {})["dead_exports.error"] = str(payload.get("error") or "dead_exports_failed")
+        return
+    if int(stats.get("read_errors") or 0) > 0:
+        metrics.setdefault("tool_status", {})["dead_exports.error"] = f"read_errors={stats.get('read_errors')}"
         return
     count = int(payload.get("count") or 0)
     metrics.setdefault("numbers", {})["dead_exports.count"] = count

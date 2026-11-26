@@ -32,7 +32,13 @@ def load_architecture_config() -> dict[str, Any]:
     path = Path(__file__).resolve().parents[1] / "config" / "audit-architecture.json"
     if not path.is_file():
         return {"exceptions": []}
-    return json.loads(path.read_text(encoding="utf-8"))
+    data = json.loads(path.read_text(encoding="utf-8"))
+    from .architecture_util import validate_architecture_config  # local: avoids cycle at import
+
+    errors = validate_architecture_config(data)
+    if errors:
+        data["_schema_errors"] = errors
+    return data
 
 
 def architecture_exception(rule: str, file: str | None) -> tuple[dict[str, Any] | None, str | None]:

@@ -146,7 +146,27 @@
         "match_mode": "module"
       },
       {
+        "from_glob": "frontend/src/components/**",
+        "to_pattern": "axios",
+        "rule": "components-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
+      },
+      {
         "from_glob": "frontend/src/**/pages/**",
+        "to_pattern": "axios",
+        "rule": "pages-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
+      },
+      {
+        "from_glob": "frontend/src/pages/**",
         "to_pattern": "axios",
         "rule": "pages-must-not-import-axios",
         "severity": "high",
@@ -199,6 +219,7 @@
       "backend.checkjs.errors": {"tolerance": 0, "priority": "P1"},
       "backend.syntax.errors": {"tolerance": 0, "priority": "P0"},
       "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
+      "backend.unit_tests.fail_count": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.critical": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.high": {"tolerance": 0, "priority": "P1"},
       "security.npm.frontend.critical": {"tolerance": 0, "priority": "P0"},
@@ -242,6 +263,11 @@
       "functions.params": {
         "tolerance": 0,
         "only_if_at_least": 1,
+        "priority": "P1"
+      },
+      "functions.cyclomatic_peak": {
+        "tolerance": 0,
+        "only_if_at_least": 25,
         "priority": "P1"
       }
     }

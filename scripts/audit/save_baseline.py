@@ -26,6 +26,7 @@ REQUIRED_NUMBERS = (
     "backend.syntax.errors",
     "backend.coverage.lines_pct",
     "backend.unit_tests.failed",
+    "backend.unit_tests.fail_count",
     "exceptions.empty",
     "exceptions.log_only",
     "exceptions.return_default",
@@ -39,6 +40,7 @@ REQUIRED_MAPS = (
     "functions.long",
     "functions.cyclomatic",
     "functions.params",
+    "functions.cyclomatic_peak",
 )
 
 

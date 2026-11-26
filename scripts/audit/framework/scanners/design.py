@@ -83,4 +83,12 @@ def scan_design(
         "numbers": numbers,
         "maps": {"architecture.god_score": god_scores},
         "samples": samples,
+        "scanner_telemetry": {
+            "design": {
+                "discovered": len(texts),
+                "analyzed": len(texts),
+                "skipped": 0,
+                "failed": 0,
+            }
+        },
     }

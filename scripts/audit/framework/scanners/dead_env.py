@@ -34,9 +34,28 @@ def read_names(texts: dict[str, str]) -> set[str]:
     return found
 
 
+def read_names_by_kind(texts: dict[str, str]) -> tuple[set[str], set[str]]:
+    backend: set[str] = set()
+    vite: set[str] = set()
+    for rel, text in texts.items():
+        is_frontend = rel.startswith("frontend/")
+        for name in ENV_DOT.findall(text):
+            if name.startswith("VITE_") or (is_frontend and "import.meta.env" in text):
+                vite.add(name)
+            elif not name.startswith("VITE_"):
+                backend.add(name)
+        for name in ENV_INDEX.findall(text):
+            if name.startswith("VITE_"):
+                vite.add(name)
+            else:
+                backend.add(name)
+    return backend, vite
+
+
 def scan(texts: dict[str, str], root: Path | None = None) -> tuple[list[AuditFinding], int]:
     documented = documented_names(root)
     used = read_names(texts)
+    backend_used, vite_used = read_names_by_kind(texts)
     missing = sorted(used - documented)
     unused = sorted(documented - used)
     findings: list[AuditFinding] = []
@@ -54,7 +73,13 @@ def scan(texts: dict[str, str], root: Path | None = None) -> tuple[list[AuditFin
                     f"{len(missing)} variables se leen vía process.env o import.meta.env "
                     "y no están en los .env.example."
                 ),
-                evidence={"vars": missing[:80], "count": len(missing)},
+                evidence={
+                    "vars": missing[:80],
+                    "count": len(missing),
+                    "backend_vars": sorted(backend_used - documented)[:40],
+                    "vite_vars": sorted(vite_used - documented)[:40],
+                    "native_vite_ignored": ["MODE", "DEV", "PROD", "SSR"],
+                },
                 recommendation="Documentarlas en .env.example (incluye VITE_* del frontend).",
                 blocking=False,
             )

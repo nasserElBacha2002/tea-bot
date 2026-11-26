@@ -6,13 +6,15 @@
       "rule": "components-must-not-import-axios",
       "file": "frontend/src/features/flows/editor/components/HistoryTimeline.tsx",
       "reason": "Deuda previa a DIN-552: el componente importa axios solo para axios.isAxiosError. Este ticket no modifica la app.",
-      "expires_at": "2027-05-26"
+      "expires_at": "2027-05-26",
+      "allowed_members": ["isAxiosError"]
     },
     {
       "rule": "pages-must-not-import-axios",
       "file": "frontend/src/features/monitoring/pages/MonitoringPage.tsx",
       "reason": "Deuda previa a DIN-552: la página importa axios solo para axios.isCancel. Este ticket no modifica la app.",
-      "expires_at": "2027-05-26"
+      "expires_at": "2027-05-26",
+      "allowed_members": ["isCancel"]
     }
   ]
 }
