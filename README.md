@@ -115,6 +115,10 @@ Pruebas locales con curl: ver `whatsapp-bot/README.md`.
 4. **Twilio en producción**: usar HTTPS en la URL del webhook.
 5. `CORS_ORIGIN` en `whatsapp-bot/.env` debe incluir el origen exacto del frontend (p. ej. `https://app.tudominio.com`).
 
+## Auditoría de calidad
+
+`npm run audit` y `npm run audit:security` en la raíz. El detalle de umbrales, baseline y del workflow de CI está en [docs/auditoria-calidad.md](docs/auditoria-calidad.md).
+
 ## Healthchecks
 
 - `GET /health` — ligero (Docker / load balancer).

@@ -1,0 +1,179 @@
+[
+  {
+    "id": "CVE-2026-101898",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: axios: Security control bypass via unapplied HTTP/2 proxy and DNS settings",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-101901",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Denial of Service via unhandled error in HTTP/2 session initialization",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-109461",
+    "severity": "high",
+    "package": "@azure/msal-node",
+    "title": "MSAL Node authorization code flow may disclose parameters to an attacker-controlled endpoint",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-111181",
+    "severity": "high",
+    "package": "body-parser",
+    "title": "body-parser: body-parser: Denial of Service via unhandled decompression stream error",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-12143",
+    "severity": "high",
+    "package": "form-data",
+    "title": "form-data: form-data: Form field override via CRLF injection",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-34077",
+    "severity": "high",
+    "package": "react-router",
+    "title": "react-router: React Router: Denial of Service via client-side Cross-Site Scripting in RSC redirect handling",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42033",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: HTTP Transport Hijacking via Prototype Pollution",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42035",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Arbitrary HTTP header injection via prototype pollution",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42043",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: NO_PROXY bypass via crafted URL",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42211",
+    "severity": "high",
+    "package": "react-router",
+    "title": "react-router: React Router: Remote Code Execution via prototype pollution in Framework Mode",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42264",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Prototype pollution allows information disclosure and request manipulation",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-42342",
+    "severity": "high",
+    "package": "react-router",
+    "title": "react-router: @remix-run/server-runtime: React Router / Remix: Denial of Service via unbounded path expansion in __manifest endpoint",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44486",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Information disclosure of proxy credentials via HTTP redirects",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44487",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Information disclosure of proxy credentials via redirect flows",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44488",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Denial of Service due to unenforced request and response size limits",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44494",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Man-in-the-Middle (MITM) attack via Prototype Pollution",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44495",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Information disclosure due to prototype pollution vulnerability",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-44496",
+    "severity": "high",
+    "package": "axios",
+    "title": "axios: Axios: Client-side Denial of Service via unescaped regex metacharacters in XSRF cookie name",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-48779",
+    "severity": "high",
+    "package": "ws",
+    "title": "ws: ws: Denial of Service via memory exhaustion from small WebSocket fragments",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-55685",
+    "severity": "high",
+    "package": "react-router",
+    "title": "react-router: @remix-run/server-runtime: React Router: Denial of Service via unauthenticated manifest endpoint requests",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  },
+  {
+    "id": "CVE-2026-90711",
+    "severity": "critical",
+    "package": "proxy-addr",
+    "title": "proxy-addr: proxy-addr vulnerable to IP spoofing via IPv4-mapped IPv6 trust subnet",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26",
+    "critical_waiver": "DIN-444-inherited"
+  },
+  {
+    "id": "GHSA-qwww-vcr4-c8h2",
+    "severity": "high",
+    "package": "react-router",
+    "title": "React Router: RSC Mode CSRF Bypass Allows Action Execution Before 400 Response",
+    "reason": "Preexistente al implementar DIN-444. No se actualiza el lockfile ni los Dockerfile en este ticket.",
+    "review_by": "2027-05-26"
+  }
+]

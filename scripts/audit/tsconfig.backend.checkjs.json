@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "maxNodeModuleJsDepth": 0,
+    "moduleDetection": "force"
+  },
+  "include": ["../../whatsapp-bot/src/**/*.js"],
+  "exclude": [
+    "../../whatsapp-bot/src/**/*.test.js",
+    "../../whatsapp-bot/node_modules"
+  ]
+}

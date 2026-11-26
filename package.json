@@ -1,0 +1,17 @@
+{
+  "name": "tea-bot",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Scripts de auditoría de calidad y seguridad (DIN-444). La aplicación vive en whatsapp-bot/ y frontend/.",
+  "scripts": {
+    "audit": "bash scripts/audit/run_full_audit.sh",
+    "audit:strict": "AUDIT_STRICT=1 bash scripts/audit/run_full_audit.sh",
+    "audit:baseline": "python3 scripts/audit/save_baseline.py",
+    "audit:summary": "python3 scripts/audit/generate_audit_summary.py",
+    "audit:security": "bash scripts/ci/run-security.sh",
+    "secrets:scan": "bash scripts/secrets/scan.sh",
+    "secrets:install-hook": "bash scripts/secrets/install-hook.sh",
+    "test:audit": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py' && python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'",
+    "test:audit-policy": "node --test scripts/ci/evaluate-audit.spec.mjs"
+  }
+}

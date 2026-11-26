@@ -1,0 +1,7 @@
+{
+  "kind": "trivy-misconfig",
+  "fingerprints": [
+    "46fe95a18953828f3f97278f",
+    "9d8d867ffb2b0b6d7d335246"
+  ]
+}

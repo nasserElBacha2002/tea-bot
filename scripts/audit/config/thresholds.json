@@ -1,0 +1,165 @@
+{
+  "god_class": {
+    "loc_watch": 600,
+    "loc_high": 1000,
+    "methods_high": 20,
+    "deps_high": 10,
+    "imports_high": 8,
+    "score_watch": 9,
+    "score_medium": 14,
+    "score_high": 20
+  },
+  "complexity": {
+    "file_loc_warn": 800,
+    "file_loc_high": 1200,
+    "file_cyclomatic_warn": 40,
+    "file_cyclomatic_high": 80,
+    "function_cyclomatic_high": 25,
+    "control_flow_token_density_high": 80,
+    "_notes": {
+      "cyclomatic": "decision points (if/for/while/case/catch/&&/||/??/ternary), not a typed AST",
+      "gate": "per-file cyclomatic regressions use progressive.maps_higher_is_worse"
+    }
+  },
+  "duplication": {
+    "min_lines": 8,
+    "min_line_chars": 18
+  },
+  "coupling": {
+    "fan_out_high": 25,
+    "fan_in_info": 20
+  },
+  "architecture": {
+    "forbidden_import_patterns": [
+      {
+        "from_glob": "whatsapp-bot/src/controllers/**",
+        "to_pattern": "mssql",
+        "rule": "controllers-must-not-import-mssql",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": false
+      },
+      {
+        "from_glob": "whatsapp-bot/src/controllers/**",
+        "to_pattern": "/repositories/",
+        "rule": "controllers-must-not-import-repositories",
+        "severity": "medium",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": false
+      },
+      {
+        "from_glob": "whatsapp-bot/src/routes/**",
+        "to_pattern": "mssql",
+        "rule": "routes-must-not-import-mssql",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": false
+      },
+      {
+        "from_glob": "whatsapp-bot/src/repositories/**",
+        "to_pattern": "/services/",
+        "rule": "repositories-must-not-import-services",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/**",
+        "to_pattern": "frontend/src",
+        "rule": "backend-must-not-import-frontend",
+        "severity": "critical",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "case_insensitive_contains"
+      },
+      {
+        "from_glob": "frontend/src/**",
+        "to_pattern": "whatsapp-bot",
+        "rule": "frontend-must-not-import-backend",
+        "severity": "critical",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "case_insensitive_contains"
+      }
+    ]
+  },
+  "gate": {
+    "block_severities": ["critical"],
+    "block_high_with_confidence": ["high"],
+    "ignore_statuses": ["accepted-risk", "false-positive"],
+    "regression_only": true
+  },
+  "progressive": {
+    "numbers_higher_is_worse": {
+      "frontend.eslint.errors": {"tolerance": 0, "priority": "P1"},
+      "frontend.tsc.errors": {"tolerance": 0, "priority": "P1"},
+      "backend.checkjs.errors": {"tolerance": 0, "priority": "P1"},
+      "backend.syntax.errors": {"tolerance": 0, "priority": "P0"},
+      "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
+      "security.npm.whatsapp-bot.critical": {"tolerance": 0, "priority": "P0"},
+      "security.npm.whatsapp-bot.high": {"tolerance": 0, "priority": "P1"},
+      "security.npm.frontend.critical": {"tolerance": 0, "priority": "P0"},
+      "security.npm.frontend.high": {"tolerance": 0, "priority": "P1"},
+      "security.secrets": {"tolerance": 0, "priority": "P0"},
+      "duplication.lines": {"tolerance_abs": 30, "tolerance_pct": 5, "priority": "P2"},
+      "cycles.count": {"tolerance": 0, "priority": "P1"}
+    },
+    "numbers_lower_is_worse": {
+      "backend.coverage.lines_pct": {"tolerance": 1.0, "priority": "P1"},
+      "backend.coverage.files_pct": {"tolerance": 1.0, "priority": "P2"},
+      "frontend.coverage.files_pct": {"tolerance": 1.0, "priority": "P2"}
+    },
+    "maps_higher_is_worse": {
+      "complexity.cyclomatic": {
+        "tolerance_abs": 10,
+        "tolerance_pct": 20,
+        "only_if_at_least": 40,
+        "priority": "P1"
+      }
+    }
+  },
+  "scan_roots": ["whatsapp-bot/src", "frontend/src"],
+  "exclude_globs": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.test.js",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.integration.test.js",
+    "**/*.d.ts"
+  ],
+  "scanner_coverage": {
+    "framework": [
+      "complexity",
+      "duplication",
+      "cycles",
+      "coupling",
+      "cohesion",
+      "responsibilities",
+      "solid",
+      "architecture",
+      "security-patterns",
+      "secrets",
+      "coverage-gap"
+    ],
+    "tools": [
+      "frontend eslint",
+      "frontend tsc",
+      "backend tsc --checkJs (progresivo, no estricto)",
+      "backend node --check",
+      "backend node --test coverage (unitarias, sin SQL)",
+      "cobertura estructural de archivos con test colocalizado",
+      "npm audit produccion (critical/high)",
+      "npm audit dev (informativo, no bloquea)"
+    ]
+  }
+}

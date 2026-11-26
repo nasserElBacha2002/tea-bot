@@ -1,0 +1,670 @@
+{
+  "run_id": "20261126T214745Z",
+  "generated_at": "2026-11-26T21:48:22.342641+00:00",
+  "finding_count": 31,
+  "findings": [
+    {
+      "id": "57b0ace6b17c",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/conversations/components/ConversationComposer.tsx",
+      "line": null,
+      "evidence": {
+        "loc": 473,
+        "cyclomatic": 86,
+        "functions": 8
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "daa79d191de1",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/conversations/components/ConversationMessageTimeline.tsx",
+      "line": null,
+      "evidence": {
+        "loc": 458,
+        "cyclomatic": 100,
+        "functions": 2
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "a8744826b724",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/conversations/pages/ConversationsPage.tsx",
+      "line": null,
+      "evidence": {
+        "loc": 729,
+        "cyclomatic": 96,
+        "functions": 7
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "1c0f38378b77",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/conversations/utils/applyConversationLiveEvent.ts",
+      "line": null,
+      "evidence": {
+        "loc": 315,
+        "cyclomatic": 111,
+        "functions": 11
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "bda312cff5d6",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/flows/editor/ConversationEditorPage.tsx",
+      "line": null,
+      "evidence": {
+        "loc": 826,
+        "cyclomatic": 118,
+        "functions": 2
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "3d93b45dc389",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "frontend/src/features/monitoring/pages/MonitoringPage.tsx",
+      "line": null,
+      "evidence": {
+        "loc": 507,
+        "cyclomatic": 112,
+        "functions": 8
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "a1659516dd40",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/config.js",
+      "line": null,
+      "evidence": {
+        "loc": 479,
+        "cyclomatic": 124,
+        "functions": 11
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "a88a64cae5c5",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/monitoring.repository.js",
+      "line": null,
+      "evidence": {
+        "loc": 793,
+        "cyclomatic": 128,
+        "functions": 38
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "bdb24e64e93d",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/monitoring.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 546,
+        "cyclomatic": 99,
+        "functions": 4
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "38d58dcb1051",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/rules.js",
+      "line": null,
+      "evidence": {
+        "loc": 355,
+        "cyclomatic": 127,
+        "functions": 18
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "35641056e5ea",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/twilio-usage.client.js",
+      "line": null,
+      "evidence": {
+        "loc": 372,
+        "cyclomatic": 100,
+        "functions": 15
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "ca430089401c",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/whatsapp-cost-audit.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 488,
+        "cyclomatic": 117,
+        "functions": 12
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "5d0c42288e1f",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/monitoring/whatsapp-cost-engine.js",
+      "line": null,
+      "evidence": {
+        "loc": 358,
+        "cyclomatic": 99,
+        "functions": 7
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "622cb3a9feb7",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/repositories/conversation.repository.js",
+      "line": null,
+      "evidence": {
+        "loc": 629,
+        "cyclomatic": 83,
+        "functions": 2
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "7dc47bfeb30c",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/agent-outbound-send.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 878,
+        "cyclomatic": 129,
+        "functions": 14
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "2f355c84b578",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/conversation-inbox.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 820,
+        "cyclomatic": 134,
+        "functions": 13
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "0efe3698f423",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/conversation-reentry.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 565,
+        "cyclomatic": 135,
+        "functions": 3
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "222e681e63e2",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/conversation-takeover.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 664,
+        "cyclomatic": 142,
+        "functions": 14
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "40c5ebd221ae",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/conversationExport.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 353,
+        "cyclomatic": 104,
+        "functions": 0
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "7c4b88c70416",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/conversationSheetFormatter.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 490,
+        "cyclomatic": 144,
+        "functions": 25
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "c28d9b166fbd",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/export-session-merge.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 177,
+        "cyclomatic": 81,
+        "functions": 8
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "9d550984d917",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/services/flow-engine.service.js",
+      "line": null,
+      "evidence": {
+        "loc": 739,
+        "cyclomatic": 130,
+        "functions": 0
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "63277f8fc7b0",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/utils/conversation-reentry-policy.js",
+      "line": null,
+      "evidence": {
+        "loc": 297,
+        "cyclomatic": 93,
+        "functions": 19
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "ad6ec57ca9f6",
+      "category": "complexity",
+      "subcategory": "file",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Complejidad o tamaño de archivo elevado",
+      "description": "Métrica heurística (puntos de decisión y líneas). No bloquea por sí misma; el gate mira la regresión contra el baseline.",
+      "file": "whatsapp-bot/src/utils/conversation-search.js",
+      "line": null,
+      "evidence": {
+        "loc": 256,
+        "cyclomatic": 89,
+        "functions": 18
+      },
+      "recommendation": "Partir el módulo solo si mezcla responsabilidades.",
+      "blocking": false
+    },
+    {
+      "id": "fan-in-top",
+      "category": "coupling",
+      "subcategory": "fan-in",
+      "severity": "info",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Módulos con más fan-in",
+      "description": "Señal de acoplamiento, no una violación.",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "top_fan_in": [
+          {
+            "file": "whatsapp-bot/src/db/index.js",
+            "fan_in": 47
+          },
+          {
+            "file": "whatsapp-bot/src/config.js",
+            "fan_in": 39
+          },
+          {
+            "file": "frontend/src/features/flows/editor/model/conversationViewModel.ts",
+            "fan_in": 23
+          },
+          {
+            "file": "whatsapp-bot/src/repositories/conversation.repository.js",
+            "fan_in": 19
+          },
+          {
+            "file": "whatsapp-bot/src/services/session.service.js",
+            "fan_in": 16
+          },
+          {
+            "file": "whatsapp-bot/src/auth/roles.js",
+            "fan_in": 12
+          },
+          {
+            "file": "whatsapp-bot/src/utils/flow-loader.js",
+            "fan_in": 12
+          },
+          {
+            "file": "whatsapp-bot/src/services/conversationClassification/classification.types.js",
+            "fan_in": 11
+          },
+          {
+            "file": "whatsapp-bot/src/realtime/conversation-live.notify.js",
+            "fan_in": 11
+          },
+          {
+            "file": "whatsapp-bot/src/repositories/conversation-message.repository.js",
+            "fan_in": 11
+          },
+          {
+            "file": "frontend/src/features/flows/editor/model/conversationValidation.ts",
+            "fan_in": 11
+          },
+          {
+            "file": "whatsapp-bot/src/repositories/conversation-session.repository.js",
+            "fan_in": 10
+          },
+          {
+            "file": "whatsapp-bot/src/utils/conversation-inbox.mapper.js",
+            "fan_in": 10
+          },
+          {
+            "file": "whatsapp-bot/src/repositories/conversation-message-attachment.repository.js",
+            "fan_in": 9
+          },
+          {
+            "file": "whatsapp-bot/src/utils/inbound-media-policy.js",
+            "fan_in": 8
+          }
+        ]
+      },
+      "recommendation": null,
+      "blocking": false
+    },
+    {
+      "id": "854616fce6b1",
+      "category": "coupling",
+      "subcategory": "fan-out",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Fan-out alto",
+      "description": "25 imports internos (umbral 25).",
+      "file": "whatsapp-bot/src/services/conversation-inbox.service.js",
+      "line": null,
+      "evidence": {
+        "fan_out": 25
+      },
+      "recommendation": "Revisar si el módulo coordina demasiados colaboradores.",
+      "blocking": false
+    },
+    {
+      "id": "33a8613c9a06",
+      "category": "cycles",
+      "subcategory": "import-cycle",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Dependencia cíclica",
+      "description": "frontend/src/features/flows/editor/model/conversationValidation.ts > frontend/src/features/flows/editor/model/flowTransitionValidation.ts",
+      "file": "frontend/src/features/flows/editor/model/conversationValidation.ts",
+      "line": null,
+      "evidence": {
+        "cycle": "frontend/src/features/flows/editor/model/conversationValidation.ts > frontend/src/features/flows/editor/model/flowTransitionValidation.ts"
+      },
+      "recommendation": "Romper el ciclo con un módulo intermedio o invirtiendo la dependencia.",
+      "blocking": true
+    },
+    {
+      "id": "aa8a52928f00",
+      "category": "cycles",
+      "subcategory": "import-cycle",
+      "severity": "high",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Dependencia cíclica",
+      "description": "whatsapp-bot/src/services/conversationSheetFormatter.service.js > whatsapp-bot/src/services/sheet-row-identity.service.js",
+      "file": "whatsapp-bot/src/services/conversationSheetFormatter.service.js",
+      "line": null,
+      "evidence": {
+        "cycle": "whatsapp-bot/src/services/conversationSheetFormatter.service.js > whatsapp-bot/src/services/sheet-row-identity.service.js"
+      },
+      "recommendation": "Romper el ciclo con un módulo intermedio o invirtiendo la dependencia.",
+      "blocking": true
+    },
+    {
+      "id": "duplication-summary",
+      "category": "duplication",
+      "subcategory": "cross-file",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "detected",
+      "title": "Bloques duplicados entre archivos",
+      "description": "Ventanas de líneas normalizadas repetidas en más de un archivo. El gate usa la métrica duplication.lines con tolerancia.",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "duplicated_lines": 18,
+        "min_lines": 8
+      },
+      "recommendation": "Extraer el bloque compartido si el duplicado sigue creciendo.",
+      "blocking": false
+    },
+    {
+      "id": "03d57b062da5",
+      "category": "solid",
+      "subcategory": "srp",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Posible mezcla de responsabilidades",
+      "description": "Señales=3, funciones≈14, dominios=['conversation', 'twilio', 'auth', 'media', 'session']. Heurística, no bloquea.",
+      "file": "whatsapp-bot/src/services/agent-outbound-send.service.js",
+      "line": null,
+      "evidence": {
+        "signals": 3,
+        "functions": 14,
+        "domains": [
+          "conversation",
+          "twilio",
+          "auth",
+          "media",
+          "session"
+        ],
+        "sql": true,
+        "externals": [
+          "twilio"
+        ]
+      },
+      "recommendation": "Confirmar y extraer colaboradores si las responsabilidades son independientes.",
+      "blocking": false
+    },
+    {
+      "id": "88e6709a16f2",
+      "category": "solid",
+      "subcategory": "srp",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Posible mezcla de responsabilidades",
+      "description": "Señales=3, funciones≈13, dominios=['conversation', 'twilio', 'handoff', 'takeover', 'auth', 'media', 'session']. Heurística, no bloquea.",
+      "file": "whatsapp-bot/src/services/conversation-inbox.service.js",
+      "line": null,
+      "evidence": {
+        "signals": 3,
+        "functions": 13,
+        "domains": [
+          "conversation",
+          "twilio",
+          "handoff",
+          "takeover",
+          "auth",
+          "media",
+          "session"
+        ],
+        "sql": false,
+        "externals": [
+          "twilio"
+        ]
+      },
+      "recommendation": "Confirmar y extraer colaboradores si las responsabilidades son independientes.",
+      "blocking": false
+    }
+  ]
+}

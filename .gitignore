@@ -1,5 +1,7 @@
 node_modules/
 **/node_modules/
+__pycache__/
+*.pyc
 dist/
 **/dist/
 .env
@@ -14,6 +16,15 @@ whatsapp-bot/flows/
 
 # Local JSON backups (post-migración; no versionar)
 backups/
+
+# DIN-444 generated audit artifacts (baselines under audit/baseline stay versioned)
+audit/raw/
+audit/audit-summary.md
+audit/audit-status.json
+audit/findings.json
+audit/metrics.json
+audit/current-run.json
+audit/security-summary.md
 
 # Generated implementation review artifacts
 git-review/*
