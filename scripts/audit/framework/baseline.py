@@ -7,6 +7,19 @@ from typing import Any
 from .models import AuditFinding, finding_key
 
 
+def is_never_baseline(finding: AuditFinding) -> bool:
+    return bool(finding.evidence.get("never_baseline"))
+
+
+def regressable_findings(findings: list[AuditFinding]) -> list[AuditFinding]:
+    """Findings that participate in the progressive baseline.
+
+    Layer rules are enforced on every run and are omitted here so regenerating
+    the baseline cannot hide them.
+    """
+    return [item for item in findings if not is_never_baseline(item)]
+
+
 def compare_findings(current: list[AuditFinding], baseline: list[AuditFinding]) -> dict[str, Any]:
     current_map = {finding_key(item): item for item in current}
     baseline_map = {finding_key(item): item for item in baseline}

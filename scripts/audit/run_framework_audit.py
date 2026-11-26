@@ -14,8 +14,8 @@ AUDIT_SCRIPTS = Path(__file__).resolve().parent
 if str(AUDIT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPTS))
 
-from framework.baseline import compare_findings  # noqa: E402
-from framework.config import audit_dir, is_excluded, repo_root  # noqa: E402
+from framework.baseline import compare_findings, regressable_findings  # noqa: E402
+from framework.config import architecture_exception, audit_dir, is_excluded, repo_root  # noqa: E402
 from framework.gate import evaluate_gate  # noqa: E402
 from framework.models import AuditFinding, finding_key  # noqa: E402
 from framework.report import render_summary  # noqa: E402
@@ -36,6 +36,25 @@ def _apply_exclusions(findings: list[AuditFinding]) -> list[AuditFinding]:
             finding.status = exclusion.get("status", "accepted-risk")  # type: ignore[assignment]
             finding.blocking = False
             finding.evidence = {**finding.evidence, "exclusion": exclusion.get("reason")}
+    return findings
+
+
+def _apply_architecture_exceptions(findings: list[AuditFinding]) -> list[AuditFinding]:
+    for finding in findings:
+        if not finding.evidence.get("never_baseline"):
+            continue
+        rule = str(finding.evidence.get("rule") or finding.subcategory)
+        entry, expired = architecture_exception(rule, finding.file)
+        if entry:
+            finding.status = "accepted-risk"
+            finding.blocking = False
+            finding.evidence = {
+                **finding.evidence,
+                "architecture_exception": entry.get("reason"),
+                "expires_at": entry.get("expires_at") or entry.get("expires"),
+            }
+        elif expired:
+            finding.evidence = {**finding.evidence, "architecture_exception_expired": expired}
     return findings
 
 
@@ -62,8 +81,8 @@ def main() -> int:
     raw.mkdir(parents=True, exist_ok=True)
 
     findings, metrics = scan_sources(root)
-    ingest_tool_metrics(metrics, raw)
-    findings = _apply_exclusions(_dedupe(findings))
+    ingest_tool_metrics(metrics, raw, findings)
+    findings = _apply_architecture_exceptions(_apply_exclusions(_dedupe(findings)))
     findings.sort(key=lambda item: (item.category, item.file or "", item.id))
 
     baseline_findings_path = out / "baseline" / "findings.baseline.json"
@@ -73,7 +92,7 @@ def main() -> int:
     if baseline_findings_path.is_file():
         payload = json.loads(baseline_findings_path.read_text(encoding="utf-8"))
         baseline_findings = [AuditFinding.from_dict(item) for item in payload.get("findings") or []]
-        baseline_diff = compare_findings(findings, baseline_findings)
+        baseline_diff = compare_findings(regressable_findings(findings), regressable_findings(baseline_findings))
     if baseline_metrics_path.is_file():
         metrics_baseline = json.loads(baseline_metrics_path.read_text(encoding="utf-8"))
 

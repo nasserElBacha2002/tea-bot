@@ -13,7 +13,7 @@ AUDIT_SCRIPTS = Path(__file__).resolve().parent
 if str(AUDIT_SCRIPTS) not in sys.path:
     sys.path.insert(0, str(AUDIT_SCRIPTS))
 
-from framework.baseline import compare_findings  # noqa: E402
+from framework.baseline import compare_findings, regressable_findings  # noqa: E402
 from framework.config import audit_dir  # noqa: E402
 from framework.gate import evaluate_gate  # noqa: E402
 from framework.models import AuditFinding  # noqa: E402
@@ -57,7 +57,8 @@ def main() -> int:
     metrics_baseline = None
     if baseline_findings_path.is_file():
         data = json.loads(baseline_findings_path.read_text(encoding="utf-8"))
-        baseline_diff = compare_findings(findings, [AuditFinding.from_dict(item) for item in data.get("findings") or []])
+        baseline_loaded = [AuditFinding.from_dict(item) for item in data.get("findings") or []]
+        baseline_diff = compare_findings(regressable_findings(findings), regressable_findings(baseline_loaded))
     if baseline_metrics_path.is_file():
         metrics_baseline = json.loads(baseline_metrics_path.read_text(encoding="utf-8"))
     elif args.strict:

@@ -28,6 +28,38 @@ def load_exclusions() -> list[dict[str, Any]]:
     return list(data.get("exclusions") or [])
 
 
+def load_architecture_config() -> dict[str, Any]:
+    path = Path(__file__).resolve().parents[1] / "config" / "audit-architecture.json"
+    if not path.is_file():
+        return {"exceptions": []}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def architecture_exception(rule: str, file: str | None) -> tuple[dict[str, Any] | None, str | None]:
+    """Active exception, or a reason when a matching entry is expired or invalid.
+
+    ``expires_at`` is required. An entry without it does not suppress the finding.
+    """
+    for entry in load_architecture_config().get("exceptions") or []:
+        if entry.get("rule") and entry.get("rule") != rule:
+            continue
+        pattern = entry.get("file")
+        if pattern:
+            if not file or not (file == pattern or fnmatch(file, pattern) or fnmatch(file, pattern.lstrip("./"))):
+                continue
+        expires = entry.get("expires_at") or entry.get("expires")
+        if not expires:
+            return None, "architecture exception missing expires_at"
+        try:
+            expiry = date.fromisoformat(str(expires))
+        except ValueError:
+            return None, f"invalid architecture exception expiry {expires}"
+        if expiry < date.today():
+            return None, f"architecture exception expired {expires}"
+        return entry, None
+    return None, None
+
+
 def is_excluded(finding_id: str, file: str | None, rule: str) -> tuple[dict[str, Any] | None, str | None]:
     for entry in load_exclusions():
         expires = entry.get("expires")

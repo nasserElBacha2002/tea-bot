@@ -11,7 +11,7 @@
     "audit:security": "bash scripts/ci/run-security.sh",
     "secrets:scan": "bash scripts/secrets/scan.sh",
     "secrets:install-hook": "bash scripts/secrets/install-hook.sh",
-    "test:audit": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py' && python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py'",
+    "test:audit": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py' && python3 -m unittest discover -s scripts/ci/tests -p 'test_*.py' && node --test scripts/audit/framework/scanners/function_metrics.spec.mjs",
     "test:audit-policy": "node --test scripts/ci/evaluate-audit.spec.mjs"
   }
 }

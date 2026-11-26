@@ -1,0 +1,19 @@
+{
+  "_note": "Umbrales de lectura del audit (diagnóstico). No son política de formateador.",
+  "enabled": true,
+  "audit_thresholds": {
+    "warning": 120,
+    "high": 160,
+    "severe": 200
+  },
+  "include_globs": ["whatsapp-bot/src/**", "frontend/src/**"],
+  "exclude_globs": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/*.test.js",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.integration.test.js"
+  ]
+}

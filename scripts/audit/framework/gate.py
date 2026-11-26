@@ -32,12 +32,20 @@ def evaluate_gate(
 ) -> dict[str, Any]:
     cfg = load_thresholds().get("gate", {})
     progressive = load_thresholds().get("progressive") or {}
-    candidates = findings
+    # Layer rules carry evidence.never_baseline. They are not compared as inherited
+    # debt: a blocking one fails even when a previous baseline still lists it.
+    regressable = [item for item in findings if not item.evidence.get("never_baseline")]
+    candidates = regressable
     if regression_only and baseline_diff is not None:
         new_keys = {item["key"] for item in baseline_diff.get("new_findings", [])}
-        candidates = [item for item in findings if finding_key(item) in new_keys]
+        candidates = [item for item in regressable if finding_key(item) in new_keys]
 
     blockers = [item for item in candidates if should_block(item, cfg)]
+    seen = {item.id for item in blockers}
+    for item in findings:
+        if item.evidence.get("never_baseline") and should_block(item, cfg) and item.id not in seen:
+            blockers.append(item)
+            seen.add(item.id)
     metric_regressions: list[dict[str, Any]] = []
     if regression_only and metrics_baseline is not None:
         metric_regressions = compare_metrics(metrics, metrics_baseline, progressive)
@@ -66,7 +74,7 @@ def evaluate_gate(
         "metric_regressions": metric_regressions,
         "policy": {
             "regression_only": regression_only,
-            "note": "La deuda de calidad ya presente en el baseline no bloquea. Una métrica peor o un hallazgo blocking nuevo sí.",
+            "note": "La deuda de calidad ya presente en el baseline no bloquea. Una métrica peor, un hallazgo blocking nuevo o una regla de capas (nunca en baseline) sí.",
         },
     }
 
