@@ -491,7 +491,6 @@ def _ingest_function_metrics(
                 blocking=False,
             )
         )
-        del map_key
     maps = metrics.setdefault("maps", {})
     maps["functions.cyclomatic"] = cc_map
     maps["functions.long"] = long_map

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from framework.config import architecture_exception, load_thresholds  # noqa: E402
 from framework.gate import evaluate_gate  # noqa: E402
 from framework.models import AuditFinding  # noqa: E402
-from framework.scan import _architecture_findings  # noqa: E402
+from framework.scan import _architecture_findings, _ingest_function_metrics  # noqa: E402
 from framework.scanners.dead_env import read_names  # noqa: E402
 from framework.scanners.exceptions import scan as scan_exceptions  # noqa: E402
 from framework.scanners.god_class import score_file  # noqa: E402
@@ -137,6 +139,39 @@ class DesignScannerTests(unittest.TestCase):
             config.load_architecture_config = original
         self.assertIsNone(expired_entry)
         self.assertIn("expired", expired_reason or "")
+
+    def test_function_metrics_ingest_builds_maps(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = Path(tmp)
+            payload = {
+                "ok": True,
+                "functions": [
+                    {
+                        "file": "whatsapp-bot/src/services/flow-engine.service.js",
+                        "rule": "complexity",
+                        "name": "processNode",
+                        "line": 422,
+                        "complexity": 29,
+                        "message": "complexity",
+                    },
+                    {
+                        "file": "whatsapp-bot/src/services/flow-engine.service.js",
+                        "rule": "max-params",
+                        "name": "processNode",
+                        "line": 422,
+                        "params": 10,
+                        "message": "params",
+                    },
+                ],
+            }
+            (raw / "function-metrics.json").write_text(json.dumps(payload), encoding="utf-8")
+            metrics: dict = {}
+            findings: list[AuditFinding] = []
+            _ingest_function_metrics(metrics, raw, findings)
+        self.assertEqual(metrics["numbers"]["functions.cyclomatic_high"], 1)
+        self.assertEqual(metrics["maps"]["functions.cyclomatic"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
+        self.assertEqual(metrics["maps"]["functions.params"]["whatsapp-bot/src/services/flow-engine.service.js"], 1)
+        self.assertTrue(any(item.file and item.file.endswith("flow-engine.service.js") for item in findings))
 
     def test_never_baseline_layer_rule_blocks_even_when_already_seen(self):
         item = AuditFinding(
