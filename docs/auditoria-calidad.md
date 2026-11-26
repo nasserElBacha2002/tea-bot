@@ -35,7 +35,7 @@ Mismos comandos en local y en CI.
 bash scripts/ci/install-gitleaks.sh "$HOME/.local/bin"
 bash scripts/ci/install-trivy.sh "$HOME/.local/bin"
 bash scripts/ci/install-hadolint.sh "$HOME/.local/bin"
-python3 -m pip install --user "semgrep==1.110.0"
+bash scripts/ci/install-semgrep.sh   # requiere Python 3.12; 3.14 rompe semgrep 1.110.0
 export PATH="$HOME/.local/bin:$PATH"
 npm run audit:security
 npm run secrets:install-hook   # opcional: pre-commit con gitleaks
