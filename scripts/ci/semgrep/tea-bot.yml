@@ -1,0 +1,64 @@
+rules:
+  - id: tea-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: eval() no está permitido en Tea Bot.
+    pattern: eval(...)
+  - id: tea-new-function
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: new Function() no está permitido en Tea Bot.
+    pattern: new Function(...)
+  - id: tea-tls-verify-disabled
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: rejectUnauthorized:false desactiva la verificación TLS.
+    pattern-regex: rejectUnauthorized\s*:\s*false
+  - id: tea-signature-mode-hardcoded-off
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: TWILIO_SIGNATURE_MODE no debe quedar fijo en off fuera de tests.
+    pattern-regex: TWILIO_SIGNATURE_MODE\s*=\s*['\"]off['\"]
+  - id: tea-dangerous-html
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: dangerouslySetInnerHTML requiere revisión; un hallazgo nuevo bloquea.
+    pattern-regex: dangerouslySetInnerHTML
+  - id: tea-child-process-exec
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: exec/execSync de child_process no está permitido en el código de la app.
+    patterns:
+      - pattern-either:
+          - pattern: exec(...)
+          - pattern: execSync(...)
+          - pattern: child_process.exec(...)
+          - pattern: child_process.execSync(...)
+      - pattern-either:
+          - pattern-inside: |
+              import $MOD from "child_process"
+              ...
+          - pattern-inside: |
+              import $MOD from "node:child_process"
+              ...
+          - pattern-inside: |
+              import { $NAME } from "child_process"
+              ...
+          - pattern-inside: |
+              import { $NAME } from "node:child_process"
+              ...
+          - pattern-inside: |
+              const $NAME = require("child_process")
+              ...
+          - pattern-inside: |
+              const $NAME = require("node:child_process")
+              ...
+  - id: tea-sql-interpolation-outside-repository
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: SQL con interpolación en controllers o routes. Las queries viven en repositories.
+    paths:
+      include:
+        - whatsapp-bot/src/controllers
+        - whatsapp-bot/src/routes
+    pattern-regex: (?i)(SELECT|INSERT|UPDATE|DELETE)\b[^`'\"\n]{0,120}\$\{

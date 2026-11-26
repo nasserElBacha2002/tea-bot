@@ -1,0 +1,151 @@
+name: Quality Gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  audit-artifacts:
+    name: audit-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            whatsapp-bot/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install backend dependencies
+        working-directory: whatsapp-bot
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Quality audit (baseline regression gate)
+        run: npm run audit:strict
+
+      - name: Upload quality report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: audit-report
+          path: |
+            audit/audit-summary.md
+            audit/audit-status.json
+            audit/findings.json
+            audit/metrics.json
+            audit/raw/
+          if-no-files-found: warn
+          retention-days: 14
+
+  security:
+    name: security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            whatsapp-bot/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          npm ci --prefix whatsapp-bot
+          npm ci --prefix frontend
+
+      - name: Install gitleaks, trivy and hadolint
+        run: |
+          set -euo pipefail
+          bash scripts/ci/install-gitleaks.sh "$HOME/.local/bin"
+          bash scripts/ci/install-trivy.sh "$HOME/.local/bin"
+          bash scripts/ci/install-hadolint.sh "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install semgrep
+        run: |
+          set -euo pipefail
+          python3 -m pip install --user "semgrep==1.110.0"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Security suite
+        run: bash scripts/ci/run-security.sh
+
+      - name: Upload security report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: security-report
+          path: |
+            audit/security-summary.md
+            audit/raw/gitleaks-history.json
+            audit/raw/gitleaks-worktree.json
+            audit/raw/npm-audit-whatsapp-bot.json
+            audit/raw/npm-audit-frontend.json
+            audit/raw/semgrep.json
+            audit/raw/hadolint.json
+            audit/raw/trivy.json
+          if-no-files-found: warn
+          retention-days: 14
+
+  quality-gate:
+    name: quality-gate
+    needs:
+      - audit-artifacts
+      - security
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Aggregate required checks
+        env:
+          R_AUDIT: ${{ needs.audit-artifacts.result }}
+          R_SECURITY: ${{ needs.security.result }}
+        run: |
+          set -euo pipefail
+          failed=0
+          report() {
+            local name="$1"
+            local result="$2"
+            echo "${name}: ${result}"
+            if [[ "${result}" != "success" ]]; then
+              failed=1
+            fi
+          }
+          report audit-artifacts "${R_AUDIT}"
+          report security "${R_SECURITY}"
+          if [[ "${failed}" -ne 0 ]]; then
+            echo "::error::One or more required Quality Gate jobs failed (required check: quality-gate)."
+            exit 1
+          fi
+          echo "All required Quality Gate jobs passed."

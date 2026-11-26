@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Pre-commit: rutas prohibidas + gitleaks sobre lo staged.
+# Si gitleaks no está instalado, el hook falla (no deja pasar en silencio).
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+bash "${ROOT}/scripts/secrets/forbidden-staged.sh"
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "[secrets] gitleaks no está instalado. bash scripts/ci/install-gitleaks.sh \"\$HOME/.local/bin\"" >&2
+  exit 1
+fi
+
+gitleaks protect --staged --redact --config "${ROOT}/.gitleaks.toml" --no-banner

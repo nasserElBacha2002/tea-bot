@@ -1,0 +1,26 @@
+title = "tea-bot"
+
+[extend]
+useDefault = true
+
+# No se excluyen .env ni .env.*. Un secreto en el worktree o en el historial bloquea.
+# Solo se omiten árboles generados que no son código de la app.
+
+[[allowlists]]
+description = "Dependencias y artefactos generados"
+paths = [
+  '''(?:^|/)node_modules/''',
+  '''(?:^|/)dist/''',
+  '''(?:^|/)coverage/''',
+  '''(?:^|/)audit/raw/''',
+]
+
+[[allowlists]]
+description = "Fixture de nombre de archivo en inbound-media.service.test.js (abcd1234.jpg), no una API key"
+paths = ['''(?:^|/)inbound-media\.service\.test\.js$''']
+regexes = ['''abcd1234\.jpg''']
+
+[[allowlists]]
+description = "SHA-256 de ejemplo documentado en el README para la contraseña de demo Tea2026, solo en .env.example"
+paths = ['''(?:^|/)whatsapp-bot/\.env\.example$''']
+regexes = ['''e6cb496be6f8ec1bb9ece061e9d5589919c6d63d1cfde5bc0095f78d657ce29d''']
