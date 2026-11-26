@@ -77,6 +77,51 @@ GROUP BY day_ar
 ORDER BY day_ar;
 `;
 
+const RANGE_WINDOW_SQL = `
+SELECT
+  CONVERT(varchar(10), CAST($1 AS date), 23) AS start_day_ar,
+  CONVERT(varchar(10), CAST($2 AS date), 23) AS end_day_ar,
+  CAST(CAST($1 AS datetime2) AT TIME ZONE N'${ARGENTINA_PRESENTATION_TZ}' AT TIME ZONE 'UTC' AS datetime2) AS start_utc,
+  DATEADD(day, 1, CAST($2 AS datetime2))
+    AT TIME ZONE N'${ARGENTINA_PRESENTATION_TZ}' AT TIME ZONE 'UTC' AS end_utc_exclusive;
+`;
+
+const DAILY_MESSAGES_RANGE_SQL = `
+WITH span AS (
+  SELECT
+    CAST($1 AS date) AS start_day_ar,
+    CAST($2 AS date) AS end_day_ar,
+    CAST(CAST($1 AS datetime2) AT TIME ZONE N'${ARGENTINA_PRESENTATION_TZ}' AT TIME ZONE 'UTC' AS datetime2) AS start_utc,
+    DATEADD(day, 1, CAST($2 AS datetime2))
+      AT TIME ZONE N'${ARGENTINA_PRESENTATION_TZ}' AT TIME ZONE 'UTC' AS end_utc_exclusive
+),
+scoped AS (
+  SELECT
+    m.conversation_id,
+    m.direction,
+    m.sender_type,
+    CAST((m.created_at AT TIME ZONE 'UTC') AT TIME ZONE N'${ARGENTINA_PRESENTATION_TZ}' AS date) AS day_ar
+  FROM dbo.conversation_messages m
+  INNER JOIN dbo.conversations c ON c.id = m.conversation_id
+  CROSS JOIN span s
+  WHERE c.channel = N'whatsapp'
+    AND c.provider = N'twilio'
+    AND m.created_at >= s.start_utc
+    AND m.created_at < s.end_utc_exclusive
+)
+SELECT
+  CONVERT(varchar(10), day_ar, 23) AS day_ar,
+  SUM(CASE WHEN direction = N'inbound' THEN 1 ELSE 0 END) AS inbound,
+  SUM(CASE WHEN direction = N'outbound' THEN 1 ELSE 0 END) AS outbound,
+  SUM(CASE WHEN direction = N'outbound' AND sender_type = N'bot' THEN 1 ELSE 0 END) AS outbound_bot,
+  SUM(CASE WHEN direction = N'outbound' AND sender_type = N'agent' THEN 1 ELSE 0 END) AS outbound_agent,
+  SUM(CASE WHEN direction = N'outbound' AND sender_type = N'system' THEN 1 ELSE 0 END) AS outbound_system,
+  COUNT(DISTINCT conversation_id) AS unique_conversations
+FROM scoped
+GROUP BY day_ar
+ORDER BY day_ar;
+`;
+
 const DELIVERY_BY_DAY_SQL = `
 WITH bounds AS (
   SELECT
@@ -175,6 +220,32 @@ export function mapMetricsWindowRow(row) {
  * Métricas diarias persistidas en SQL (no usage Twilio). Conteos = filas de mensaje / filas de SID.
  * @param {{ days?: number, asOf?: Date }} options
  */
+export async function getDailyWhatsAppMetricsForDayRange({ startDayAr, endDayAr, asOf = new Date() }) {
+  if (!isConversationDbEnabled()) {
+    throw new Error('Conversation database is not enabled');
+  }
+  if (!startDayAr || !endDayAr) {
+    throw new Error('startDayAr and endDayAr are required');
+  }
+  const [windowResult, dailyResult] = await Promise.all([
+    query(RANGE_WINDOW_SQL, [startDayAr, endDayAr]),
+    query(DAILY_MESSAGES_RANGE_SQL, [startDayAr, endDayAr]),
+  ]);
+  return {
+    window: mapMetricsWindowRow(windowResult.rows[0]),
+    days: null,
+    asOfUtc: asOf.toISOString(),
+    definitions: {
+      messageRows:
+        'COUNT de filas dbo.conversation_messages con join whatsapp/twilio; dedupe en insert por (provider, provider_message_id).',
+      whatsappOutbound: 'outbound bot + agent; excluye sender_type system.',
+    },
+    templates: TEMPLATE_METRIC_LIMITATION,
+    daily: dailyResult.rows.map(mapDailyMessageRow),
+    deliveryByDay: [],
+  };
+}
+
 export async function getDailyWhatsAppMetrics(options = {}) {
   if (!isConversationDbEnabled()) {
     throw new Error('Conversation database is not enabled');
@@ -212,6 +283,7 @@ export default {
   TEMPLATE_METRIC_LIMITATION,
   clampMetricsDays,
   getDailyWhatsAppMetrics,
+  getDailyWhatsAppMetricsForDayRange,
   isSyntheticTwilioOutboundProviderMessageId,
   mapDailyMessageRow,
   mapDeliveryStatusRow,

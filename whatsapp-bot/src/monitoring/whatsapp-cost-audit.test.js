@@ -78,10 +78,10 @@ test('cost audit combina usage confirmado sin doble conteo ni meta inferido desd
   assert.equal(report.costs.providerMonthlyByUsageMonth[0].whatsappSubtotalUsd, 1.7);
   assert.equal(report.costs.providerMonthlyByUsageMonth[0].accountingCoverage, 'partial_or_unknown');
   assert.equal(report.reconciliation.countComparison.comparable, false);
-  assert.equal(report.costs.daily[0].costs.metaEstimatedUsd, null);
-  assert.equal(report.costs.daily[0].costs.metaEstimatedQuality, 'non_determinable');
-  assert.equal(report.costs.daily[0].costs.twilioEstimatedUsd, null);
-  assert.equal(report.costs.daily[0].costs.twilioEstimatedQuality, 'unavailable');
+  assert.equal(report.costs.daily[0].costs.metaEstimatedUsd, 0);
+  assert.notEqual(report.costs.daily[0].costs.metaEstimatedQuality, 'non_determinable');
+  assert.equal(report.costs.daily[0].costs.twilioEstimatedUsd, 0.11);
+  assert.equal(report.costs.daily[0].costs.twilioEstimatedQuality, 'estimated_sql_proxy');
   assert.equal(report.rateCard.operationalQuality, 'fixture_illustrative_only');
   assert.equal(report.costs.providerUsage.periodAggregateWhatsappUsd, 0.05);
   config.monitoringTwilioEnabled = prevTwilio;
@@ -252,7 +252,8 @@ test('parseWhatsAppCostAuditQuery valida fechas y días', () => {
   assert.equal(bad.ok, false);
   assert.ok(bad.errors.includes('asOf_invalid'));
   assert.ok(bad.errors.includes('days_out_of_range'));
-  const ok = parseWhatsAppCostAuditQuery({ days: 30, fetchUsage: 'false' });
+  const ok = parseWhatsAppCostAuditQuery({ period: '30d', fetchUsage: 'false' });
   assert.equal(ok.ok, true);
   assert.equal(ok.fetchUsage, false);
+  assert.equal(ok.days, 30);
 });

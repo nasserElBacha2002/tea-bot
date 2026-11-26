@@ -270,6 +270,13 @@ export const config = {
   inboundAnomalyEnabled: envFlag('INBOUND_ANOMALY_ENABLED', false),
   inboundAnomalyWindowMinutes: parsePositiveInt(process.env.INBOUND_ANOMALY_WINDOW_MINUTES, 30),
   inboundAnomalyMinExpected: parsePositiveInt(process.env.INBOUND_ANOMALY_MIN_EXPECTED, 5),
+  billingAggregateEnabled: envFlag('BILLING_AGGREGATE_ENABLED', false),
+  billingAggregateIntervalHours: parsePositiveInt(process.env.BILLING_AGGREGATE_INTERVAL_HOURS, 24),
+  billingTwilioSyncEnabled: envFlag('BILLING_TWILIO_SYNC_ENABLED', false),
+  billingTwilioSyncIntervalMinutes: monitoringIntervalMinutes(
+    process.env.BILLING_TWILIO_SYNC_INTERVAL_MINUTES,
+    60,
+  ),
   twilioReconciliationEnabled: envFlag('TWILIO_RECONCILIATION_ENABLED', false),
   twilioReconciliationLookbackMinutes: parsePositiveInt(
     process.env.TWILIO_RECONCILIATION_LOOKBACK_MINUTES,

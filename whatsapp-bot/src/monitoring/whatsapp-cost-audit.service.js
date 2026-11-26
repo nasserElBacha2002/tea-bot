@@ -1,16 +1,19 @@
 import { config } from '../config.js';
 import { isConversationDbEnabled } from '../db/index.js';
 import { collectTwilioSnapshot } from './twilio-monitor.client.js';
-import { getDailyWhatsAppMetrics, TEMPLATE_METRIC_LIMITATION } from './whatsapp-daily-metrics.js';
+import { getDailyWhatsAppMetrics, getDailyWhatsAppMetricsForDayRange, TEMPLATE_METRIC_LIMITATION } from './whatsapp-daily-metrics.js';
+import { listBillingDailyAggregates } from './whatsapp-billing.repository.js';
+import { mergeSqlWithHistorical } from './whatsapp-billing-historical.js';
 import { loadRateCard, rateCardMetaLimitation } from './whatsapp-rate-card.js';
 import {
-  applyServiceFreeTier,
-  isFullCalendarMonthCoverage,
   lastDayOfMonthYm,
   monthKeyArgentina,
-  resolveMetaPricingRegime,
 } from './whatsapp-pricing-regime.js';
 import { fetchTwilioUsageRecords, isVerifiedDailyAccounting } from './twilio-usage.client.js';
+import {
+  auditDailyEstimatesFromPack,
+  resolveSqlCostEstimatesForMetrics,
+} from './whatsapp-sql-cost-estimates.js';
 
 function round4(value) {
   if (!Number.isFinite(value)) return null;
@@ -40,44 +43,10 @@ function monthWindowCoverage(metricsWindow, monthAr) {
   return { coverage: 'partial_month', quality: 'partial_month' };
 }
 
-function estimateDailyCostsFromSql(dailyRows, metricsWindow) {
-  const fullMonth = isFullCalendarMonthCoverage(metricsWindow);
-  const phoneScoped = Boolean(config.twilioWhatsappFrom);
-
-  return dailyRows.map((row) => {
-    const regime = resolveMetaPricingRegime(row.dayAr);
-    const franchise = applyServiceFreeTier({
-      regime,
-      serviceMessageCount: null,
-      fullCalendarMonth: fullMonth,
-      phoneNumberScoped: phoneScoped,
-    });
-
-    return {
-      dayAr: row.dayAr,
-      messages: {
-        inbound: row.inbound,
-        whatsappOutbound: row.whatsappOutbound,
-        outboundBot: row.outboundBot,
-        outboundAgent: row.outboundAgent,
-        outboundSystem: row.outboundSystem,
-      },
-      costs: {
-        twilioEstimatedUsd: null,
-        twilioEstimatedQuality: 'unavailable',
-        twilioEstimatedReason: 'NO_CONFIRMED_RATE_WITHOUT_USAGE_OR_CONTRACT',
-        metaEstimatedUsd: null,
-        metaEstimatedQuality: 'non_determinable',
-        metaEstimatedReason: 'META_SERVICE_NOT_INFERABLE_FROM_SQL',
-        totalEstimatedUsd: null,
-        totalEstimatedQuality: 'unavailable',
-        regime,
-        metaServiceFreeTier: franchise,
-        whatsappOutboundNote:
-          'whatsappOutbound incluye bot/agent; no implica service Meta facturable sin ventana 24h.',
-      },
-    };
-  });
+async function estimateDailyCostsFromSql(metrics) {
+  if (!metrics?.daily?.length) return [];
+  const { estimatesPack } = await resolveSqlCostEstimatesForMetrics(metrics);
+  return auditDailyEstimatesFromPack(metrics, estimatesPack);
 }
 
 function mergeDailyMessageAndEstimates(messageDaily, estimates) {
@@ -373,12 +342,33 @@ export async function getWhatsAppCostAudit(options = {}) {
 
   let metrics = options.metricsOverride || null;
   if (!metrics && isConversationDbEnabled()) {
-    metrics = await getDailyWhatsAppMetrics({ days, asOf });
+    if (options.effectiveWindow?.startDayAr && options.effectiveWindow?.endDayAr) {
+      metrics = await getDailyWhatsAppMetricsForDayRange({
+        startDayAr: options.effectiveWindow.startDayAr,
+        endDayAr: options.effectiveWindow.endDayAr,
+        asOf,
+      });
+      metrics = {
+        ...metrics,
+        window: { ...metrics.window, ...options.effectiveWindow },
+      };
+    } else {
+      metrics = await getDailyWhatsAppMetrics({ days, asOf });
+    }
+    if (metrics?.window?.startDayAr && metrics?.window?.endDayAr) {
+      const stored = await listBillingDailyAggregates(metrics.window.startDayAr, metrics.window.endDayAr);
+      if (stored.available && stored.rows.length > 0) {
+        metrics = {
+          ...metrics,
+          daily: mergeSqlWithHistorical(metrics.daily, stored.rows),
+        };
+      }
+    }
   }
 
   const usageWindow = metrics ? formatUsageWindow(metrics.window) : null;
   let usage = null;
-  const shouldFetch = options.fetchUsage !== false && config.monitoringTwilioEnabled;
+  const shouldFetch = options.fetchUsage === true && config.monitoringTwilioEnabled;
   if (!shouldFetch) {
     usage = { ok: false, error: 'twilio_usage_disabled', records: [], summary: null, truncated: false };
   } else if (usageWindow?.startDate && usageWindow?.endDate) {
@@ -415,7 +405,7 @@ export async function getWhatsAppCostAudit(options = {}) {
       : { usd: null, quality: 'unavailable', error: snapshot.error };
   }
 
-  const estimates = metrics ? estimateDailyCostsFromSql(metrics.daily, metrics.window) : [];
+  const estimates = metrics ? await estimateDailyCostsFromSql(metrics) : [];
   const daily = metrics ? mergeDailyMessageAndEstimates(metrics.daily, estimates) : [];
 
   const reconciliation = buildReconciliation(

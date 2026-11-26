@@ -7,6 +7,8 @@ import { getFlowStorageMode } from './config/flow-storage.js';
 import sessionService from './services/session.service.js';
 import conversationAbandonmentService from './services/conversationAbandonment.service.js';
 import conversationRetentionService from './services/conversationRetention.service.js';
+import whatsappBillingAggregateService from './services/whatsapp-billing-aggregate.service.js';
+import whatsappBillingSyncService from './services/whatsapp-billing-sync.service.js';
 import conversationSheetSyncRecoveryService from './services/conversation-sheet-sync-recovery.service.js';
 import inboundMediaFetchService from './services/inbound-media-fetch.service.js';
 import {
@@ -25,6 +27,8 @@ validateConfig();
 
 installProcessShutdownHandlers();
 registerShutdownTask('conversation_retention', () => conversationRetentionService.stop());
+registerShutdownTask('billing_aggregate', () => whatsappBillingAggregateService.stop());
+registerShutdownTask('billing_twilio_sync', () => whatsappBillingSyncService.stop());
 registerShutdownTask('conversation_sheet_sync_recovery', () => conversationSheetSyncRecoveryService.stop());
 registerShutdownTask('conversation_abandonment', () => conversationAbandonmentService.stop());
 registerShutdownTask('inbound_media_fetch', () => inboundMediaFetchService.stop());
@@ -47,6 +51,8 @@ registerShutdownTask('http_server', () => new Promise((resolve) => {
     await sessionService.loadSessions();
     conversationAbandonmentService.start();
     conversationRetentionService.start();
+    whatsappBillingAggregateService.start();
+    whatsappBillingSyncService.start();
     conversationSheetSyncRecoveryService.start();
     inboundMediaFetchService.start();
     monitoringService.start();

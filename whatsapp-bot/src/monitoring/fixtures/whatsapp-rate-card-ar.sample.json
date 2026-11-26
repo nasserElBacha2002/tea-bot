@@ -24,18 +24,18 @@
       "effectiveFrom": "2026-10-01",
       "rules": {
         "serviceInCustomerWindow": {
-          "metaFeePerMessageUsd": 0.0348,
+          "metaFeePerMessageUsd": 0.026,
           "freeAllowancePerNumberPerMonth": 1000,
           "freeAllowanceResetsMonthly": true,
           "note": "Tarifa ilustrativa AR — reemplazar con rate card oficial del período."
         },
         "utilityInCustomerWindow": {
-          "metaFeePerMessageUsd": 0.0286,
+          "metaFeePerMessageUsd": 0.026,
           "note": "Utility dentro de ventana 24h vuelve a cobrarse desde oct-2026."
         },
-        "utilityOutsideWindow": { "metaFeePerMessageUsd": 0.0286 },
+        "utilityOutsideWindow": { "metaFeePerMessageUsd": 0.026 },
         "marketing": { "metaFeePerMessageUsd": 0.0618 },
-        "authentication": { "metaFeePerMessageUsd": 0.0348 }
+        "authentication": { "metaFeePerMessageUsd": 0.026 }
       }
     }
   }
