@@ -101,6 +101,7 @@
       "frontend.tsc.errors": {"tolerance": 0, "priority": "P1"},
       "backend.checkjs.errors": {"tolerance": 0, "priority": "P1"},
       "backend.syntax.errors": {"tolerance": 0, "priority": "P0"},
+      "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.critical": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.high": {"tolerance": 0, "priority": "P1"},
       "security.npm.frontend.critical": {"tolerance": 0, "priority": "P0"},

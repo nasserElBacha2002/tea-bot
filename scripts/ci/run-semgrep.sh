@@ -5,14 +5,25 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
 mkdir -p "${ROOT}/audit/raw"
 
-if ! command -v semgrep >/dev/null 2>&1; then
-  echo "[sast] semgrep no está instalado (pip install semgrep==1.110.0)" >&2
+SEMGREP_BIN="${SEMGREP_BIN:-}"
+if [[ -z "${SEMGREP_BIN}" ]]; then
+  VENV_DIR="${SEMGREP_VENV:-${HOME}/.cache/tea-bot/semgrep-venv}"
+  if [[ -x "${VENV_DIR}/bin/semgrep" ]]; then
+    SEMGREP_BIN="${VENV_DIR}/bin/semgrep"
+  elif command -v semgrep >/dev/null 2>&1; then
+    SEMGREP_BIN="$(command -v semgrep)"
+  fi
+fi
+
+if [[ -z "${SEMGREP_BIN}" || ! -x "${SEMGREP_BIN}" ]]; then
+  echo "[sast] semgrep no está instalado (bash scripts/ci/install-semgrep.sh)" >&2
   exit 2
 fi
 
 out="${ROOT}/audit/raw/semgrep.json"
+rm -f "${out}"
 set +e
-semgrep scan \
+"${SEMGREP_BIN}" scan \
   --config "${ROOT}/scripts/ci/semgrep" \
   --config p/javascript \
   --config p/nodejs \

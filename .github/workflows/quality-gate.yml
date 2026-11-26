@@ -33,6 +33,11 @@ jobs:
             whatsapp-bot/package-lock.json
             frontend/package-lock.json
 
+      - name: Setup Python 3.12
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+
       - name: Install backend dependencies
         working-directory: whatsapp-bot
         run: npm ci
@@ -41,7 +46,17 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Audit script unit tests
+        run: |
+          set -euo pipefail
+          npm run test:audit
+          npm run test:audit-policy
+
       - name: Quality audit (baseline regression gate)
+        env:
+          # Secrets sintéticos solo para tests unitarios del audit runner (no productivos).
+          SESSION_SECRET: test-session-secret-for-audit
+          APP_BASE_URL: http://127.0.0.1:3000
         run: npm run audit:strict
 
       - name: Upload quality report
@@ -92,17 +107,18 @@ jobs:
           bash scripts/ci/install-hadolint.sh "$HOME/.local/bin"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      # semgrep 1.110.0 arrastra protobuf que no carga en el Python 3.14 del runner.
+      # semgrep 1.110.0 + protobuf/OpenTelemetry no arrancan en Python 3.14 del runner.
+      # Se instala en un venv aislado con Python 3.12 y setuptools<81.
       - name: Setup Python 3.12
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.12"
 
-      - name: Install semgrep
+      - name: Install semgrep (isolated venv)
         run: |
           set -euo pipefail
           bash scripts/ci/install-semgrep.sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          echo "$HOME/.cache/tea-bot/semgrep-venv/bin" >> "$GITHUB_PATH"
 
       - name: Security suite
         run: bash scripts/ci/run-security.sh

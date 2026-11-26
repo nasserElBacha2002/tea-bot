@@ -397,26 +397,70 @@ def _covered_on_disk(prefix: str) -> tuple[int, int]:
     return covered, len(files)
 
 
+def _read_exit_code(path: Path) -> int | None:
+    if not path.is_file():
+        return None
+    text = path.read_text(encoding="utf-8", errors="replace").strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
 def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path) -> None:
     numbers = metrics.setdefault("numbers", {})
     samples = metrics.setdefault("samples", {})
+    tool_status = metrics.setdefault("tool_status", {})
+
+    eslint_exit = _read_exit_code(raw_dir / "frontend-eslint.exit")
+    if eslint_exit is not None:
+        tool_status["frontend.eslint.exit"] = eslint_exit
     eslint_path = raw_dir / "frontend-eslint.json"
     eslint_text = eslint_path.read_text(encoding="utf-8", errors="replace") if eslint_path.is_file() else ""
-    if eslint_text.lstrip().startswith(("{", "[")):
+    if eslint_text.lstrip().startswith("["):
         errors, warnings, rows = _parse_eslint(eslint_path)
         numbers["frontend.eslint.errors"] = errors
         numbers["frontend.eslint.warnings"] = warnings
         samples["eslint"] = rows[:40]
+    elif eslint_text.lstrip().startswith("{"):
+        payload = json.loads(eslint_text)
+        if isinstance(payload, dict) and payload.get("error"):
+            tool_status["frontend.eslint.error"] = str(payload.get("error"))
+            samples["eslint"] = [{"error": payload.get("error"), "exit": payload.get("exit")}]
+        elif isinstance(payload, dict) and isinstance(payload.get("results"), list):
+            errors, warnings, rows = _parse_eslint(eslint_path)
+            numbers["frontend.eslint.errors"] = errors
+            numbers["frontend.eslint.warnings"] = warnings
+            samples["eslint"] = rows[:40]
+
+    tsc_exit = _read_exit_code(raw_dir / "frontend-tsc.exit")
+    if tsc_exit is not None:
+        tool_status["frontend.tsc.exit"] = tsc_exit
     tsc_path = raw_dir / "frontend-tsc.txt"
-    if tsc_path.is_file() and "STATUS: SKIPPED" not in tsc_path.read_text(encoding="utf-8", errors="replace"):
-        count, rows = _parse_tsc(tsc_path)
-        numbers["frontend.tsc.errors"] = count
-        samples["tsc"] = rows[:40]
+    if tsc_path.is_file():
+        tsc_text = tsc_path.read_text(encoding="utf-8", errors="replace")
+        if "STATUS: MISSING_TOOL" in tsc_text or "STATUS: SKIPPED" in tsc_text:
+            tool_status["frontend.tsc.error"] = "missing_or_skipped"
+        else:
+            count, rows = _parse_tsc(tsc_path)
+            numbers["frontend.tsc.errors"] = count
+            samples["tsc"] = rows[:40]
+
+    checkjs_exit = _read_exit_code(raw_dir / "backend-checkjs.exit")
+    if checkjs_exit is not None:
+        tool_status["backend.checkjs.exit"] = checkjs_exit
     checkjs_path = raw_dir / "backend-checkjs.txt"
-    if checkjs_path.is_file() and "STATUS: SKIPPED" not in checkjs_path.read_text(encoding="utf-8", errors="replace"):
-        count, rows = _parse_tsc(checkjs_path)
-        numbers["backend.checkjs.errors"] = count
-        samples["checkjs"] = rows[:40]
+    if checkjs_path.is_file():
+        checkjs_text = checkjs_path.read_text(encoding="utf-8", errors="replace")
+        if "STATUS: MISSING_TOOL" in checkjs_text or "STATUS: SKIPPED" in checkjs_text:
+            tool_status["backend.checkjs.error"] = "missing_or_skipped"
+        else:
+            count, rows = _parse_tsc(checkjs_path)
+            numbers["backend.checkjs.errors"] = count
+            samples["checkjs"] = rows[:40]
+
     syntax_path = raw_dir / "backend-syntax.txt"
     if syntax_path.is_file():
         failed = [
@@ -426,6 +470,13 @@ def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path) -> None:
         ]
         numbers["backend.syntax.errors"] = len(failed)
         samples["syntax"] = failed[:40]
+
+    unit_exit = _read_exit_code(raw_dir / "backend-unit-tests.exit")
+    if unit_exit is not None:
+        tool_status["backend.unit_tests.exit"] = unit_exit
+        # Preservar el fallo de pruebas aparte de la cobertura: 1 = falló, 0 = pasó.
+        numbers["backend.unit_tests.failed"] = 0 if unit_exit == 0 else 1
+
     coverage_path = raw_dir / "backend-coverage.txt"
     if coverage_path.is_file():
         pct = _parse_coverage(coverage_path.read_text(encoding="utf-8", errors="replace"))
@@ -436,7 +487,11 @@ def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path) -> None:
 def _parse_eslint(path: Path) -> tuple[int, int, list[dict[str, Any]]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     if isinstance(data, dict):
+        if data.get("error"):
+            raise ValueError(f"eslint report error: {data.get('error')}")
         data = data.get("results") or []
+    if not isinstance(data, list):
+        raise ValueError("eslint report must be a JSON array of file results")
     errors = 0
     warnings = 0
     rows = []

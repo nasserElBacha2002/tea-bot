@@ -1,7 +1,7 @@
 {
   "kind": "trivy-misconfig",
   "fingerprints": [
-    "DS-0002|frontend/Dockerfile",
-    "DS-0002|whatsapp-bot/Dockerfile"
+    "46fe95a18953828f3f97278f",
+    "9d8d867ffb2b0b6d7d335246"
   ]
 }

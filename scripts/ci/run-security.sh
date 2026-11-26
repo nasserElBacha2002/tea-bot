@@ -7,15 +7,30 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${ROOT}"
 mkdir -p "${ROOT}/audit/raw"
 
+# Evitar que un reporte viejo apruebe una corrida incompleta.
+rm -f \
+  "${ROOT}/audit/raw/gitleaks-history.json" \
+  "${ROOT}/audit/raw/gitleaks-worktree.json" \
+  "${ROOT}/audit/raw/npm-audit-whatsapp-bot.json" \
+  "${ROOT}/audit/raw/npm-audit-frontend.json" \
+  "${ROOT}/audit/raw/semgrep.json" \
+  "${ROOT}/audit/raw/hadolint.json" \
+  "${ROOT}/audit/raw/trivy.json" \
+  "${ROOT}/audit/security-summary.md"
+
 fail=0
 run_check() {
   local name="$1"
   local script="$2"
+  local code=0
   echo "== ${name} =="
-  if bash "${script}"; then
+  set +e
+  bash "${script}"
+  code=$?
+  set -e
+  if [[ "${code}" -eq 0 ]]; then
     echo "[ok] ${name}"
   else
-    local code=$?
     echo "[fail] ${name} (exit ${code})" >&2
     fail=1
   fi
@@ -42,7 +57,7 @@ nuevo de semgrep/hadolint/trivy misconfig hace fallar el check. No queda en esta
 - npm audit (`--omit=dev`, igual que en CI): `audit/raw/npm-audit-*.json`
 - Semgrep: `audit/raw/semgrep.json`
 - Hadolint: `audit/raw/hadolint.json`
-- Trivy: `audit/raw/trivy.json`
+- Trivy: `audit/raw/trivy.json` (incluye vulnerabilidades HIGH/CRITICAL sin parche)
 
 Resultado de esta corrida: {status}
 """.format(status="FAIL" if fail else "PASS")

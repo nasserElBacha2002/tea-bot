@@ -10,7 +10,8 @@
     "frontend.tsc.errors": 0,
     "backend.checkjs.errors": 296,
     "backend.syntax.errors": 0,
-    "backend.coverage.lines_pct": 54.05
+    "backend.coverage.lines_pct": 54.05,
+    "backend.unit_tests.failed": 1
   },
   "maps": {
     "complexity.cyclomatic": {

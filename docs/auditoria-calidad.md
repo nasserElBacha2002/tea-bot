@@ -20,10 +20,11 @@ El gate de calidad compara:
 - errores de `tsc --checkJs` del backend (progresivo, `scripts/audit/tsconfig.backend.checkjs.json`, sin `strict`)
 - `node --check` del backend
 - cobertura de líneas de las pruebas unitarias del backend (sin integración SQL) y cobertura estructural de archivos con test colocalizado
+- el exit code de esas pruebas unitarias (`backend.unit_tests.failed`): una falla nueva (regresión 0→1) bloquea aunque la cobertura no baje; la deuda de pruebas ya registrada en el baseline no se reabre
 - líneas duplicadas entre archivos (con tolerancia) y ciclos de imports
 - complejidad ciclomática por archivo cuando cruza el umbral y crece por encima del baseline
 
-SOLID, cohesión, fan-out y god-class quedan en el reporte como heurísticas. Un ciclo nuevo o una métrica peor sí bloquean `audit:strict`.
+SOLID, cohesión, fan-out y god-class quedan en el reporte como heurísticas. Un ciclo nuevo, una prueba unitaria fallida, un scanner incompleto o una métrica peor sí bloquean `audit:strict`.
 
 El reporte por archivo, con evidencia y acciones P0/P1/P2, queda en `audit/audit-summary.md` (no se versiona; CI lo sube como artefacto `audit-report`).
 
@@ -35,19 +36,21 @@ Mismos comandos en local y en CI.
 bash scripts/ci/install-gitleaks.sh "$HOME/.local/bin"
 bash scripts/ci/install-trivy.sh "$HOME/.local/bin"
 bash scripts/ci/install-hadolint.sh "$HOME/.local/bin"
-bash scripts/ci/install-semgrep.sh   # requiere Python 3.12; 3.14 rompe semgrep 1.110.0
-export PATH="$HOME/.local/bin:$PATH"
+bash scripts/ci/install-semgrep.sh   # venv aislado con Python 3.12; 3.14 rompe protobuf/OTel
+export PATH="$HOME/.cache/tea-bot/semgrep-venv/bin:$HOME/.local/bin:$PATH"
 npm run audit:security
 npm run secrets:install-hook   # opcional: pre-commit con gitleaks
 ```
 
 | Check | Qué bloquea |
 | --- | --- |
-| Gitleaks | Cualquier secreto en el historial completo (`--log-opts=--all`) o en el worktree. No hay allowlist de `.env` / `.env.*`. El checkout de CI usa `fetch-depth: 0`. |
+| Gitleaks | Cualquier secreto en el historial completo (`--log-opts=--all`) o en el worktree. No hay allowlist de `.env` / `.env.*`. Excepciones de valor usan `condition = "AND"` (no excluyen el archivo entero). El checkout de CI usa `fetch-depth: 0`. |
 | `npm audit --omit=dev` | Advisory `GHSA-*` high/critical que no esté en `scripts/ci/audit-allowlist.json` con `review_by` vigente. El id es el de la advisory, no el nombre del paquete. Una entrada vencida hace fallar el scanner. El mismo flag `--omit=dev` se usa en local y en CI. |
-| Semgrep | Un `ERROR` nuevo respecto de `audit/baseline/semgrep.json` (reglas propias en `scripts/ci/semgrep/` más `p/javascript`, `p/nodejs` y `p/react`). |
+| Semgrep | Un `ERROR` nuevo (fingerprint por ocurrencia) respecto de `audit/baseline/semgrep.json` (reglas propias en `scripts/ci/semgrep/` más `p/javascript`, `p/nodejs` y `p/react`). |
 | Hadolint | Un error nuevo en los Dockerfile respecto de `audit/baseline/hadolint.json`. |
-| Trivy `fs` | Una vulnerabilidad high/critical fuera de `scripts/ci/trivy-allowlist.json` (id `CVE-` o `GHSA-`, con vencimiento) o un misconfig high/critical nuevo respecto de `audit/baseline/trivy-misconfig.json`. |
+| Trivy `fs` | Una vulnerabilidad high/critical (con o sin parche) fuera de `scripts/ci/trivy-allowlist.json` (id `CVE-` o `GHSA-`, con vencimiento) o un misconfig high/critical nuevo respecto de `audit/baseline/trivy-misconfig.json`. |
+
+Para regenerar baselines de calidad o SAST hace falta `AUDIT_ALLOW_BASELINE_WRITE=1`. Sin ese control explícito no se pueden ocultar regresiones reescribiendo baselines.
 
 Si el scanner no puede correr o el reporte es inválido, el check sale con código 2. No queda en un estado “findings” que el workflow ignore.
 

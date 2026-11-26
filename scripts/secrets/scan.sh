@@ -15,28 +15,36 @@ fi
 rc=0
 
 echo "[secrets] historial git completo (.gitleaks.toml, log --all)"
-if ! gitleaks detect \
+set +e
+gitleaks detect \
   --source "${ROOT}" \
   --config "${ROOT}/.gitleaks.toml" \
   --log-opts="--all" \
   --redact \
   --no-banner \
   --report-format json \
-  --report-path "${ROOT}/audit/raw/gitleaks-history.json"; then
-  echo "[secrets] gitleaks encontró secretos en el historial" >&2
+  --report-path "${ROOT}/audit/raw/gitleaks-history.json"
+hist_code=$?
+set -e
+if [[ "${hist_code}" -ne 0 ]]; then
+  echo "[secrets] gitleaks encontró secretos en el historial (exit ${hist_code})" >&2
   rc=1
 fi
 
 echo "[secrets] worktree, sin allowlist de .env"
-if ! gitleaks detect \
+set +e
+gitleaks detect \
   --source "${ROOT}" \
   --config "${ROOT}/.gitleaks.toml" \
   --no-git \
   --redact \
   --no-banner \
   --report-format json \
-  --report-path "${ROOT}/audit/raw/gitleaks-worktree.json"; then
-  echo "[secrets] gitleaks encontró secretos en el worktree" >&2
+  --report-path "${ROOT}/audit/raw/gitleaks-worktree.json"
+wt_code=$?
+set -e
+if [[ "${wt_code}" -ne 0 ]]; then
+  echo "[secrets] gitleaks encontró secretos en el worktree (exit ${wt_code})" >&2
   rc=1
 fi
 

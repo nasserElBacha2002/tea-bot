@@ -17,11 +17,14 @@ for dir in whatsapp-bot frontend; do
     echo "[audit] scanner: npm audit no escribió JSON para ${dir} (exit ${status})" >&2
     exit 2
   fi
-  if ! NPM_AUDIT_EXIT_CODE="${status}" node "${ROOT}/scripts/ci/evaluate-audit.mjs" < "${out}"; then
-    code=$?
-    if [[ "${code}" -eq 2 ]]; then
-      exit 2
-    fi
+  set +e
+  NPM_AUDIT_EXIT_CODE="${status}" node "${ROOT}/scripts/ci/evaluate-audit.mjs" < "${out}"
+  eval_code=$?
+  set -e
+  if [[ "${eval_code}" -eq 2 ]]; then
+    exit 2
+  fi
+  if [[ "${eval_code}" -ne 0 ]]; then
     fail=1
   fi
 done

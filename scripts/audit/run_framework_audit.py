@@ -85,6 +85,7 @@ def main() -> int:
         regression_only=True,
     )
     runtime = os.environ.get("AUDIT_RUNTIME", "0") == "1"
+    runtime_incomplete = os.environ.get("AUDIT_RUNTIME_INCOMPLETE", "0") == "1"
     current = {
         "run_id": run_id,
         "generated_at": generated_at,
@@ -92,6 +93,7 @@ def main() -> int:
         "completed": True,
         "framework_status": "ok",
         "runtime_collected": runtime,
+        "runtime_incomplete": runtime_incomplete,
     }
     findings_payload = {
         **current,

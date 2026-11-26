@@ -10,6 +10,7 @@ if ! command -v hadolint >/dev/null 2>&1; then
 fi
 
 out="${ROOT}/audit/raw/hadolint.json"
+rm -f "${out}"
 set +e
 hadolint --format json \
   "${ROOT}/whatsapp-bot/Dockerfile" \

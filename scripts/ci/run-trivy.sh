@@ -11,12 +11,14 @@ if ! command -v trivy >/dev/null 2>&1; then
 fi
 
 out="${ROOT}/audit/raw/trivy.json"
-# exit-code 0: el veredicto lo da la política (advisory id + vencimiento) y el baseline de misconfig.
+rm -f "${out}"
+# No usar --ignore-unfixed: HIGH/CRITICAL sin parche también se reportan.
+# El veredicto lo da la política (advisory id + vencimiento) y el baseline de misconfig.
 # Un fallo de trivy (DB, JSON inválido) sigue siendo exit != 0 y no se traga.
-if ! trivy fs \
+set +e
+trivy fs \
   --quiet \
   --severity HIGH,CRITICAL \
-  --ignore-unfixed \
   --scanners vuln,misconfig \
   --skip-dirs node_modules \
   --skip-dirs dist \
@@ -26,8 +28,12 @@ if ! trivy fs \
   --exit-code 0 \
   --format json \
   --output "${out}" \
-  .; then
-  echo "[trivy] scanner: trivy fs falló" >&2
+  .
+trivy_status=$?
+set -e
+
+if [[ "${trivy_status}" -ne 0 ]]; then
+  echo "[trivy] scanner: trivy fs falló (exit ${trivy_status})" >&2
   exit 2
 fi
 
@@ -37,21 +43,28 @@ if [[ ! -s "${out}" ]]; then
 fi
 
 fail=0
-if ! node "${ROOT}/scripts/ci/trivy-policy.mjs" "${out}"; then
-  code=$?
-  if [[ "${code}" -eq 2 ]]; then
-    exit 2
-  fi
+set +e
+node "${ROOT}/scripts/ci/trivy-policy.mjs" "${out}"
+policy_code=$?
+set -e
+if [[ "${policy_code}" -eq 2 ]]; then
+  exit 2
+fi
+if [[ "${policy_code}" -ne 0 ]]; then
   fail=1
 fi
-if ! python3 "${ROOT}/scripts/ci/sast_baseline.py" \
+
+set +e
+python3 "${ROOT}/scripts/ci/sast_baseline.py" \
   --kind trivy-misconfig \
   --current "${out}" \
-  --baseline "${ROOT}/audit/baseline/trivy-misconfig.json"; then
-  code=$?
-  if [[ "${code}" -eq 2 ]]; then
-    exit 2
-  fi
+  --baseline "${ROOT}/audit/baseline/trivy-misconfig.json"
+baseline_code=$?
+set -e
+if [[ "${baseline_code}" -eq 2 ]]; then
+  exit 2
+fi
+if [[ "${baseline_code}" -ne 0 ]]; then
   fail=1
 fi
 exit "${fail}"

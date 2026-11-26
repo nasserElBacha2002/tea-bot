@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -25,14 +26,31 @@ def main() -> int:
     out = audit_dir()
     findings_path = out / "findings.json"
     metrics_path = out / "metrics.json"
-    if not findings_path.is_file() or not metrics_path.is_file():
-        print("Quality gate: falta findings.json o metrics.json", file=sys.stderr)
+    current_path = out / "current-run.json"
+    if not findings_path.is_file() or not metrics_path.is_file() or not current_path.is_file():
+        print("Quality gate: falta findings.json, metrics.json o current-run.json", file=sys.stderr)
         return 1 if args.strict else 0
+
+    current = json.loads(current_path.read_text(encoding="utf-8"))
+    if args.strict:
+        if current.get("completed") is not True or current.get("framework_status") != "ok":
+            print("Quality gate: corrida incompleta (framework)", file=sys.stderr)
+            return 1
+        if current.get("runtime_collected") is not True:
+            print("Quality gate: corrida incompleta (runtime eslint/tsc/cobertura ausente)", file=sys.stderr)
+            return 1
+        if current.get("runtime_incomplete") is True or os.environ.get("AUDIT_RUNTIME_INCOMPLETE") == "1":
+            print("Quality gate: scanners de runtime incompletos o con error operativo", file=sys.stderr)
+            return 1
 
     payload = json.loads(findings_path.read_text(encoding="utf-8"))
     metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
     findings = [AuditFinding.from_dict(item) for item in payload.get("findings") or []]
-    metrics = {"numbers": metrics_payload.get("numbers") or {}, "maps": metrics_payload.get("maps") or {}}
+    metrics = {
+        "numbers": metrics_payload.get("numbers") or {},
+        "maps": metrics_payload.get("maps") or {},
+        "tool_status": metrics_payload.get("tool_status") or {},
+    }
     baseline_findings_path = out / "baseline" / "findings.baseline.json"
     baseline_metrics_path = out / "baseline" / "metrics.baseline.json"
     baseline_diff = None
@@ -53,6 +71,14 @@ def main() -> int:
         metrics_baseline=metrics_baseline,
         regression_only=True,
     )
+
+    # El exit code de las unitarias se preserva en backend.unit_tests.failed y entra al
+    # progressive gate. Una falla nueva (0→1) bloquea aunque la cobertura no baje.
+    # La deuda de pruebas ya presente en el baseline (failed=1) no se reabre aquí.
+    unit_exit = (metrics.get("tool_status") or {}).get("backend.unit_tests.exit")
+    if unit_exit not in (None, 0):
+        print(f"- backend unit tests exit: {unit_exit} (métrica backend.unit_tests.failed)")
+
     print("Quality gate evaluation")
     print(f"- mode: {'strict' if args.strict else 'diagnostic'}")
     print(f"- passed: {gate['passed']}")

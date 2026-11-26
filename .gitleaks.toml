@@ -13,14 +13,20 @@ paths = [
   '''(?:^|/)dist/''',
   '''(?:^|/)coverage/''',
   '''(?:^|/)audit/raw/''',
+  '''(?:^|/)\.cache/''',
+  '''(?:^|/)__pycache__/''',
 ]
 
+# Excepciones de valor: condition=AND + targetRules/regexes.
+# No se usan paths aquí: en gitleaks un path en allowlist omite el archivo entero.
+
 [[allowlists]]
-description = "Fixture de nombre de archivo en inbound-media.service.test.js (abcd1234.jpg), no una API key"
-paths = ['''(?:^|/)inbound-media\.service\.test\.js$''']
+description = "Fixture de nombre de archivo abcd1234.jpg (generic-api-key), no una API key"
+condition = "AND"
+targetRules = ["generic-api-key"]
 regexes = ['''abcd1234\.jpg''']
 
 [[allowlists]]
-description = "SHA-256 de ejemplo documentado en el README para la contraseña de demo Tea2026, solo en .env.example"
-paths = ['''(?:^|/)whatsapp-bot/\.env\.example$''']
+description = "SHA-256 de ejemplo documentado para la contraseña de demo Tea2026"
+condition = "AND"
 regexes = ['''e6cb496be6f8ec1bb9ece061e9d5589919c6d63d1cfde5bc0095f78d657ce29d''']

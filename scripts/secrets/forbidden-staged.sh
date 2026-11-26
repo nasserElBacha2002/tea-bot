@@ -2,21 +2,29 @@
 # Rechaza secretos staged antes de que entren al historial.
 set -euo pipefail
 
+is_env_file() {
+  local path="$1"
+  local base
+  base="$(basename "${path}")"
+  case "${base}" in
+    .env|.env.*)
+      case "${base}" in
+        .env.example|.env.*.example) return 1 ;;
+        *) return 0 ;;
+      esac
+      ;;
+  esac
+  return 1
+}
+
 fail=0
 while IFS= read -r path; do
   [[ -z "${path}" ]] && continue
   base="$(basename "${path}")"
-  case "${path}" in
-    */.env|.env|.env.*)
-      case "${base}" in
-        .env.example|.env.*.example) ;;
-        *)
-          echo "[secrets] rechazado: archivo de entorno en staging (${path})" >&2
-          fail=1
-          ;;
-      esac
-      ;;
-  esac
+  if is_env_file "${path}"; then
+    echo "[secrets] rechazado: archivo de entorno en staging (${path})" >&2
+    fail=1
+  fi
   case "${base}" in
     credentials.json|*.pem|*.p12|*.keystore|id_rsa|id_rsa.pub)
       echo "[secrets] rechazado: archivo sensible en staging (${path})" >&2

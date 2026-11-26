@@ -85,6 +85,7 @@ class GateTests(unittest.TestCase):
         progressive = {
             "numbers_higher_is_worse": {
                 "frontend.eslint.errors": {"tolerance": 0, "priority": "P1"},
+                "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
                 "duplication.lines": {"tolerance_abs": 30, "tolerance_pct": 5, "priority": "P2"},
             },
             "numbers_lower_is_worse": {
@@ -100,25 +101,53 @@ class GateTests(unittest.TestCase):
             },
         }
         same = compare_metrics(
-            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40},
+            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40, "backend.unit_tests.failed": 0},
              "maps": {"complexity.cyclomatic": {"a.js": 50}}},
-            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40},
+            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40, "backend.unit_tests.failed": 0},
              "maps": {"complexity.cyclomatic": {"a.js": 50}}},
             progressive,
         )
         self.assertEqual(same, [])
         worse = compare_metrics(
-            {"numbers": {"frontend.eslint.errors": 4, "duplication.lines": 110, "backend.coverage.lines_pct": 38},
+            {"numbers": {"frontend.eslint.errors": 4, "duplication.lines": 110, "backend.coverage.lines_pct": 38, "backend.unit_tests.failed": 1},
              "maps": {"complexity.cyclomatic": {"a.js": 80, "new.js": 45}}},
-            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40},
+            {"numbers": {"frontend.eslint.errors": 3, "duplication.lines": 100, "backend.coverage.lines_pct": 40, "backend.unit_tests.failed": 0},
              "maps": {"complexity.cyclomatic": {"a.js": 50}}},
             progressive,
         )
         keys = {item["key"] for item in worse}
         self.assertIn("frontend.eslint.errors", keys)
         self.assertIn("backend.coverage.lines_pct", keys)
+        self.assertIn("backend.unit_tests.failed", keys)
         self.assertIn("complexity.cyclomatic", keys)
         self.assertNotIn("duplication.lines", keys)
+
+    def test_failed_unit_tests_block_even_if_coverage_stable(self):
+        progressive = {
+            "numbers_higher_is_worse": {
+                "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
+            },
+            "numbers_lower_is_worse": {
+                "backend.coverage.lines_pct": {"tolerance": 1.0, "priority": "P1"},
+            },
+            "maps_higher_is_worse": {},
+        }
+        regressions = compare_metrics(
+            {"numbers": {"backend.unit_tests.failed": 1, "backend.coverage.lines_pct": 54.05}, "maps": {}},
+            {"numbers": {"backend.unit_tests.failed": 0, "backend.coverage.lines_pct": 54.05}, "maps": {}},
+            progressive,
+        )
+        self.assertEqual(len(regressions), 1)
+        self.assertEqual(regressions[0]["key"], "backend.unit_tests.failed")
+        gate = evaluate_gate(
+            [],
+            baseline_diff={"new_findings": []},
+            metrics={"numbers": {"backend.unit_tests.failed": 1, "backend.coverage.lines_pct": 54.05}, "maps": {}},
+            metrics_baseline={"numbers": {"backend.unit_tests.failed": 0, "backend.coverage.lines_pct": 54.05}, "maps": {}},
+        )
+        # evaluate_gate uses thresholds.json progressive; assert explicit regression path above.
+        self.assertTrue(any(item["key"] == "backend.unit_tests.failed" for item in regressions))
+        self.assertIsNotNone(gate)
 
     def test_comment_does_not_add_complexity(self):
         self.assertEqual(cyclomatic("function a(){ return 1 }\n"), cyclomatic("// if (true) {\nfunction a(){ return 1 }\n"))
