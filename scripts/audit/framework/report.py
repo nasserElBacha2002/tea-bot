@@ -11,6 +11,59 @@ from .models import AuditFinding, max_severity
 PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2}
 
 
+def _design_section(metrics: dict[str, Any]) -> list[str]:
+    numbers = metrics.get("numbers") or {}
+    lines = [
+        "## Diseño y mantenibilidad",
+        "",
+        "SOLID/GRASP, números mágicos, largo de línea y exports muertos son informativos. "
+        "El gate progresivo mira funciones largas, CC≥25, parámetros y el score god-class por archivo "
+        "(tolerancia 0) y, con tolerancia, catches que solo loguean o devuelven un default, "
+        "bypasses de tipos y variables de entorno sin documentar. "
+        "Las reglas de capas bloquean y no entran al baseline.",
+        "",
+    ]
+    rows = [
+        ("solid.grasp.count", "Hallazgos SOLID/GRASP"),
+        ("exceptions.problematic", "Catch problemáticos (vacío + default + solo log)"),
+        ("exceptions.empty", "Catch vacíos"),
+        ("exceptions.return_default", "Catch que devuelve un default"),
+        ("exceptions.log_only", "Catch que solo loguea"),
+        ("patches.type_bypass", "Bypasses de tipos o lint"),
+        ("env.undocumented", "Variables de entorno sin documentar"),
+        ("functions.cyclomatic_high", "Funciones con CC≥25"),
+        ("functions.long", "Funciones de más de 80 líneas"),
+        ("functions.params", "Funciones con más de 6 parámetros"),
+        ("functions.statements_high", "Funciones con más de 50 sentencias"),
+        ("functions.depth_high", "Bloques con profundidad >4"),
+        ("magic.numbers", "Números mágicos (informativo)"),
+        ("line_length.over_120", "Líneas de más de 120 caracteres"),
+        ("line_length.over_160", "Líneas de más de 160 caracteres"),
+        ("line_length.over_200", "Líneas de más de 200 caracteres"),
+        ("dead_exports.count", "Exports sin referencias"),
+        ("routes.heavy", "Rutas con lógica pesada"),
+    ]
+    for key, label in rows:
+        if key in numbers:
+            lines.append(f"- {label}: **{numbers[key]}**")
+    params = (metrics.get("samples") or {}).get("functions_params") or []
+    if params:
+        lines.append("")
+        lines.append("Funciones con más parámetros:")
+        for item in params[:8]:
+            lines.append(
+                f"- `{item.get('file')}` `{item.get('name')}` ({item.get('params')} parámetros, línea {item.get('line')})"
+            )
+    god = (metrics.get("samples") or {}).get("god_class") or []
+    if god:
+        lines.append("")
+        lines.append("God class (watch ≥9, medium ≥14, high ≥20):")
+        for item in sorted(god, key=lambda row: (-int(row.get("score") or 0), row.get("file") or ""))[:12]:
+            lines.append(f"- `{item.get('file')}` score {item.get('score')} ({item.get('band')})")
+    lines.append("")
+    return lines
+
+
 def priority_for(finding: AuditFinding) -> str:
     if finding.severity == "critical":
         return "P0"
@@ -42,6 +95,7 @@ def render_summary(
         f"- Hallazgos de calidad: **{len(findings)}**",
         f"- Gate: **{'PASS' if gate.get('passed') else 'FAIL'}** (bloqueos={gate.get('blocking_count', 0)})",
         "",
+        *_design_section(metrics),
         "## Acciones priorizadas",
         "",
     ]

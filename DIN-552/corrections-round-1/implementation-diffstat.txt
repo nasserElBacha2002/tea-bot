@@ -1,0 +1,17 @@
+ audit/baseline/metrics.baseline.json               | 55 +++++++++++-
+ scripts/audit/config/audit-architecture.json       |  6 +-
+ scripts/audit/config/thresholds.json               | 26 ++++++
+ scripts/audit/framework/config.py                  |  8 +-
+ scripts/audit/framework/scan.py                    | 98 ++++++++++++++++++++--
+ scripts/audit/framework/scanners/dead_env.py       | 27 +++++-
+ scripts/audit/framework/scanners/dead_exports.mjs  | 22 +++--
+ scripts/audit/framework/scanners/design.py         |  8 ++
+ scripts/audit/framework/scanners/exceptions.py     |  2 +-
+ .../audit/framework/scanners/function_metrics.mjs  | 27 ++++--
+ .../framework/scanners/function_metrics.spec.mjs   | 20 +++++
+ scripts/audit/framework/scanners/heuristics.py     |  2 +-
+ .../audit/framework/tests/test_design_scanners.py  | 88 ++++++++++++++++++-
+ scripts/audit/run_backend_unit_coverage.mjs        | 80 ++++++++++++++++--
+ scripts/audit/run_framework_audit.py               | 50 +++++++++--
+ scripts/audit/save_baseline.py                     |  2 +
+ 16 files changed, 484 insertions(+), 37 deletions(-)

@@ -12,8 +12,11 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from .architecture_util import AXIOS_HTTP_RE
 from .config import load_thresholds, repo_root
 from .models import AuditFinding
+from .scanners.design import scan_design
+from .scanners.heuristics import import_bindings, specifier_matches
 from .textutil import (
     count_functions,
     cyclomatic,
@@ -21,28 +24,12 @@ from .textutil import (
     extract_imports,
     find_cycles,
     line_count,
+    mask_non_code,
     resolve_specifier,
     stable_id,
 )
 
 SKIP_DIRS = {"node_modules", "dist", "coverage", "build", ".git"}
-DOMAIN_HINTS = (
-    "conversation",
-    "twilio",
-    "webhook",
-    "flow",
-    "handoff",
-    "takeover",
-    "sheet",
-    "billing",
-    "auth",
-    "media",
-    "classification",
-    "session",
-    "retention",
-    "monitoring",
-)
-SQL_RE = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b", re.I)
 ALL_FILES_RE = re.compile(r"all files\s*\|([^|\n]+)")
 
 
@@ -102,16 +89,22 @@ def _finding(**kwargs: Any) -> AuditFinding:
     return AuditFinding(**kwargs)
 
 
-def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any]]:
+def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str, Any], dict[str, str]]:
     root = root or repo_root()
     thresholds = load_thresholds()
     complexity_cfg = thresholds["complexity"]
-    god_cfg = thresholds["god_class"]
     dup_cfg = thresholds["duplication"]
     coupling_cfg = thresholds["coupling"]
     files = iter_source_files(root)
     known = {path.relative_to(root).as_posix() for path in files}
-    texts = {path.relative_to(root).as_posix(): _read(path) for path in files}
+    texts: dict[str, str] = {}
+    read_failed = 0
+    for path in files:
+        rel = path.relative_to(root).as_posix()
+        try:
+            texts[rel] = _read(path)
+        except OSError:
+            read_failed += 1
     findings: list[AuditFinding] = []
     cyclomatic_map: dict[str, int] = {}
     graph: dict[str, set[str]] = {rel: set() for rel in known}
@@ -166,7 +159,7 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
                 )
             )
 
-        _architecture_findings(findings, rel, imports, thresholds)
+        _architecture_findings(findings, rel, text, thresholds)
         if len(internal) >= coupling_cfg["fan_out_high"] and layer in {"services", "controllers", "pages", "hooks"}:
             findings.append(
                 _finding(
@@ -184,7 +177,6 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
                     blocking=False,
                 )
             )
-        _responsibility_findings(findings, rel, text, layer, functions, god_cfg)
 
     cycles = find_cycles(graph)
     for cycle in cycles:
@@ -244,33 +236,83 @@ def scan_sources(root: Path | None = None) -> tuple[list[AuditFinding], dict[str
     )
 
     backend_pct, frontend_pct = _structural_coverage(texts)
+    design_findings, design_metrics = scan_design(texts, thresholds)
+    findings.extend(design_findings)
     metrics = {
         "numbers": {
             "duplication.lines": dup_lines,
             "cycles.count": len(cycles),
             "backend.coverage.files_pct": backend_pct,
             "frontend.coverage.files_pct": frontend_pct,
+            **(design_metrics.get("numbers") or {}),
         },
-        "maps": {"complexity.cyclomatic": cyclomatic_map},
-        "samples": {},
+        "maps": {
+            "complexity.cyclomatic": cyclomatic_map,
+            **(design_metrics.get("maps") or {}),
+        },
+        "samples": dict(design_metrics.get("samples") or {}),
+        "scanner_telemetry": {
+            "sources": {
+                "discovered": len(files),
+                "analyzed": len(texts),
+                "skipped": 0,
+                "failed": read_failed,
+            },
+            **(design_metrics.get("scanner_telemetry") or {}),
+        },
     }
-    return findings, metrics
+    return findings, metrics, texts
 
 
-def _architecture_findings(findings: list[AuditFinding], rel: str, imports: list[str], thresholds: dict[str, Any]) -> None:
+def _architecture_findings(findings: list[AuditFinding], rel: str, text: str, thresholds: dict[str, Any]) -> None:
+    masked = mask_non_code(text)
+    if AXIOS_HTTP_RE.search(masked) and _matches(
+        rel,
+        [
+            "frontend/src/**/components/**",
+            "frontend/src/components/**",
+            "frontend/src/**/pages/**",
+            "frontend/src/pages/**",
+        ],
+    ):
+        findings.append(
+            _finding(
+                id=stable_id("arch", "axios-http", rel),
+                category="architecture",
+                subcategory="components-must-not-call-axios-http",
+                severity="critical",
+                confidence="high",
+                status="detected",
+                title="Llamada HTTP vía axios en capa UI",
+                description="axios.get/post/request y similares están prohibidos en components/pages.",
+                file=rel,
+                evidence={"rule": "components-must-not-call-axios-http", "never_baseline": True},
+                recommendation="Usar el cliente API de features en lugar de axios directo.",
+                blocking=True,
+            )
+        )
+    bindings = import_bindings(text)
     for rule in thresholds.get("architecture", {}).get("forbidden_import_patterns") or []:
         if not fnmatch(rel, rule.get("from_glob") or "**/*"):
             continue
         pattern = rule.get("to_pattern") or ""
         mode = rule.get("match_mode") or "contains"
-        for spec in imports:
-            hay = spec.lower() if mode == "case_insensitive_contains" else spec
-            needle = pattern.lower() if mode == "case_insensitive_contains" else pattern
-            if needle not in hay:
+        wanted = rule.get("imported_name")
+        seen: set[tuple[str, str | None]] = set()
+        for spec, imported in bindings:
+            if wanted and imported != wanted:
                 continue
+            if not specifier_matches(spec, pattern, mode):
+                continue
+            key = (spec, imported)
+            if key in seen:
+                continue
+            seen.add(key)
+            blocking = bool(rule.get("blocking", False))
+            label = f"{spec}#{imported}" if imported else spec
             findings.append(
                 _finding(
-                    id=stable_id("arch", rule.get("rule", "rule"), rel, spec),
+                    id=stable_id("arch", rule.get("rule", "rule"), rel, label),
                     category="architecture",
                     subcategory=rule.get("rule") or "layer",
                     severity=rule.get("severity", "high"),
@@ -279,86 +321,16 @@ def _architecture_findings(findings: list[AuditFinding], rel: str, imports: list
                     title=rule.get("rule") or "architecture-import-rule",
                     description=f"Import '{spec}' cruza el límite {rule.get('rule')}.",
                     file=rel,
-                    evidence={"import": spec, "rule": rule.get("rule")},
+                    evidence={
+                        "import": spec,
+                        "imported_name": imported,
+                        "rule": rule.get("rule"),
+                        "never_baseline": blocking,
+                    },
                     recommendation="Respetar controllers → services → repositories.",
-                    blocking=bool(rule.get("blocking", False)),
+                    blocking=blocking,
                 )
             )
-
-
-def _responsibility_findings(
-    findings: list[AuditFinding],
-    rel: str,
-    text: str,
-    layer: str,
-    functions: int,
-    god_cfg: dict[str, Any],
-) -> None:
-    domains = [name for name in DOMAIN_HINTS if name in rel.lower() or name in text.lower()]
-    sql = bool(SQL_RE.search(text))
-    externals = [name for name in ("twilio", "mssql", "googleapis", "axios") if name in text.lower()]
-    signals = 0
-    if sql and layer != "repositories":
-        signals += 1
-    if externals:
-        signals += 1
-    if len(domains) >= 3:
-        signals += 1
-    if layer == "services" and "res." in text:
-        signals += 1
-    if signals >= 3 and functions >= 8 and layer in {"services", "controllers", "pages"}:
-        findings.append(
-            _finding(
-                id=stable_id("srp", rel),
-                category="solid",
-                subcategory="srp",
-                severity="medium",
-                confidence="low",
-                status="suspected",
-                title="Posible mezcla de responsabilidades",
-                description=f"Señales={signals}, funciones≈{functions}, dominios={domains}. Heurística, no bloquea.",
-                file=rel,
-                evidence={"signals": signals, "functions": functions, "domains": domains, "sql": sql, "externals": externals},
-                recommendation="Confirmar y extraer colaboradores si las responsabilidades son independientes.",
-                blocking=False,
-            )
-        )
-    loc = line_count(text)
-    score = 0
-    reasons = []
-    if loc > god_cfg["loc_high"]:
-        score += 3
-        reasons.append("loc")
-    elif loc > god_cfg["loc_watch"]:
-        score += 2
-        reasons.append("loc-watch")
-    if functions > god_cfg["methods_high"]:
-        score += 3
-        reasons.append("functions")
-    if len(domains) >= 4:
-        score += 3
-        reasons.append("domains")
-    if sql and layer != "repositories":
-        score += 3
-        reasons.append("sql")
-    if score >= god_cfg["score_watch"] and layer in {"services", "controllers", "pages"}:
-        band = "high" if score >= god_cfg["score_high"] else "medium" if score >= god_cfg["score_medium"] else "low"
-        findings.append(
-            _finding(
-                id=stable_id("god", rel),
-                category="architecture",
-                subcategory="god-class",
-                severity=band,  # type: ignore[arg-type]
-                confidence="medium",
-                status="requires-review",
-                title="Módulo con demasiadas responsabilidades (heurística)",
-                description="Puntaje estilo god-class. Informativo salvo que empeore la complejidad medida.",
-                file=rel,
-                evidence={"score": score, "reasons": reasons, "loc": loc, "functions": functions, "domains": domains},
-                recommendation="Separar por caso de uso si el puntaje sigue subiendo.",
-                blocking=False,
-            )
-        )
 
 
 def _structural_coverage(_texts: dict[str, str]) -> tuple[float, float]:
@@ -409,7 +381,7 @@ def _read_exit_code(path: Path) -> int | None:
         return None
 
 
-def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path) -> None:
+def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path, findings: list[AuditFinding] | None = None) -> None:
     numbers = metrics.setdefault("numbers", {})
     samples = metrics.setdefault("samples", {})
     tool_status = metrics.setdefault("tool_status", {})
@@ -472,16 +444,182 @@ def ingest_tool_metrics(metrics: dict[str, Any], raw_dir: Path) -> None:
         samples["syntax"] = failed[:40]
 
     unit_exit = _read_exit_code(raw_dir / "backend-unit-tests.exit")
-    if unit_exit is not None:
+    unit_summary_path = raw_dir / "backend-unit-tests.json"
+    if unit_summary_path.is_file():
+        summary = json.loads(unit_summary_path.read_text(encoding="utf-8"))
+        fail_count = int(summary.get("fail_count") or summary.get("failures") or 0)
+        numbers["backend.unit_tests.fail_count"] = fail_count
+        numbers["backend.unit_tests.failed"] = 0 if fail_count == 0 else 1
+        tool_status["backend.unit_tests.exit"] = int(summary.get("exit_code") or unit_exit or (1 if fail_count else 0))
+        breakdown = summary.get("failure_kinds") or {}
+        if breakdown:
+            samples["unit_test_failures"] = breakdown
+    elif unit_exit is not None:
         tool_status["backend.unit_tests.exit"] = unit_exit
-        # Preservar el fallo de pruebas aparte de la cobertura: 1 = falló, 0 = pasó.
         numbers["backend.unit_tests.failed"] = 0 if unit_exit == 0 else 1
+        numbers["backend.unit_tests.fail_count"] = 1 if unit_exit != 0 else 0
 
     coverage_path = raw_dir / "backend-coverage.txt"
     if coverage_path.is_file():
         pct = _parse_coverage(coverage_path.read_text(encoding="utf-8", errors="replace"))
         if pct is not None:
             numbers["backend.coverage.lines_pct"] = pct
+
+    _ingest_function_metrics(metrics, raw_dir, findings)
+    _ingest_dead_exports(metrics, raw_dir, findings)
+
+
+def _ingest_function_metrics(
+    metrics: dict[str, Any],
+    raw_dir: Path,
+    findings: list[AuditFinding] | None,
+) -> None:
+    path = raw_dir / "function-metrics.json"
+    if not path.is_file():
+        return
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    tool_status = metrics.setdefault("tool_status", {})
+    telemetry = metrics.setdefault("scanner_telemetry", {})
+    stats = payload.get("stats") or {}
+    telemetry["function_metrics"] = {
+        "ok": bool(payload.get("ok")),
+        "discovered": int(stats.get("discovered") or 0),
+        "analyzed": int(stats.get("analyzed") or 0),
+        "skipped": int(stats.get("skipped") or 0),
+        "parse_errors": len(payload.get("parse_errors") or []),
+    }
+    if not payload.get("ok"):
+        tool_status["functions.error"] = str(payload.get("error") or "function_metrics_failed")
+        return
+    parse_errors = list(payload.get("parse_errors") or [])
+    if parse_errors:
+        tool_status["functions.error"] = f"parse_errors={len(parse_errors)}"
+        return
+    rows = list(payload.get("functions") or [])
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault((str(row.get("file") or ""), str(row.get("rule") or "")), []).append(row)
+    smells = load_thresholds().get("code_smells") or {}
+    param_high = int((smells.get("param_count") or {}).get("high", 10))
+    line_high = int((smells.get("method_lines") or {}).get("high", 150))
+    cc_map: dict[str, int] = {}
+    long_map: dict[str, int] = {}
+    param_map: dict[str, int] = {}
+    numbers = metrics.setdefault("numbers", {})
+    numbers["functions.cyclomatic_high"] = sum(1 for row in rows if row.get("rule") == "complexity")
+    numbers["functions.long"] = sum(1 for row in rows if row.get("rule") == "max-lines-per-function")
+    numbers["functions.params"] = sum(1 for row in rows if row.get("rule") == "max-params")
+    numbers["functions.depth_high"] = sum(1 for row in rows if row.get("rule") == "max-depth")
+    numbers["functions.statements_high"] = sum(1 for row in rows if row.get("rule") == "max-statements")
+    samples = metrics.setdefault("samples", {})
+    samples["functions"] = rows[:40]
+    samples["functions_params"] = sorted(
+        (row for row in rows if row.get("rule") == "max-params"),
+        key=lambda row: (-int(row.get("params") or 0), str(row.get("file") or "")),
+    )[:15]
+    if findings is None:
+        metrics.setdefault("maps", {})["functions.cyclomatic"] = {}
+        return
+    catalog = {
+        "complexity": (cc_map, "Funciones con complejidad alta", "CC ≥ 25"),
+        "max-lines-per-function": (long_map, "Funciones largas", "más de 80 líneas"),
+        "max-params": (param_map, "Funciones con muchos parámetros", "más de 6 parámetros"),
+    }
+    for (rel, rule), items in sorted(grouped.items()):
+        spec = catalog.get(rule)
+        if spec is None or not rel:
+            continue
+        target, title, detail = spec
+        target[rel] = len(items)
+        shown = []
+        for item in items[:8]:
+            value = item.get("complexity") or item.get("lines") or item.get("params") or item.get("statements")
+            shown.append(f"{item.get('name')}={value}@{item.get('line')}")
+        severity = "low"
+        if rule == "max-params" and any(int(item.get("params") or 0) >= param_high for item in items):
+            severity = "medium"
+        if rule == "max-lines-per-function" and any(int(item.get("lines") or 0) >= line_high for item in items):
+            severity = "medium"
+        if rule == "complexity":
+            severity = "medium"
+        findings.append(
+            _finding(
+                id=stable_id("fn", rule, rel),
+                category="complexity",
+                subcategory=rule,
+                severity=severity,  # type: ignore[arg-type]
+                confidence="high",
+                status="detected",
+                title=title,
+                description=f"{len(items)} funciones con {detail}: {', '.join(shown)}.",
+                file=rel,
+                evidence={"count": len(items), "functions": items[:12]},
+                recommendation="Partir la función si mezcla decisiones. El gate mira el conteo por archivo.",
+                blocking=False,
+            )
+        )
+    peak_map: dict[str, int] = {}
+    for row in rows:
+        if row.get("rule") != "complexity":
+            continue
+        rel = str(row.get("file") or "")
+        value = int(row.get("complexity") or 0)
+        if rel:
+            peak_map[rel] = max(peak_map.get(rel, 0), value)
+    maps = metrics.setdefault("maps", {})
+    maps["functions.cyclomatic"] = cc_map
+    maps["functions.cyclomatic_peak"] = peak_map
+    maps["functions.long"] = long_map
+    maps["functions.params"] = param_map
+
+
+def _ingest_dead_exports(
+    metrics: dict[str, Any],
+    raw_dir: Path,
+    findings: list[AuditFinding] | None,
+) -> None:
+    path = raw_dir / "dead-exports.json"
+    if not path.is_file():
+        return
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    telemetry = metrics.setdefault("scanner_telemetry", {})
+    stats = payload.get("stats") or {}
+    telemetry["dead_exports"] = {
+        "ok": bool(payload.get("ok")),
+        "discovered": int(stats.get("discovered") or 0),
+        "analyzed": int(stats.get("analyzed") or 0),
+        "read_errors": int(stats.get("read_errors") or 0),
+    }
+    if not payload.get("ok"):
+        metrics.setdefault("tool_status", {})["dead_exports.error"] = str(payload.get("error") or "dead_exports_failed")
+        return
+    if int(stats.get("read_errors") or 0) > 0:
+        metrics.setdefault("tool_status", {})["dead_exports.error"] = f"read_errors={stats.get('read_errors')}"
+        return
+    count = int(payload.get("count") or 0)
+    metrics.setdefault("numbers", {})["dead_exports.count"] = count
+    exports = list(payload.get("exports") or [])
+    metrics.setdefault("samples", {})["dead_exports"] = exports[:40]
+    if findings is None or count == 0:
+        return
+    findings.append(
+        _finding(
+            id="dead-exports-summary",
+            category="dead-code",
+            subcategory="dead-exports",
+            severity="info",
+            confidence="low",
+            status="suspected",
+            title="Exports sin referencias en otros archivos",
+            description=(
+                f"{count} exports con nombre que ningún otro archivo menciona. "
+                "Equivalente informativo de ts-prune; puede haber falsos positivos."
+            ),
+            evidence={"count": count, "exports": exports[:40]},
+            recommendation="Borrar el export si nadie lo importa, o usarlo desde el módulo que corresponde.",
+            blocking=False,
+        )
+    )
 
 
 def _parse_eslint(path: Path) -> tuple[int, int, list[dict[str, Any]]]:

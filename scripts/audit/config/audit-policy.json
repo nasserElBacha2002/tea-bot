@@ -1,0 +1,6 @@
+{
+  "baseline": {
+    "never_baseline_tools": ["architecture_boundaries"],
+    "note": "Las reglas de capas bloqueantes no se guardan en el baseline. Una violación nueva falla audit:strict aunque se regenere el baseline. La excepción con expires_at vive en audit-architecture.json."
+  }
+}

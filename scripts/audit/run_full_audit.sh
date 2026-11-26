@@ -25,6 +25,8 @@ rm -f \
   "${AUDIT_RAW}/backend-checkjs.exit" \
   "${AUDIT_RAW}/backend-coverage.txt" \
   "${AUDIT_RAW}/backend-unit-tests.exit" \
+  "${AUDIT_RAW}/function-metrics.json" \
+  "${AUDIT_RAW}/dead-exports.json" \
   "${AUDIT_DIR}/audit-summary.md" \
   "${AUDIT_DIR}/audit-status.json" \
   "${AUDIT_DIR}/findings.json" \
@@ -107,6 +109,18 @@ else
       runtime_incomplete=1
       echo "{\"error\":\"eslint_empty_report\",\"exit\":${eslint_code}}" > "${AUDIT_RAW}/frontend-eslint.json"
     fi
+  fi
+
+  log_info "function metrics (eslint) and dead exports"
+  set +e
+  node "${REPO_ROOT}/scripts/audit/framework/scanners/function_metrics.mjs"
+  fn_code=$?
+  node "${REPO_ROOT}/scripts/audit/framework/scanners/dead_exports.mjs"
+  dead_code=$?
+  set -e
+  if [[ "${fn_code}" -ne 0 || "${dead_code}" -ne 0 ]]; then
+    log_warn "métricas de diseño incompletas (function=${fn_code} dead=${dead_code})"
+    runtime_incomplete=1
   fi
 
   log_info "backend unit coverage"

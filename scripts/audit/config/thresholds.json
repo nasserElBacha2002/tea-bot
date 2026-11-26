@@ -5,6 +5,8 @@
     "methods_high": 20,
     "deps_high": 10,
     "imports_high": 8,
+    "complex_methods_high": 8,
+    "branch_proxy": 60,
     "score_watch": 9,
     "score_medium": 14,
     "score_high": 20
@@ -38,16 +40,25 @@
         "severity": "high",
         "confidence": "high",
         "status": "detected",
-        "blocking": false
+        "blocking": true
       },
       {
         "from_glob": "whatsapp-bot/src/controllers/**",
         "to_pattern": "/repositories/",
         "rule": "controllers-must-not-import-repositories",
-        "severity": "medium",
+        "severity": "high",
         "confidence": "high",
         "status": "detected",
-        "blocking": false
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/controllers/**",
+        "to_pattern": "/db/",
+        "rule": "controllers-must-not-import-db",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
       },
       {
         "from_glob": "whatsapp-bot/src/routes/**",
@@ -56,7 +67,113 @@
         "severity": "high",
         "confidence": "high",
         "status": "detected",
-        "blocking": false
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/routes/**",
+        "to_pattern": "/db/",
+        "rule": "routes-must-not-import-db",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/routes/**",
+        "to_pattern": "/repositories/",
+        "rule": "routes-must-not-import-repositories",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/services/**",
+        "to_pattern": "/controllers/",
+        "rule": "services-must-not-import-controllers",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/services/**",
+        "to_pattern": "/routes/",
+        "rule": "services-must-not-import-routes",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/services/**",
+        "to_pattern": "/db/",
+        "imported_name": "query",
+        "rule": "services-must-not-import-db-query",
+        "severity": "medium",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": false,
+        "note": "Informativo hasta DIN-553. No entra en never_baseline."
+      },
+      {
+        "from_glob": "whatsapp-bot/src/repositories/**",
+        "to_pattern": "/controllers/",
+        "rule": "repositories-must-not-import-controllers",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true
+      },
+      {
+        "from_glob": "whatsapp-bot/src/repositories/**",
+        "to_pattern": "twilio",
+        "rule": "repositories-must-not-import-twilio",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "case_insensitive_contains"
+      },
+      {
+        "from_glob": "frontend/src/**/components/**",
+        "to_pattern": "axios",
+        "rule": "components-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
+      },
+      {
+        "from_glob": "frontend/src/components/**",
+        "to_pattern": "axios",
+        "rule": "components-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
+      },
+      {
+        "from_glob": "frontend/src/**/pages/**",
+        "to_pattern": "axios",
+        "rule": "pages-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
+      },
+      {
+        "from_glob": "frontend/src/pages/**",
+        "to_pattern": "axios",
+        "rule": "pages-must-not-import-axios",
+        "severity": "high",
+        "confidence": "high",
+        "status": "detected",
+        "blocking": true,
+        "match_mode": "module"
       },
       {
         "from_glob": "whatsapp-bot/src/repositories/**",
@@ -102,13 +219,19 @@
       "backend.checkjs.errors": {"tolerance": 0, "priority": "P1"},
       "backend.syntax.errors": {"tolerance": 0, "priority": "P0"},
       "backend.unit_tests.failed": {"tolerance": 0, "priority": "P0"},
+      "backend.unit_tests.fail_count": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.critical": {"tolerance": 0, "priority": "P0"},
       "security.npm.whatsapp-bot.high": {"tolerance": 0, "priority": "P1"},
       "security.npm.frontend.critical": {"tolerance": 0, "priority": "P0"},
       "security.npm.frontend.high": {"tolerance": 0, "priority": "P1"},
       "security.secrets": {"tolerance": 0, "priority": "P0"},
       "duplication.lines": {"tolerance_abs": 30, "tolerance_pct": 5, "priority": "P2"},
-      "cycles.count": {"tolerance": 0, "priority": "P1"}
+      "cycles.count": {"tolerance": 0, "priority": "P1"},
+      "exceptions.empty": {"tolerance": 0, "priority": "P1"},
+      "exceptions.log_only": {"tolerance_abs": 2, "tolerance_pct": 10, "priority": "P2"},
+      "exceptions.return_default": {"tolerance_abs": 1, "tolerance_pct": 10, "priority": "P1"},
+      "patches.type_bypass": {"tolerance_abs": 2, "tolerance_pct": 10, "priority": "P2"},
+      "env.undocumented": {"tolerance_abs": 2, "tolerance_pct": 5, "priority": "P2"}
     },
     "numbers_lower_is_worse": {
       "backend.coverage.lines_pct": {"tolerance": 1.0, "priority": "P1"},
@@ -121,8 +244,43 @@
         "tolerance_pct": 20,
         "only_if_at_least": 40,
         "priority": "P1"
+      },
+      "architecture.god_score": {
+        "tolerance": 0,
+        "only_if_at_least": 9,
+        "priority": "P1"
+      },
+      "functions.long": {
+        "tolerance": 0,
+        "only_if_at_least": 1,
+        "priority": "P1"
+      },
+      "functions.cyclomatic": {
+        "tolerance": 0,
+        "only_if_at_least": 1,
+        "priority": "P1"
+      },
+      "functions.params": {
+        "tolerance": 0,
+        "only_if_at_least": 1,
+        "priority": "P1"
+      },
+      "functions.cyclomatic_peak": {
+        "tolerance": 0,
+        "only_if_at_least": 25,
+        "priority": "P1"
       }
     }
+  },
+  "code_smells": {
+    "method_lines": {"warning": 80, "high": 150},
+    "param_count": {"warning": 6, "high": 10},
+    "ctor_deps": {"warning": 8, "high": 12},
+    "max_depth": 4,
+    "max_statements": 50,
+    "max_returns": 6,
+    "route_lines": 350,
+    "route_branches": 40
   },
   "scan_roots": ["whatsapp-bot/src", "frontend/src"],
   "exclude_globs": [
@@ -147,6 +305,16 @@
       "responsibilities",
       "solid",
       "architecture",
+      "god-class",
+      "grasp",
+      "sql",
+      "exceptions",
+      "patches",
+      "env",
+      "function-metrics",
+      "line-length",
+      "magic-numbers",
+      "dead-exports",
       "security-patterns",
       "secrets",
       "coverage-gap"

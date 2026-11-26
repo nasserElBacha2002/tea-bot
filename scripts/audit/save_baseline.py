@@ -26,6 +26,21 @@ REQUIRED_NUMBERS = (
     "backend.syntax.errors",
     "backend.coverage.lines_pct",
     "backend.unit_tests.failed",
+    "backend.unit_tests.fail_count",
+    "exceptions.empty",
+    "exceptions.log_only",
+    "exceptions.return_default",
+    "patches.type_bypass",
+    "env.undocumented",
+)
+
+REQUIRED_MAPS = (
+    "complexity.cyclomatic",
+    "architecture.god_score",
+    "functions.long",
+    "functions.cyclomatic",
+    "functions.params",
+    "functions.cyclomatic_peak",
 )
 
 
@@ -69,17 +84,23 @@ def main() -> int:
     if missing:
         print(f"Baseline NOT saved: métricas incompletas: {', '.join(missing)}", file=sys.stderr)
         return 1
-    if "complexity.cyclomatic" not in (metrics.get("maps") or {}):
-        print("Baseline NOT saved: falta maps.complexity.cyclomatic", file=sys.stderr)
+    missing_maps = [key for key in REQUIRED_MAPS if key not in (metrics.get("maps") or {})]
+    if missing_maps:
+        print(f"Baseline NOT saved: faltan mapas: {', '.join(missing_maps)}", file=sys.stderr)
         return 1
 
+    kept_findings = [
+        item
+        for item in (findings.get("findings") or [])
+        if not (item.get("evidence") or {}).get("never_baseline")
+    ]
     baseline = out / "baseline"
     baseline.mkdir(parents=True, exist_ok=True)
     slim_findings = {
         "run_id": findings.get("run_id"),
         "generated_at": findings.get("generated_at"),
-        "finding_count": findings.get("finding_count"),
-        "findings": findings.get("findings") or [],
+        "finding_count": len(kept_findings),
+        "findings": kept_findings,
     }
     slim_metrics = {
         "run_id": metrics.get("run_id"),

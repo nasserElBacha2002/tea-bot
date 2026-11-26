@@ -52,7 +52,7 @@ jobs:
           npm run test:audit
           npm run test:audit-policy
 
-      - name: Quality audit (baseline regression gate)
+      - name: Quality audit with design scanners (baseline regression gate)
         env:
           # Secrets sintéticos solo para tests unitarios del audit runner (no productivos).
           SESSION_SECRET: test-session-secret-for-audit
