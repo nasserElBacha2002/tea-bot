@@ -12,6 +12,16 @@ import {
 import { canTakeoverConversation } from '../auth/roles.js';
 import { agentsMatch } from '../utils/agent-identity.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
+import {
+  ERROR_CODES,
+  OUTCOMES,
+  REASON_CODES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  logLegacyAttentionEvent,
+  outcomeFromError,
+} from './conversation-attention-transition-log.js';
 
 function returnAuthError(code, message, httpStatus, details) {
   const error = new Error(message);
@@ -56,10 +66,6 @@ export function assertExclusiveReturnAllowed(locked, actor, {
 
 export { isHandoffTerminalNode };
 
-function logLifecycleEvent(payload) {
-  console.log(JSON.stringify(payload));
-}
-
 /**
  * Transición centralizada: devolver conversación al bot con estado coherente.
  */
@@ -71,6 +77,7 @@ export class ConversationBotLifecycleService {
    *   handoffRepo?: typeof humanHandoffRepository,
    *   runtimeSession?: typeof sessionService,
    *   runTransaction?: typeof withTransaction,
+   *   logTransition?: typeof logAttentionTransition,
    * }} [deps]
    */
   constructor(deps = {}) {
@@ -79,22 +86,35 @@ export class ConversationBotLifecycleService {
     this.handoffRepo = deps.handoffRepo || humanHandoffRepository;
     this.runtimeSession = deps.runtimeSession || sessionService;
     this.runTransaction = deps.runTransaction || withTransaction;
+    this.logTransition = deps.logTransition || logAttentionTransition;
   }
 
   /**
    * @param {object} conversation
    */
-  async resetRuntimeSessionSafe(conversation) {
+  async resetRuntimeSessionSafe(conversation, logContext = {}) {
     if (!conversation?.externalUserId) return { reset: false, failed: false };
 
     try {
       await this.runtimeSession.resetSession(conversation.externalUserId);
       return { reset: true, failed: false };
     } catch (error) {
-      logLifecycleEvent({
-        event: 'conversation_runtime_reset_failed',
+      const correlationId = ensureCorrelationId(logContext.correlationId);
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.returnToBot,
+        outcome: OUTCOMES.error,
         conversationId: conversation.id,
-        error: error instanceof Error ? error.message : String(error),
+        correlationId,
+        reasonCode: logContext.reasonCode,
+        actorKind: logContext.actorAgentId ? 'operator' : 'system',
+        actorAgentId: logContext.actorAgentId,
+        errorCode: ERROR_CODES.runtimeResetFailed,
+      });
+      logLegacyAttentionEvent('conversation_runtime_reset_failed', {
+        conversationId: conversation.id,
+        correlationId,
+        errorCode: ERROR_CODES.runtimeResetFailed,
+        outcome: OUTCOMES.error,
       });
       return { reset: false, failed: true };
     }
@@ -105,9 +125,12 @@ export class ConversationBotLifecycleService {
    * @param {{ resolutionNote?: string | null }} [options]
    */
   async returnConversationToBot(conversation, options = {}) {
+    const startedAt = Date.now();
     const conversationId = conversation.id;
-    const previousStatus = conversation.status;
     const previousNodeKey = conversation.currentNodeKey ?? null;
+    const correlationId = ensureCorrelationId(options.correlationId || options.clientRequestId);
+    const reasonCode = options.reasonCode || REASON_CODES.returnToBot;
+    const actorAgentId = options.actor?.agentId || null;
     const reentryPolicy = resolveReentryPolicy();
     const promptReentry = reentryPolicy === 'prompt';
     const degradedReentry = reentryPolicy === 'degraded';
@@ -116,6 +139,7 @@ export class ConversationBotLifecycleService {
       : null;
     const resolvedAt = new Date();
 
+    try {
     const txResult = await this.runTransaction(async (transaction) => {
       const locked = await this.conversationRepo.findByIdForUpdate(conversationId, { transaction });
       if (!locked) {
@@ -193,31 +217,66 @@ export class ConversationBotLifecycleService {
         { transaction },
       );
 
+      const transitionApplied = locked.status !== 'bot'
+        || resolvedHandoffIds.length > 0
+        || endedSessionCount > 0;
+
       return {
         conversation: updated,
         resolvedHandoffIds,
         endedSessionCount,
         resumeNodeKey,
         reentryArmed: Boolean(reentryJson),
+        lockedPreviousStatus: locked.status,
+        transitionApplied,
       };
     });
 
-    const runtimeResult = await this.resetRuntimeSessionSafe(conversation);
+    const runtimeResult = await this.resetRuntimeSessionSafe(txResult.conversation, {
+      correlationId,
+      reasonCode,
+      actorAgentId,
+    });
 
-    logLifecycleEvent({
-      event: 'conversation_returned_to_bot',
+    const outcome = txResult.transitionApplied ? OUTCOMES.confirmed : OUTCOMES.idempotentReplay;
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.returnToBot,
+      outcome,
       conversationId,
-      previousStatus,
+      correlationId,
+      previousStatus: txResult.lockedPreviousStatus,
       newStatus: 'bot',
-      previousNodeKey,
+      reasonCode,
+      actorKind: options.actor?.agentId ? 'operator' : 'system',
+      actorAgentId,
       resumeNodeKey: txResult.resumeNodeKey,
       reentryArmed: txResult.reentryArmed,
-      resolvedHandoffIds: txResult.resolvedHandoffIds,
       resolvedHandoffCount: txResult.resolvedHandoffIds.length,
+      resolvedHandoffIds: txResult.resolvedHandoffIds,
       endedSessionCount: txResult.endedSessionCount,
       runtimeReset: runtimeResult.reset,
       runtimeResetFailed: runtimeResult.failed,
+      statusVersion: txResult.conversation?.statusVersion ?? null,
+      durationMs: Date.now() - startedAt,
+      nodeKey: previousNodeKey,
     });
+    if (outcome === OUTCOMES.confirmed) {
+      logLegacyAttentionEvent('conversation_returned_to_bot', {
+        conversationId,
+        correlationId,
+        previousStatus: txResult.lockedPreviousStatus,
+        newStatus: 'bot',
+        reasonCode,
+        resolvedHandoffCount: txResult.resolvedHandoffIds.length,
+        resolvedHandoffIds: txResult.resolvedHandoffIds,
+        endedSessionCount: txResult.endedSessionCount,
+        reentryArmed: txResult.reentryArmed,
+        runtimeReset: runtimeResult.reset,
+        runtimeResetFailed: runtimeResult.failed,
+        resumeNodeKey: txResult.resumeNodeKey,
+        nodeKey: previousNodeKey,
+      });
+    }
 
     return {
       conversation: txResult.conversation,
@@ -226,6 +285,23 @@ export class ConversationBotLifecycleService {
       resolvedHandoffIds: txResult.resolvedHandoffIds,
       endedSessionCount: txResult.endedSessionCount,
     };
+    } catch (error) {
+      const { outcome, errorCode } = outcomeFromError(error);
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.returnToBot,
+        outcome,
+        conversationId,
+        correlationId,
+        previousStatus: conversation?.status ?? null,
+        newStatus: conversation?.status ?? null,
+        reasonCode,
+        actorKind: options.actor?.agentId ? 'operator' : 'system',
+        actorAgentId,
+        errorCode,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -241,6 +317,7 @@ export class ConversationBotLifecycleService {
     const resumeNodeKey = await resolveResumeNodeKey(conversation);
     const endedAt = new Date();
     const previousNodeKey = conversation.currentNodeKey ?? null;
+    const correlationId = ensureCorrelationId();
 
     const txResult = await this.runTransaction(async (transaction) => {
       const locked = await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
@@ -291,11 +368,24 @@ export class ConversationBotLifecycleService {
       return { conversation: txResult.conversation, normalized: false };
     }
 
-    await this.resetRuntimeSessionSafe(txResult.conversation);
+    await this.resetRuntimeSessionSafe(txResult.conversation, { correlationId });
 
-    logLifecycleEvent({
-      event: 'conversation_legacy_state_normalized',
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.legacyNormalize,
+      outcome: OUTCOMES.confirmed,
       conversationId: conversation.id,
+      correlationId,
+      previousStatus: 'bot',
+      newStatus: 'bot',
+      actorKind: 'system',
+      reasonCode: REASON_CODES.legacyNormalize,
+      resumeNodeKey,
+      nodeKey: previousNodeKey,
+      endedSessionCount: txResult.endedSessionCount,
+    });
+    logLegacyAttentionEvent('conversation_legacy_state_normalized', {
+      conversationId: conversation.id,
+      correlationId,
       previousNodeKey,
       resumeNodeKey,
       endedSessionCount: txResult.endedSessionCount,

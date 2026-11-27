@@ -29,13 +29,50 @@ import {
   resolveReentryInactivityHours,
   resolveReentryPolicy,
 } from '../utils/conversation-reentry-policy.js';
+import {
+  ERROR_CODES,
+  OUTCOMES,
+  REASON_CODES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  logLegacyAttentionEvent,
+  reasonCodeForReentry,
+} from './conversation-attention-transition-log.js';
 
 export { REENTRY_PROMPT, resolveReentryPolicy };
 
 const CONVERSATION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function logReentry(event, payload) {
-  console.log(JSON.stringify({ event, ...payload }));
+function logReentry(subEvent, payload = {}) {
+  const correlationId = ensureCorrelationId(payload.correlationId);
+  const reasonCode = payload.reasonCode || reasonCodeForReentry(payload.internalReason);
+  const record = {
+    transitionType: TRANSITION_TYPES.reentry,
+    outcome: payload.outcome || OUTCOMES.confirmed,
+    reentryAction: payload.reentryAction || subEvent,
+    conversationId: payload.conversationId,
+    correlationId,
+    previousStatus: payload.previousStatus,
+    newStatus: payload.newStatus,
+    reasonCode,
+    actorKind: payload.actorKind || 'system',
+    nodeKey: payload.nodeKey,
+    durationMs: payload.durationMs,
+    errorCode: payload.errorCode,
+    replayed: payload.replayed,
+  };
+  logAttentionTransition(record);
+  if (subEvent === 'reentry_inbound' || subEvent.startsWith('reentry_')) {
+    logLegacyAttentionEvent(subEvent, {
+      conversationId: payload.conversationId,
+      correlationId,
+      reasonCode,
+      reentryAction: record.reentryAction,
+      outcome: record.outcome,
+      errorCode: payload.errorCode,
+    });
+  }
 }
 
 function parseFlowDocument(snapshotJson) {
@@ -107,22 +144,23 @@ export class ConversationReentryService {
       return parseFlowDocument(row?.snapshotJson);
     } catch (error) {
       logReentry('reentry_historical_flow_unavailable', {
-        flowId,
-        version,
-        error: error instanceof Error ? error.message : String(error),
+        outcome: OUTCOMES.error,
+        errorCode: ERROR_CODES.historicalFlowUnavailable,
       });
       return null;
     }
   }
 
-  async resetRuntime(conversation) {
+  async resetRuntime(conversation, context = {}) {
     if (!conversation?.externalUserId) return;
     try {
       await this.runtimeSession.resetSession(conversation.externalUserId);
     } catch (error) {
       logReentry('reentry_runtime_reset_failed', {
         conversationId: conversation.id,
-        error: error instanceof Error ? error.message : String(error),
+        correlationId: context.correlationId,
+        outcome: OUTCOMES.error,
+        errorCode: ERROR_CODES.runtimeResetFailed,
       });
     }
   }
@@ -142,9 +180,9 @@ export class ConversationReentryService {
       flow = await this.flowLoader.getFlow(flowId);
     } catch (error) {
       logReentry('reentry_resume_flow_unavailable', {
-        flowId,
         nodeKey,
-        error: error instanceof Error ? error.message : String(error),
+        outcome: OUTCOMES.error,
+        errorCode: ERROR_CODES.resumeFlowUnavailable,
       });
       return { decision: 'restart', reason: 'published_unavailable' };
     }
@@ -294,8 +332,14 @@ export class ConversationReentryService {
     });
 
     if (txResult?.action === 'legacy_cleared') {
-      await this.resetRuntime(txResult.conversation);
-      logReentry('reentry_legacy_rollback', { conversationId: conversation.id });
+      const correlationId = ensureCorrelationId();
+      await this.resetRuntime(txResult.conversation, { correlationId });
+      logReentry('reentry_legacy_rollback', {
+        conversationId: conversation.id,
+        correlationId,
+        internalReason: 'policy_legacy',
+        reasonCode: REASON_CODES.reentryPolicyLegacy,
+      });
     }
     return txResult;
   }
@@ -345,25 +389,45 @@ export class ConversationReentryService {
       return applied;
     });
 
-    if (txResult?.replayed) return txResult;
+    const inboundCorrelation = ensureCorrelationId({
+      providerMessageId: options.providerMessageId,
+    });
+
+    if (txResult?.replayed) {
+      logReentry('reentry_inbound', {
+        conversationId: conversation.id,
+        outcome: OUTCOMES.idempotentReplay,
+        replayed: true,
+        correlationId: inboundCorrelation,
+        internalReason: txResult.reason || 'replayed_effect',
+      });
+      return txResult;
+    }
+
+    if (txResult?.handoffTelemetry) {
+      this.handoffService.emitCommittedHandoffTransition(txResult.handoffTelemetry);
+    }
 
     if (txResult?.action === 'handoff') {
       notifyConversationUpdated(txResult.conversation, {
         humanHandoff: mapHumanHandoffPublic(txResult.handoff),
       });
-      await this.resetRuntime(txResult.conversation);
+      await this.resetRuntime(txResult.conversation, { correlationId: inboundCorrelation });
     } else if (txResult?.action === 'present_node') {
       await this.restoreRuntime(txResult);
     } else if (txResult?.action === 'present_entry') {
-      await this.resetRuntime(txResult.conversation);
+      await this.resetRuntime(txResult.conversation, { correlationId: inboundCorrelation });
     }
 
     if (txResult?.action && txResult.action !== 'delegate' && txResult.action !== 'human_skip') {
       logReentry('reentry_inbound', {
         conversationId: conversation.id,
-        action: txResult.action,
-        reason: txResult.reason || null,
+        reentryAction: txResult.action,
+        internalReason: txResult.reason || null,
         nodeKey: txResult.nodeKey || null,
+        newStatus: txResult.conversation?.status ?? null,
+        correlationId: inboundCorrelation,
+        outcome: OUTCOMES.confirmed,
       });
     }
     return txResult;
@@ -535,6 +599,7 @@ export class ConversationReentryService {
       action: 'handoff',
       reply: handoffResult.confirmationMessage,
       conversation: handoffResult.conversation,
+      handoffTelemetry: handoffResult.handoffTelemetry,
       handoff: handoffResult.handoff,
       nodeKey: handoffResult.nodeKey,
       reason: 'new_handoff',

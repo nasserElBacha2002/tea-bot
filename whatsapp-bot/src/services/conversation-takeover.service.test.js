@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ConversationTakeoverService } from './conversation-takeover.service.js';
+import { OUTCOMES, TRANSITION_TYPES } from './conversation-attention-transition-log.js';
 import { evaluateAutomaticReply } from './conversation-turn-guard.service.js';
 import { ConversationBotLifecycleService } from './conversation-bot-lifecycle.service.js';
 import { ConversationReentryService, REENTRY_PROMPT } from './conversation-reentry.service.js';
@@ -43,6 +44,7 @@ function createHarness(initial = {}) {
   }])];
   const messages = [];
   const audits = [];
+  const transitions = [];
   const operationRequests = [];
   const notifications = [];
   const resets = [];
@@ -186,6 +188,9 @@ function createHarness(initial = {}) {
     async recordAudit(entry) {
       audits.push(entry);
     },
+    logTransition(entry) {
+      transitions.push(entry);
+    },
     async findOperationRequest(conversationId, operation, clientRequestId) {
       return operationRequests.find((row) => (
         row.conversationId === conversationId
@@ -245,6 +250,7 @@ function createHarness(initial = {}) {
     notifications,
     resets,
     audits,
+    transitions,
     operationRequests,
     messages,
     get conversation() { return conversation; },
@@ -637,4 +643,71 @@ test('el mensaje interno de la toma no sale por WhatsApp', async () => {
   assert.equal(world.messages[0].senderType, 'system');
   assert.equal(world.messages[0].provider, 'internal');
   assert.equal(world.messages[0].metadataJson.event, 'manual_takeover');
+});
+
+test('DIN-435: toma exitosa emite confirmed con correlación del clientRequestId', async () => {
+  const world = createHarness();
+  await world.service.takeover({
+    conversationId: world.conversation.id,
+    actor: actor(AGENT_A, 'admin', 'ana'),
+    clientRequestId: 'req-takeover-1',
+    reason: 'urgente',
+  });
+  assert.equal(world.transitions.length, 1);
+  assert.equal(world.transitions[0].transitionType, TRANSITION_TYPES.manualTakeover);
+  assert.equal(world.transitions[0].outcome, OUTCOMES.confirmed);
+  const { ensureCorrelationId } = await import('./conversation-attention-transition-log.js');
+  assert.equal(world.transitions[0].correlationId, ensureCorrelationId('req-takeover-1'));
+  assert.notEqual(world.transitions[0].correlationId, 'req-takeover-1');
+  assert.equal(world.transitions[0].previousStatus, 'bot');
+  assert.equal(world.transitions[0].newStatus, 'assigned');
+});
+
+test('DIN-435: segundo intento idempotente no repite confirmed', async () => {
+  const world = createHarness();
+  const input = {
+    conversationId: world.conversation.id,
+    actor: actor(AGENT_A, 'admin', 'ana'),
+    clientRequestId: 'req-idem',
+  };
+  await world.service.takeover(input);
+  await world.service.takeover(input);
+  const confirmed = world.transitions.filter((row) => row.outcome === OUTCOMES.confirmed);
+  const replay = world.transitions.filter((row) => row.outcome === OUTCOMES.idempotentReplay);
+  assert.equal(confirmed.length, 1);
+  assert.equal(replay.length, 1);
+});
+
+test('DIN-435: conflicto concurrente emite rejected sin confirmed', async () => {
+  const world = createHarness();
+  const [first, second] = await Promise.allSettled([
+    world.service.takeover({
+      conversationId: world.conversation.id,
+      actor: actor(AGENT_A, 'conversations_only', 'ana'),
+    }),
+    world.service.takeover({
+      conversationId: world.conversation.id,
+      actor: actor(AGENT_B, 'admin', 'luis'),
+    }),
+  ]);
+  assert.equal([first, second].filter((item) => item.status === 'fulfilled').length, 1);
+  const confirmed = world.transitions.filter((row) => row.outcome === OUTCOMES.confirmed);
+  const rejected = world.transitions.filter((row) => row.outcome === OUTCOMES.rejected);
+  assert.equal(confirmed.length, 1);
+  assert.equal(rejected.length, 1);
+  assert.equal(rejected[0].errorCode, 'CONVERSATION_OWNED');
+});
+
+test('DIN-435: sin permiso emite rejected operativo y no confirma transición', async () => {
+  const world = createHarness();
+  await assert.rejects(
+    () => world.service.takeover({
+      conversationId: world.conversation.id,
+      actor: actor(AGENT_A, 'viewer', 'ana'),
+    }),
+    (error) => error.code === 'FORBIDDEN',
+  );
+  assert.equal(world.transitions.length, 1);
+  assert.equal(world.transitions[0].outcome, OUTCOMES.rejected);
+  assert.equal(world.transitions.filter((row) => row.outcome === OUTCOMES.confirmed).length, 0);
 });

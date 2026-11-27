@@ -16,6 +16,16 @@ import {
   canTakeoverConversation,
 } from '../auth/roles.js';
 import { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
+import {
+  ERROR_CODES,
+  OUTCOMES,
+  REASON_CODES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  logAuxiliaryAttentionEvent,
+  outcomeFromError,
+} from './conversation-attention-transition-log.js';
 
 export { isManualTakeoverEnabled } from '../utils/manual-takeover-flag.js';
 export const MANUAL_TAKEOVER_EVENT = 'manual_takeover';
@@ -155,10 +165,40 @@ export class ConversationTakeoverService {
       }
     });
     this.enabled = deps.enabled || isManualTakeoverEnabled;
+    this.logTransition = deps.logTransition || logAttentionTransition;
+  }
+
+  _logTakeoverFailure({
+    conversationId,
+    correlationId,
+    actor,
+    error,
+    startedAt,
+    transitionType,
+    reasonCode,
+  }) {
+    const { outcome, errorCode } = outcomeFromError(error);
+    this.logTransition({
+      transitionType,
+      outcome,
+      conversationId,
+      correlationId,
+      reasonCode,
+      actorKind: 'operator',
+      actorAgentId: actor?.agentId || null,
+      errorCode,
+      durationMs: Date.now() - startedAt,
+    });
   }
 
   async takeover(input) {
+    const startedAt = Date.now();
     const actor = input?.actor || {};
+    const conversationId = input?.conversationId;
+    const clientRequestId = normalizeRequestId(input.clientRequestId);
+    const correlationId = ensureCorrelationId(clientRequestId);
+
+    try {
     if (!canTakeoverConversation(actor.role)) {
       throw appError('FORBIDDEN', 'No tenés permiso para tomar conversaciones.', 403);
     }
@@ -170,9 +210,6 @@ export class ConversationTakeoverService {
       );
     }
     await this.assertSchema();
-
-    const conversationId = input.conversationId;
-    const clientRequestId = normalizeRequestId(input.clientRequestId);
     const requestHash = clientRequestId
       ? hashOperation('takeover', actor, {
         reason: input.reason || null,
@@ -231,7 +268,12 @@ export class ConversationTakeoverService {
           }, transaction);
         }
         const handoff = await this._latestActiveHandoff(conversationId, transaction);
-        return { kind: 'idempotent', conversation: locked, handoff };
+        return {
+          kind: 'idempotent',
+          conversation: locked,
+          handoff,
+          previous: attentionSnapshot(locked),
+        };
       }
       if (owned) {
         throw appError(
@@ -312,20 +354,66 @@ export class ConversationTakeoverService {
 
     committed = txResult.conversation;
     if (txResult.kind === 'taken') {
-      await this._resetRuntime(committed);
+      await this._resetRuntime(committed, { correlationId });
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.manualTakeover,
+        outcome: OUTCOMES.confirmed,
+        conversationId,
+        handoffId: txResult.handoff?.id ?? null,
+        correlationId,
+        previousStatus: txResult.previous?.status ?? null,
+        newStatus: committed?.status ?? 'assigned',
+        reasonCode: REASON_CODES.manualTakeover,
+        actorKind: 'operator',
+        actorAgentId: actor.agentId || null,
+        statusVersion: committed?.statusVersion ?? null,
+        durationMs: Date.now() - startedAt,
+      });
+    } else {
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.manualTakeover,
+        outcome: OUTCOMES.idempotentReplay,
+        conversationId,
+        handoffId: txResult.handoff?.id ?? null,
+        correlationId,
+        previousStatus: txResult.previous?.status ?? committed?.status ?? null,
+        newStatus: committed?.status ?? null,
+        reasonCode: REASON_CODES.manualTakeover,
+        actorKind: 'operator',
+        actorAgentId: actor.agentId || null,
+        statusVersion: committed?.statusVersion ?? null,
+        durationMs: Date.now() - startedAt,
+      });
     }
-    this._notify(committed, txResult.handoff);
+    this._notify(committed, txResult.handoff, { correlationId });
 
     return this._publicResult(committed, txResult.handoff, actor, {
       idempotent: txResult.kind !== 'taken',
     });
+    } catch (error) {
+      this._logTakeoverFailure({
+        conversationId,
+        correlationId,
+        actor,
+        error,
+        startedAt,
+        transitionType: TRANSITION_TYPES.manualTakeover,
+        reasonCode: REASON_CODES.manualTakeover,
+      });
+      throw error;
+    }
   }
 
   /**
    * Cambia el dueño sin devolver la conversación al bot y sin usar la toma.
    */
   async reassign(input) {
+    const startedAt = Date.now();
     const actor = input?.actor || {};
+    const conversationId = input?.conversationId;
+    const correlationId = ensureCorrelationId();
+
+    try {
     if (!canReassignConversation(actor.role)) {
       throw appError('FORBIDDEN', 'No tenés permiso para reasignar conversaciones.', 403);
     }
@@ -351,7 +439,6 @@ export class ConversationTakeoverService {
       );
     }
     const targetAgentId = target.agentId;
-    const conversationId = input.conversationId;
 
     const txResult = await this.runTransaction(async (transaction) => {
       const locked = await this.conversationRepo.findByIdForUpdate(conversationId, { transaction });
@@ -375,7 +462,12 @@ export class ConversationTakeoverService {
       }
       if (agentsMatch(locked.assignedAgentId, targetAgentId)) {
         const handoff = await this._latestActiveHandoff(conversationId, transaction);
-        return { kind: 'idempotent', conversation: locked, handoff };
+        return {
+          kind: 'idempotent',
+          conversation: locked,
+          handoff,
+          previous: attentionSnapshot(locked),
+        };
       }
 
       const previous = attentionSnapshot(locked);
@@ -429,14 +521,58 @@ export class ConversationTakeoverService {
         },
       }, { transaction });
 
-      return { kind: 'reassigned', conversation: stored, handoff };
+      return { kind: 'reassigned', conversation: stored, handoff, previous };
     });
 
-    this._notify(txResult.conversation, txResult.handoff);
-    return this._publicResult(txResult.conversation, txResult.handoff, actor, {
+    const committed = txResult.conversation;
+  if (txResult.kind === 'reassigned') {
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.manualReassign,
+      outcome: OUTCOMES.confirmed,
+      conversationId,
+      handoffId: txResult.handoff?.id ?? null,
+      correlationId,
+      previousStatus: txResult.previous?.status ?? null,
+      newStatus: committed?.status ?? 'assigned',
+      reasonCode: REASON_CODES.manualReassign,
+      actorKind: 'operator',
+      actorAgentId: actor.agentId || null,
+      statusVersion: committed?.statusVersion ?? null,
+      durationMs: Date.now() - startedAt,
+    });
+  } else {
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.manualReassign,
+      outcome: OUTCOMES.idempotentReplay,
+      conversationId,
+      handoffId: txResult.handoff?.id ?? null,
+      correlationId,
+      previousStatus: txResult.previous?.status ?? committed?.status ?? null,
+      newStatus: committed?.status ?? null,
+      reasonCode: REASON_CODES.manualReassign,
+      actorKind: 'operator',
+      actorAgentId: actor.agentId || null,
+      statusVersion: committed?.statusVersion ?? null,
+      durationMs: Date.now() - startedAt,
+    });
+  }
+    this._notify(committed, txResult.handoff, { correlationId });
+    return this._publicResult(committed, txResult.handoff, actor, {
       idempotent: txResult.kind === 'idempotent',
       assignedAgentLabel: targetUsername,
     });
+    } catch (error) {
+      this._logTakeoverFailure({
+        conversationId,
+        correlationId,
+        actor,
+        error,
+        startedAt,
+        transitionType: TRANSITION_TYPES.manualReassign,
+        reasonCode: REASON_CODES.manualReassign,
+      });
+      throw error;
+    }
   }
 
   async _replayRequest({
@@ -467,7 +603,12 @@ export class ConversationTakeoverService {
     }
     if (stillOwns(locked)) {
       const handoff = await this._latestActiveHandoff(conversationId, transaction);
-      return { kind: 'replay', conversation: locked, handoff };
+      return {
+        kind: 'replay',
+        conversation: locked,
+        handoff,
+        previous: attentionSnapshot(locked),
+      };
     }
     throw appError(
       'IDEMPOTENCY_STALE',
@@ -539,28 +680,30 @@ export class ConversationTakeoverService {
     return this.handoffRepo.updateHandoff(created.id, { assignedAt: now }, { transaction });
   }
 
-  async _resetRuntime(conversation) {
+  async _resetRuntime(conversation, context = {}) {
     if (!conversation?.externalUserId || typeof this.runtimeSession.resetSession !== 'function') return;
     try {
       await this.runtimeSession.resetSession(conversation.externalUserId);
     } catch (error) {
-      console.error(JSON.stringify({
-        event: 'manual_takeover_runtime_reset_failed',
+      logAuxiliaryAttentionEvent('manual_takeover_runtime_reset_failed', {
         conversationId: conversation.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+        correlationId: context.correlationId,
+        errorCode: ERROR_CODES.runtimeResetFailed,
+        outcome: OUTCOMES.error,
+      });
     }
   }
 
-  _notify(conversation, handoff) {
+  _notify(conversation, handoff, context = {}) {
     try {
       this.notifyAssigned(conversation, handoff || null);
     } catch (error) {
-      console.error(JSON.stringify({
-        event: 'manual_takeover_notify_failed',
+      logAuxiliaryAttentionEvent('manual_takeover_notify_failed', {
         conversationId: conversation?.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
+        correlationId: context.correlationId,
+        errorCode: ERROR_CODES.unexpectedFailure,
+        outcome: OUTCOMES.error,
+      });
     }
   }
 

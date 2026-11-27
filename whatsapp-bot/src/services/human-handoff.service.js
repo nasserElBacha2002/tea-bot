@@ -10,6 +10,14 @@ import {
   isEngineHumanHandoffResult,
   resolveHandoffConfirmationMessage,
 } from '../utils/handoff-detection.js';
+import {
+  OUTCOMES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  outcomeFromError,
+  reasonCodeForHandoff,
+} from './conversation-attention-transition-log.js';
 
 /**
  * @typedef {object} HandoffContext
@@ -20,6 +28,22 @@ import {
  * @property {string} [flowVersion]
  */
 
+function buildHandoffTelemetry({
+  conversationId,
+  correlationId,
+  startedAt,
+  reasonCode,
+  txResult,
+}) {
+  return {
+    conversationId,
+    correlationId,
+    startedAt,
+    reasonCode,
+    txResult,
+  };
+}
+
 export class HumanHandoffService {
   /**
    * @param {{
@@ -27,6 +51,7 @@ export class HumanHandoffService {
    *   conversationRepo?: typeof conversationRepository,
    *   sessionRepo?: typeof conversationSessionRepository,
    *   runTransaction?: typeof withTransaction,
+   *   logTransition?: typeof logAttentionTransition,
    * }} [deps]
    */
   constructor(deps = {}) {
@@ -34,10 +59,45 @@ export class HumanHandoffService {
     this.conversationRepo = deps.conversationRepo || conversationRepository;
     this.sessionRepo = deps.sessionRepo || conversationSessionRepository;
     this.runTransaction = deps.runTransaction || withTransaction;
+    this.logTransition = deps.logTransition || logAttentionTransition;
   }
 
   isConversationInHumanMode(conversation) {
     return isConversationInHumanMode(conversation);
+  }
+
+  emitCommittedHandoffTransition(telemetry) {
+    if (!telemetry) return;
+    const { correlationId, startedAt, reasonCode, txResult } = telemetry;
+    const durationMs = Date.now() - (startedAt || Date.now());
+    if (txResult?.aborted) {
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.botHandoff,
+        outcome: OUTCOMES.aborted,
+        conversationId: telemetry.conversationId,
+        correlationId,
+        previousStatus: txResult.lockedPreviousStatus,
+        newStatus: txResult.conversation?.status ?? txResult.lockedPreviousStatus,
+        reasonCode,
+        actorKind: 'bot',
+        durationMs,
+      });
+      return;
+    }
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.botHandoff,
+      outcome: txResult.transitionApplied ? OUTCOMES.confirmed : OUTCOMES.idempotentReplay,
+      conversationId: txResult.conversation?.id || telemetry.conversationId,
+      handoffId: txResult.handoff?.id ?? null,
+      correlationId,
+      previousStatus: txResult.lockedPreviousStatus,
+      newStatus: txResult.conversation?.status ?? 'waiting_human',
+      reasonCode,
+      actorKind: 'bot',
+      handoffCreated: Boolean(txResult.created),
+      statusVersion: txResult.conversation?.statusVersion ?? null,
+      durationMs,
+    });
   }
 
   /**
@@ -66,8 +126,11 @@ export class HumanHandoffService {
    * @param {{ engineResult: object, dbSession?: object | null, event?: object, memorySession?: object }} params
    */
   async requestHumanHandoff(conversation, params = {}) {
+    const startedAt = Date.now();
     const { engineResult, dbSession = null, event = {} } = params;
     const memorySession = params.memorySession;
+    const correlationId = ensureCorrelationId(event);
+    const reasonCode = reasonCodeForHandoff(engineResult?.terminalReason);
     const nodeKey =
       engineResult?.currentNodeId
       || conversation.currentNodeKey
@@ -88,6 +151,7 @@ export class HumanHandoffService {
           created: false,
           conversation: locked || conversation,
           session: dbSession,
+          lockedPreviousStatus: locked?.status ?? conversation?.status ?? null,
         };
       }
 
@@ -150,12 +214,51 @@ export class HumanHandoffService {
         await params.persistInside(transaction, updatedConversation);
       }
 
-      return { aborted: false, handoff, created, conversation: updatedConversation, session: pausedSession };
+      return {
+        aborted: false,
+        handoff,
+        created,
+        conversation: updatedConversation,
+        session: pausedSession,
+        lockedPreviousStatus: locked.status,
+        transitionApplied: locked.status === 'bot',
+      };
     };
 
-    const txResult = params.transaction
-      ? await run(params.transaction)
-      : await this.runTransaction(run);
+    const ownsCommit = !params.transaction;
+    let txResult;
+    try {
+      txResult = params.transaction
+        ? await run(params.transaction)
+        : await this.runTransaction(run);
+    } catch (error) {
+      if (ownsCommit) {
+        const { outcome, errorCode } = outcomeFromError(error);
+        this.logTransition({
+          transitionType: TRANSITION_TYPES.botHandoff,
+          outcome,
+          conversationId: conversation.id,
+          correlationId,
+          reasonCode,
+          actorKind: 'bot',
+          errorCode,
+          durationMs: Date.now() - startedAt,
+        });
+      }
+      throw error;
+    }
+
+    const telemetry = buildHandoffTelemetry({
+      conversationId: conversation.id,
+      correlationId,
+      startedAt,
+      reasonCode,
+      txResult,
+    });
+
+    if (ownsCommit) {
+      this.emitCommittedHandoffTransition(telemetry);
+    }
 
     if (txResult.aborted) {
       return {
@@ -169,6 +272,7 @@ export class HumanHandoffService {
         nodeKey,
         flowId,
         flowVersion,
+        handoffTelemetry: ownsCommit ? null : telemetry,
       };
     }
 
@@ -193,6 +297,7 @@ export class HumanHandoffService {
       nodeKey,
       flowId,
       flowVersion,
+      handoffTelemetry: ownsCommit ? null : telemetry,
     };
   }
 

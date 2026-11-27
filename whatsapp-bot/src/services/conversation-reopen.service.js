@@ -7,6 +7,14 @@ import { fenceInboundLease } from '../monitoring/inbound-lease.js';
 import { notifyConversationUpdated } from '../realtime/conversation-live.notify.js';
 import { mapHumanHandoffPublic } from '../utils/conversation-inbox.mapper.js';
 import { resolveReopenStatusFromHandoff } from '../utils/conversation-handoff-policy.js';
+import {
+  OUTCOMES,
+  REASON_CODES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  outcomeFromError,
+} from './conversation-attention-transition-log.js';
 
 /**
  * Reapertura automática al recibir un mensaje entrante en conversación cerrada.
@@ -20,6 +28,7 @@ export class ConversationReopenService {
    *   handoffRepo?: typeof humanHandoffRepository,
    *   audit?: typeof auditLogService,
    *   runTransaction?: typeof withTransaction,
+   *   logTransition?: typeof logAttentionTransition,
    * }} [deps]
    */
   constructor(deps = {}) {
@@ -28,6 +37,7 @@ export class ConversationReopenService {
     this.handoffRepo = deps.handoffRepo || humanHandoffRepository;
     this.audit = deps.audit || auditLogService;
     this.runTransaction = deps.runTransaction || withTransaction;
+    this.logTransition = deps.logTransition || logAttentionTransition;
   }
 
   /**
@@ -40,7 +50,10 @@ export class ConversationReopenService {
     }
 
     const previousStatus = conversation.status;
+    const startedAt = Date.now();
+    const correlationId = ensureCorrelationId(context);
 
+    try {
     const txResult = await this.runTransaction(async (transaction) => {
       await fenceInboundLease(transaction);
       await this.conversationRepo.findByIdForUpdate(conversation.id, { transaction });
@@ -109,11 +122,41 @@ export class ConversationReopenService {
     }
     notifyConversationUpdated(txResult.conversation, notifyExtras);
 
+    this.logTransition({
+      transitionType: TRANSITION_TYPES.reopen,
+      outcome: OUTCOMES.confirmed,
+      conversationId: conversation.id,
+      handoffId: txResult.activeHandoff?.id || handoff?.id || null,
+      correlationId,
+      previousStatus,
+      newStatus: txResult.newStatus,
+      reasonCode: REASON_CODES.newInboundMessage,
+      actorKind: 'system',
+      statusVersion: txResult.conversation?.statusVersion ?? null,
+      durationMs: Date.now() - startedAt,
+    });
+
     return {
       conversation: txResult.conversation,
       reopened: true,
       handoff,
     };
+    } catch (error) {
+      const { outcome, errorCode } = outcomeFromError(error);
+      this.logTransition({
+        transitionType: TRANSITION_TYPES.reopen,
+        outcome,
+        conversationId: conversation.id,
+        correlationId,
+        previousStatus,
+        newStatus: previousStatus,
+        reasonCode: REASON_CODES.newInboundMessage,
+        actorKind: 'system',
+        errorCode,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   }
 }
 

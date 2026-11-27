@@ -48,6 +48,14 @@ import conversationTakeoverService, {
 } from './conversation-takeover.service.js';
 import agentOutboundSendService from './agent-outbound-send.service.js';
 import twilioMessageDeliveryService from './twilio-message-delivery.service.js';
+import {
+  OUTCOMES,
+  REASON_CODES,
+  TRANSITION_TYPES,
+  ensureCorrelationId,
+  logAttentionTransition,
+  outcomeFromError,
+} from './conversation-attention-transition-log.js';
 import { isUuid } from '../utils/conversation-search.js';
 
 function requireReturnActor(actor) {
@@ -526,32 +534,74 @@ export class ConversationInboxService {
       );
     }
 
-    const updated = await this._assignConversationToAgent(conversationId, agentId);
+    const correlationId = ensureCorrelationId();
+    const updated = await this._assignConversationToAgent(conversationId, agentId, conversation, correlationId);
     return { conversation: mapConversationPublic(updated) };
   }
 
-  async _assignConversationToAgent(conversationId, agentId) {
-    const updated = await conversationService.markAssigned(conversationId, agentId);
-    let handoff = await humanHandoffRepository.findPendingByConversationId(conversationId);
-    if (handoff) {
-      await humanHandoffRepository.updateHandoff(handoff.id, {
-        status: 'assigned',
-        assignedAgentId: agentId,
-        assignedAt: new Date(),
-      });
-    } else {
-      handoff = await humanHandoffRepository.findLatestByConversationId(conversationId);
-      if (handoff && ['pending', 'assigned'].includes(handoff.status)) {
+  async _assignConversationToAgent(conversationId, agentId, snapshotBefore = null, correlationId = null) {
+    const startedAt = Date.now();
+    const previousStatus = snapshotBefore?.status ?? null;
+    const correlation = ensureCorrelationId(correlationId);
+    try {
+      const updated = await conversationService.markAssigned(conversationId, agentId);
+      let handoff = await humanHandoffRepository.findPendingByConversationId(conversationId);
+      if (handoff) {
         await humanHandoffRepository.updateHandoff(handoff.id, {
           status: 'assigned',
           assignedAgentId: agentId,
           assignedAt: new Date(),
         });
+      } else {
+        handoff = await humanHandoffRepository.findLatestByConversationId(conversationId);
+        if (handoff && ['pending', 'assigned'].includes(handoff.status)) {
+          await humanHandoffRepository.updateHandoff(handoff.id, {
+            status: 'assigned',
+            assignedAgentId: agentId,
+            assignedAt: new Date(),
+          });
+        }
       }
-    }
 
-    notifyConversationAssigned(updated, handoff);
-    return updated;
+      notifyConversationAssigned(updated, handoff);
+      const alreadyAssignedToSameAgent = snapshotBefore?.status === 'assigned'
+        && agentsMatch(snapshotBefore?.assignedAgentId, agentId)
+        && updated?.status === 'assigned';
+      const transitionApplied = !alreadyAssignedToSameAgent
+        && previousStatus === 'waiting_human'
+        && updated?.status === 'assigned';
+      logAttentionTransition({
+        transitionType: TRANSITION_TYPES.legacyAssign,
+        outcome: transitionApplied ? OUTCOMES.confirmed : OUTCOMES.idempotentReplay,
+        conversationId,
+        handoffId: handoff?.id ?? null,
+        correlationId: correlation,
+        previousStatus,
+        newStatus: updated?.status ?? 'assigned',
+        reasonCode: REASON_CODES.waitingHumanClaim,
+        actorKind: 'operator',
+        actorAgentId: agentId,
+        statusVersion: updated?.statusVersion ?? null,
+        durationMs: Date.now() - startedAt,
+      });
+      return updated;
+    } catch (error) {
+      const { outcome, errorCode } = outcomeFromError(error);
+      logAttentionTransition({
+        transitionType: TRANSITION_TYPES.legacyAssign,
+        outcome,
+        conversationId,
+        correlationId: correlation,
+        previousStatus,
+        newStatus: previousStatus,
+        reasonCode: REASON_CODES.waitingHumanClaim,
+        actorKind: 'operator',
+        actorAgentId: agentId,
+        errorCode,
+        durationMs: Date.now() - startedAt,
+      });
+      throw error;
+    }
   }
 
   async sendAgentMessage(conversationId, body, agentId, actor = null, options = {}) {
@@ -727,12 +777,18 @@ export class ConversationInboxService {
       throw appError('NOT_FOUND', 'Conversación no encontrada', 404);
     }
 
+    const correlationId = ensureCorrelationId();
+    const reasonCode = generatedBy === 'agent_inbox_close'
+      ? REASON_CODES.inboxClose
+      : REASON_CODES.inboxReturn;
     const { conversation: updated } = await conversationBotLifecycleService.returnConversationToBot(
       conversation,
       {
         resolutionNote,
         actor,
         takeoverEnabled: isManualTakeoverEnabled(),
+        correlationId,
+        reasonCode,
       },
     );
 
