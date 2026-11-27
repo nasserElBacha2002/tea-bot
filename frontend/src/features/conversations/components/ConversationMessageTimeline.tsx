@@ -60,6 +60,20 @@ function formatTime(iso: string): string {
   }
 }
 
+function sortMessagesChronologically(messages: ConversationMessage[]): ConversationMessage[] {
+  if (messages.length <= 1) return messages;
+  for (let i = 1; i < messages.length; i += 1) {
+    const prev = Date.parse(messages[i - 1].createdAt);
+    const cur = Date.parse(messages[i].createdAt);
+    if (cur < prev) {
+      return [...messages].sort(
+        (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id),
+      );
+    }
+  }
+  return messages;
+}
+
 function groupMessages(messages: ConversationMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const msg of messages) {
@@ -110,19 +124,7 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
   const prevConvRef = useRef(conversationId);
   const initialAnchorDoneRef = useRef(false);
 
-  const sorted = useMemo(() => {
-    if (messages.length <= 1) return messages;
-    for (let i = 1; i < messages.length; i += 1) {
-      const prev = Date.parse(messages[i - 1].createdAt);
-      const cur = Date.parse(messages[i].createdAt);
-      if (cur < prev) {
-        return [...messages].sort(
-          (a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.id.localeCompare(b.id),
-        );
-      }
-    }
-    return messages;
-  }, [messages]);
+  const sorted = sortMessagesChronologically(messages);
 
   const groups = useMemo(() => groupMessages(sorted), [sorted]);
 
@@ -205,7 +207,6 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
       prevConvRef.current = conversationId;
       prevLenRef.current = 0;
       initialAnchorDoneRef.current = false;
-      setShowNewBanner(false);
       messageRefs.current = {};
     }
   }, [conversationId]);
@@ -287,7 +288,18 @@ export const ConversationMessageTimeline: React.FC<Props> = ({
     if (!isNearBottom()) return;
     setShowNewBanner(false);
     notifyCaughtUp();
-  }, [isNearBottom, notifyCaughtUp, hasMoreBefore, hasMoreAfter, onLoadOlder, onLoadNewer, loadingOlder, loadingNewer, historyPinned]);
+  }, [
+    conversationId,
+    isNearBottom,
+    notifyCaughtUp,
+    hasMoreBefore,
+    hasMoreAfter,
+    onLoadOlder,
+    onLoadNewer,
+    loadingOlder,
+    loadingNewer,
+    historyPinned,
+  ]);
 
   const handleJumpToLatest = useCallback(() => {
     scrollToBottom('smooth');

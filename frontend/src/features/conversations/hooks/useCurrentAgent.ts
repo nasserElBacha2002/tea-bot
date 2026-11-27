@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { authApi } from '../../auth/api/authApi';
-import { useAuthUser } from '../../auth/context/AuthContext';
+import { useAuthUser } from '../../auth/context/authUserContext';
 import { isAdminRole } from '../../auth/utils/authPermissions';
 
 export function useCurrentAgent() {

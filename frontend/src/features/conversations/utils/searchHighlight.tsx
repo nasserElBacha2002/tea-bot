@@ -1,27 +1,5 @@
 import React from 'react';
-import { Box } from '@mui/material';
-
-function BoxHighlight({
-  children,
-  active,
-}: {
-  children: React.ReactNode;
-  active?: boolean;
-}) {
-  return (
-    <Box
-      component="mark"
-      sx={{
-        bgcolor: active ? 'warning.light' : 'warning.main',
-        color: 'inherit',
-        px: 0.25,
-        borderRadius: 0.5,
-      }}
-    >
-      {children}
-    </Box>
-  );
-}
+import { SearchHighlightMark } from './SearchHighlightMark';
 
 export function renderHighlightedText(
   text: string,
@@ -38,7 +16,7 @@ export function renderHighlightedText(
   return (
     <>
       {before}
-      <BoxHighlight active={options.active}>{match}</BoxHighlight>
+      <SearchHighlightMark active={options.active}>{match}</SearchHighlightMark>
       {after}
     </>
   );

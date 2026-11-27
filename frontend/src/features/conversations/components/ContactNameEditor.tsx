@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, IconButton, Stack, TextField, Button, CircularProgress } from '@mui/material';
+import {
+  Box,
+  IconButton,
+  Stack,
+  TextField,
+  Button,
+  CircularProgress,
+  Popover,
+  Typography,
+} from '@mui/material';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 interface Props {
   displayName: string | null;
@@ -15,86 +25,105 @@ export const ContactNameEditor: React.FC<Props> = ({
   error = null,
   onSave,
 }) => {
-  const [editing, setEditing] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [value, setValue] = useState(displayName ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
+  const open = Boolean(anchorEl);
 
   useEffect(() => {
-    if (!editing) {
-      setValue(displayName ?? '');
+    if (open) {
+      const t = window.setTimeout(() => {
+        inputRef.current?.focus();
+        inputRef.current?.select();
+      }, 0);
+      return () => window.clearTimeout(t);
     }
-  }, [displayName, editing]);
+    return undefined;
+  }, [open]);
 
-  useEffect(() => {
-    if (editing) {
-      inputRef.current?.focus();
-      inputRef.current?.select();
-    }
-  }, [editing]);
-
-  const handleCancel = () => {
+  const handleClose = () => {
     setValue(displayName ?? '');
-    setEditing(false);
+    setAnchorEl(null);
   };
 
   const handleSave = async () => {
     const trimmed = value.trim();
     if (!trimmed) return;
     await onSave(trimmed);
-    setEditing(false);
+    setAnchorEl(null);
   };
 
-  if (!editing) {
-    return (
+  return (
+    <>
       <IconButton
         size="small"
         aria-label="Editar nombre del contacto"
-        onClick={() => setEditing(true)}
-        sx={{ ml: 0.5 }}
+        aria-expanded={open}
+        onClick={(e) => {
+          setValue(displayName ?? '');
+          setAnchorEl(e.currentTarget);
+        }}
+        sx={{ flexShrink: 0, ml: 0.25 }}
       >
         <EditOutlinedIcon fontSize="small" />
       </IconButton>
-    );
-  }
-
-  return (
-    <Box sx={{ mt: 1 }}>
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ sm: 'center' }}>
-        <TextField
-          inputRef={inputRef}
-          size="small"
-          label="Nombre del contacto"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              e.stopPropagation();
-              void handleSave();
-            }
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              handleCancel();
-            }
-          }}
-          disabled={saving}
-          error={Boolean(error)}
-          helperText={error ?? ' '}
-          sx={{ minWidth: 220, flex: 1 }}
-        />
-        <Button
-          size="small"
-          variant="contained"
-          onClick={() => void handleSave()}
-          disabled={saving || !value.trim()}
-        >
-          {saving ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
-        </Button>
-        <Button size="small" onClick={handleCancel} disabled={saving}>
-          Cancelar
-        </Button>
-      </Stack>
-    </Box>
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+        slotProps={{
+          paper: {
+            sx: { p: 1.25, width: 300, maxWidth: 'calc(100vw - 24px)' },
+          },
+        }}
+      >
+        <Stack spacing={1}>
+          <Typography variant="subtitle2" fontWeight={700}>
+            Nombre del contacto
+          </Typography>
+          <TextField
+            inputRef={inputRef}
+            size="small"
+            label="Nombre"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleSave();
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                handleClose();
+              }
+            }}
+            disabled={saving}
+            error={Boolean(error)}
+            helperText={error ?? ' '}
+            fullWidth
+            sx={{
+              '& .MuiInputBase-root': { minHeight: conversationUiDensity.controlHeight },
+            }}
+          />
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 0.75 }}>
+            <Button size="small" onClick={handleClose} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              onClick={() => void handleSave()}
+              disabled={saving || !value.trim()}
+            >
+              {saving ? <CircularProgress size={18} color="inherit" /> : 'Guardar'}
+            </Button>
+          </Box>
+        </Stack>
+      </Popover>
+    </>
   );
 };

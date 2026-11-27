@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { AppBar, Box, Toolbar, Typography, Button, IconButton, Tooltip } from '@mui/material';
 import { BubbleChart, Forum, VolumeOff, VolumeUp } from '@mui/icons-material';
 import { authApi } from '../../features/auth/api/authApi';
-import { useAuthUser } from '../../features/auth/context/AuthContext';
+import { useAuthUser } from '../../features/auth/context/authUserContext';
 import { canAccessFlows, canAccessConversations, defaultHomePath } from '../../features/auth/utils/authPermissions';
 import { ConversationLiveProvider } from '../../features/conversations/context/ConversationLiveProvider';
 import { useConversationLive } from '../../features/conversations/context/conversationLiveContext';

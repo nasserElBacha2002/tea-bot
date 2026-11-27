@@ -93,8 +93,8 @@ export const ConversationListItem: React.FC<Props> = ({
       alignItems="flex-start"
       aria-label={ariaLabel}
       sx={{
-        py: 0.75,
-        px: 1.25,
+        py: 0.5,
+        px: 1,
         minHeight: conversationUiDensity.listItemMinHeight,
         borderBottom: '1px solid',
         borderColor: 'divider',

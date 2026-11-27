@@ -27,7 +27,7 @@ vi.mock('../../auth/api/authApi', () => ({
   },
 }));
 
-vi.mock('../../auth/context/AuthContext', () => ({
+vi.mock('../../auth/context/authUserContext', () => ({
   useAuthUser: () => ({
     username: 'admin',
     agentId: 'agent-test-id',

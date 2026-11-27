@@ -63,12 +63,13 @@ export const ConversationFilters: React.FC<Props> = ({
       sx={{
         flexShrink: 0,
         px: conversationUiDensity.filterPadding,
-        py: 0.75,
+        py: 0.5,
         borderBottom: '1px solid',
         borderColor: 'divider',
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.75,
+        gap: 0.5,
+        minHeight: conversationUiDensity.filterBlockMinHeight,
       }}
     >
       <TextField

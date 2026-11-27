@@ -260,7 +260,7 @@ export function useConversationMessagePane(conversationId: string | null) {
       if (newerAbortRef.current === controller) newerAbortRef.current = null;
       if (conversationSession === conversationSessionRef.current) setLoadingNewer(false);
     }
-  }, [conversationId, hasMoreAfter, historyView, items, loadingNewer]);
+  }, [conversationId, hasMoreAfter, items, loadingNewer]);
 
   const returnToRecent = useCallback(async () => {
     if (!conversationId) return;

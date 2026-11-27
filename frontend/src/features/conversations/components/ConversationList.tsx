@@ -2,14 +2,7 @@ import React from 'react';
 import { Box, CircularProgress, List, Typography, Alert } from '@mui/material';
 import type { InboxConversationItem } from '../types/conversation.types';
 import { ConversationListItem } from './ConversationListItem';
-
-export const conversationListScrollSx = {
-  flex: 1,
-  minHeight: 0,
-  overflowY: 'auto',
-  overflowX: 'hidden',
-  WebkitOverflowScrolling: 'touch',
-} as const;
+import { conversationListScrollSx } from './conversationListScrollSx';
 
 interface Props {
   conversations: InboxConversationItem[];

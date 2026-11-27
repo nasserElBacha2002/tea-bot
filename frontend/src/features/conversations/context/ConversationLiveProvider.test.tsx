@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConversationLiveProvider } from './ConversationLiveProvider';
 import * as liveHook from '../hooks/useConversationsLiveUpdates';
 
-vi.mock('../../auth/context/AuthContext', () => ({
+vi.mock('../../auth/context/authUserContext', () => ({
   useAuthUser: () => ({ username: 'admin', role: 'admin' }),
 }));
 

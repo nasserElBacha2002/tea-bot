@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Snackbar, Alert, Button } from '@mui/material';
 import { authApi } from '../../auth/api/authApi';
-import { useAuthUser } from '../../auth/context/AuthContext';
+import { useAuthUser } from '../../auth/context/authUserContext';
 import { canAccessConversations } from '../../auth/utils/authPermissions';
 import { useConversationsLiveUpdates } from '../hooks/useConversationsLiveUpdates';
 import { useConversationAlerts } from '../hooks/useConversationAlerts';
@@ -46,7 +46,9 @@ export function ConversationLiveProvider({ children }: { children: React.ReactNo
   }, []);
 
   const onLiveEventRef = useRef(alerts.processEvent);
-  onLiveEventRef.current = alerts.processEvent;
+  useEffect(() => {
+    onLiveEventRef.current = alerts.processEvent;
+  }, [alerts.processEvent]);
 
   const { status, markManual, reconnect } = useConversationsLiveUpdates({
     enabled: canListen,

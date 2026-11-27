@@ -59,13 +59,14 @@ export const ConversationsPage: React.FC = () => {
   const [hiddenByFilterCount, setHiddenByFilterCount] = useState(0);
 
   const { agentId: currentAgentId } = useCurrentAgent();
-  const { markRead, getReadAt, readMap } = useConversationReadState(currentAgentId);
+  const { markRead, getReadAt } = useConversationReadState(currentAgentId);
 
   const searchTerm = filters.search?.trim() ?? '';
   const globalSearchMode = searchTerm.length >= 2;
   const listFilters = useMemo(() => {
     if (!globalSearchMode) return filters;
-    const { search: _search, ...rest } = filters;
+    const rest = { ...filters };
+    delete rest.search;
     return rest;
   }, [filters, globalSearchMode]);
 
@@ -80,7 +81,10 @@ export const ConversationsPage: React.FC = () => {
   const closeMutation = useCloseConversation(filters);
   const updateContactMutation = useUpdateContact(filters);
 
-  const listItems = listQuery.data?.items ?? [];
+  const listItems = useMemo(
+    () => listQuery.data?.items ?? [],
+    [listQuery.data],
+  );
   const listIdSet = useMemo(() => new Set(listItems.map((i) => i.id)), [listItems]);
   const inboxById = useMemo(
     () => new Map(listItems.map((item) => [item.id, item])),
@@ -205,14 +209,7 @@ export const ConversationsPage: React.FC = () => {
     },
   });
 
-  const stableFilters = useMemo(() => filters, [
-    filters.status,
-    filters.channel,
-    filters.search,
-    filters.limit,
-    filters.offset,
-    filters.sort,
-  ]);
+  const stableFilters = filters;
 
   const handleFilterChange = (patch: Partial<ConversationListFilters>) => {
     setFilters((prev) => ({ ...prev, ...patch, offset: 0 }));
@@ -280,7 +277,7 @@ export const ConversationsPage: React.FC = () => {
     pendingMessageNav,
     selectedId,
     detailQuery.isLoading,
-    messagePane.jumpToMessage,
+    messagePane,
   ]);
 
   const handleBackToList = () => {
@@ -305,7 +302,7 @@ export const ConversationsPage: React.FC = () => {
       }
     }
     return next;
-  }, [listItems, unreadIds, unreadCounts, selectedId, getReadAt, readMap]);
+  }, [listItems, unreadIds, unreadCounts, selectedId, getReadAt]);
 
   const globalUnread = useMemo(() => {
     let unread = 0;

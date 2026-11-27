@@ -17,6 +17,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import { conversationsApi } from '../api/conversationsApi';
 import type { ConversationSearchMessageHit } from '../types/conversation.types';
 import { extractApiError } from '../../../utils/apiError';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 const DEBOUNCE_MS = 300;
 
@@ -168,7 +169,7 @@ export const ConversationIntraSearchBar: React.FC<Props> = ({
   return (
     <Box
       data-testid="conversation-intra-search"
-      sx={{ px: 1, py: 0.5, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}
+      sx={{ px: 1, py: 0.35, borderBottom: '1px solid', borderColor: 'divider', bgcolor: 'background.paper' }}
     >
       {searchError && (
         <Alert
@@ -190,7 +191,11 @@ export const ConversationIntraSearchBar: React.FC<Props> = ({
           value={term}
           onChange={(e) => setTerm(e.target.value)}
           autoFocus
-          sx={{ flex: 1, minWidth: 0 }}
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            '& .MuiInputBase-root': { minHeight: conversationUiDensity.controlHeight },
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { ConversationsPage } from './ConversationsPage';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../hooks/useResizableSidebarWidth';
+import { conversationUiDensity } from '../constants/conversationUiDensity';
 
 const useMediaQueryMock = vi.hoisted(() => vi.fn(() => false));
 
@@ -40,7 +41,7 @@ vi.mock('@mui/material', async (importOriginal) => {
   };
 });
 
-vi.mock('../../auth/context/AuthContext', () => ({
+vi.mock('../../auth/context/authUserContext', () => ({
   useAuthUser: () => ({
     username: 'admin',
     agentId: 'agent-test-id',
@@ -150,6 +151,16 @@ describe('ConversationsPage layout', () => {
     renderPage('/conversations/conv-scroll');
     expect(await screen.findByTestId('conversation-messages-scroll-region')).toHaveStyle({
       overflowY: 'auto',
+    });
+  });
+
+  it('mantiene encabezado de detalle en una sola fila en escritorio', async () => {
+    renderPage('/conversations/conv-scroll');
+    const headerRow = await screen.findByTestId('conversation-detail-header-row');
+    expect(headerRow).toHaveStyle({
+      flexWrap: 'nowrap',
+      maxHeight: `${conversationUiDensity.headerHeight}px`,
+      height: `${conversationUiDensity.headerHeight}px`,
     });
   });
 

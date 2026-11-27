@@ -8,7 +8,7 @@ import type {
 import { renderHighlightedText } from '../utils/searchHighlight';
 import { contactHitToInboxItem, messageHitToInboxItem } from '../utils/globalSearchListMapping';
 import { ConversationListItem } from './ConversationListItem';
-import { conversationListScrollSx } from './ConversationList';
+import { conversationListScrollSx } from './conversationListScrollSx';
 import { lastMessagePreviewPrefix } from '../utils/conversationDisplay';
 
 interface Props {
@@ -46,7 +46,10 @@ export const ConversationGlobalSearchResults: React.FC<Props> = ({
   hasMoreContacts,
   hasMoreMessages,
 }) => {
-  const inboxLookup = inboxById ?? new Map<string, InboxConversationItem>();
+  const inboxLookup = useMemo(
+    () => inboxById ?? new Map<string, InboxConversationItem>(),
+    [inboxById],
+  );
 
   const contactRows = useMemo(() => {
     if (!data) return [];

@@ -244,12 +244,15 @@ export const ConversationDetail: React.FC<Props> = ({
         direction="row"
         alignItems="center"
         spacing={0.75}
+        data-testid="conversation-detail-header-row"
         sx={{
           minHeight: conversationUiDensity.headerHeight,
           maxHeight: conversationUiDensity.headerHeight,
+          height: conversationUiDensity.headerHeight,
           width: '100%',
           minWidth: 0,
           flexWrap: 'nowrap',
+          overflow: 'hidden',
         }}
       >
         {onBack && (

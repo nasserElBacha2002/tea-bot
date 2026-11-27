@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Box, CircularProgress } from '@mui/material';
 import { Navigate, Outlet } from 'react-router-dom';
 import { authApi } from '../api/authApi';
-import { AuthProvider } from '../context/AuthContext';
+import { AuthProvider } from '../context/AuthProvider';
 import type { AuthUser } from '../types/auth.types';
 import { defaultHomePath, isFlowRoute } from '../utils/authPermissions';
 

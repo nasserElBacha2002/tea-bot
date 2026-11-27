@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuthUser } from '../context/AuthContext';
+import { useAuthUser } from '../context/authUserContext';
 import { canAccessFlows } from '../utils/authPermissions';
 
 interface Props {

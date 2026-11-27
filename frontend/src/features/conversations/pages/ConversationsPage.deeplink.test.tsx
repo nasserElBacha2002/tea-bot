@@ -34,7 +34,7 @@ vi.mock('@mui/material', async (importOriginal) => {
   };
 });
 
-vi.mock('../../auth/context/AuthContext', () => ({
+vi.mock('../../auth/context/authUserContext', () => ({
   useAuthUser: () => ({
     username: 'admin',
     agentId: 'agent-test-id',

@@ -17,7 +17,7 @@ describe('ContactNameEditor', () => {
     );
 
     await user.click(screen.getByLabelText('Editar nombre del contacto'));
-    const input = screen.getByLabelText('Nombre del contacto');
+    const input = screen.getByLabelText('Nombre');
     await user.type(input, 'Juan Pérez');
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
 
@@ -35,12 +35,12 @@ describe('ContactNameEditor', () => {
     );
 
     await user.click(screen.getByLabelText('Editar nombre del contacto'));
-    const input = screen.getByLabelText('Nombre del contacto');
+    const input = screen.getByLabelText('Nombre');
     await user.clear(input);
     await user.type(input, 'Otro');
     await user.keyboard('{Escape}');
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.queryByLabelText('Nombre del contacto')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Nombre')).not.toBeInTheDocument();
   });
 });
